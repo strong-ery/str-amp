@@ -33,7 +33,7 @@ import stramp.waybar as waybar
 import logging
 log = logging.getLogger(__name__)
 
-_DOWNLOAD_SCRIPT = Path(__file__).resolve().parent.parent.parent / "tools" / "download_music.py"
+_DOWNLOAD_SCRIPT = Path(__file__).resolve().parent.parent / "downloader.py"
 
 _REMOVED_JSON = Path.home() / ".local" / "share" / "stramp" / "removed.json"
 
