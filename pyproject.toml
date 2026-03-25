@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stramp"
+version = "0.1.0"
+description = "Strong's music player — a compact GTK4 shuffle player for your local library"
+readme = "README.md"
+license = { text = "CC-BY-NC-SA-4.0" }
+authors = [{ name = "strong-ery", email = "" }]
+requires-python = ">=3.11"
+
+# python-gobject and libadwaita are system packages on Arch — install via pacman.
+# Only pip-installable deps go here.
+dependencies = [
+    "python-mpv",
+    "mutagen",
+]
+
+[project.urls]
+Homepage   = "https://github.com/strong-ery/stramp"
+Repository = "https://github.com/strong-ery/stramp"
+Issues     = "https://github.com/strong-ery/stramp/issues"
+
+[project.scripts]
+stramp = "stramp.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["stramp"]

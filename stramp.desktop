@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Stramp
+GenericName=Music Player
+Comment=Strong's compact GTK4 shuffle player for your local library
+Exec=stramp %U
+Icon=audio-x-generic
+Terminal=false
+Categories=Audio;Music;Player;GTK;
+MimeType=audio/mpeg;audio/flac;audio/ogg;audio/opus;audio/x-m4a;audio/wav;
+Keywords=music;player;shuffle;mpv;
+StartupWMClass=stramp
