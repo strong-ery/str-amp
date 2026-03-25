@@ -14,7 +14,7 @@ from gi.repository import GLib, GdkPixbuf, GObject
 log = logging.getLogger(__name__)
 
 try:
-    from mutagen.id3 import ID3
+    from mutagen.id3 import ID3, ID3NoHeaderError
     from mutagen.mp3 import MP3
     MUTAGEN_OK = True
 except ImportError:
@@ -30,22 +30,41 @@ def load_art_pixbuf(path: str, size: int) -> GdkPixbuf.Pixbuf | None:
         return None
     try:
         tags = ID3(path)
-        for key in tags.keys():
-            if key.startswith("APIC"):
-                data = tags[key].data
-                loader = GdkPixbuf.PixbufLoader()
+    except Exception:
+        log.debug("Could not open ID3 tags for %s", path)
+        return None
+
+    for key in tags.keys():
+        if not key.startswith("APIC"):
+            continue
+        try:
+            data = tags[key].data
+            if not data:
+                continue
+            loader = GdkPixbuf.PixbufLoader()
+            try:
                 loader.write(data)
                 loader.close()
-                pb = loader.get_pixbuf()
-                if pb:
-                    w, h = pb.get_width(), pb.get_height()
-                    side = min(w, h)
-                    pb = pb.new_subpixbuf(
-                        (w - side) // 2, (h - side) // 2, side, side
-                    )
-                    return pb.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
-    except Exception:
-        log.debug("Could not load art for %s", path, exc_info=True)
+            except Exception:
+                # Corrupt image data — close loader safely and skip
+                try:
+                    loader.close()
+                except Exception:
+                    pass
+                log.debug("Corrupt APIC data in %s, skipping cover", path)
+                continue
+
+            pb = loader.get_pixbuf()
+            if pb is None:
+                continue
+            w, h = pb.get_width(), pb.get_height()
+            side = min(w, h)
+            pb = pb.new_subpixbuf((w - side) // 2, (h - side) // 2, side, side)
+            return pb.scale_simple(size, size, GdkPixbuf.InterpType.BILINEAR)
+        except Exception:
+            log.debug("Failed to decode art frame %s in %s", key, path, exc_info=True)
+            continue
+
     return None
 
 
@@ -64,6 +83,24 @@ def fmt_time(seconds: float) -> str:
     s = int(seconds)
     m, s = divmod(s, 60)
     return f"{m}:{s:02d}"
+
+
+def strip_art(path: str) -> bool:
+    """Remove all APIC frames from the file's ID3 tags. Returns True on success."""
+    if not MUTAGEN_OK:
+        return False
+    try:
+        try:
+            tags = ID3(path)
+        except ID3NoHeaderError:
+            return True  # No tags at all — nothing to strip
+        tags.delall("APIC")
+        tags.save(path, v2_version=3)
+        log.debug("Stripped art from %s", path)
+        return True
+    except Exception as e:
+        log.warning("Could not strip art from %s: %s", path, e)
+        return False
 
 
 def _song_from_path(f: Path) -> dict:
@@ -128,6 +165,15 @@ class ArtCache:
             if len(self._order) > self._max:
                 self._d.pop(self._order.popleft(), None)
 
+    def invalidate(self, path: str):
+        """Remove all cached entries for *path* (all sizes)."""
+        with self._lock:
+            stale = [k for k in self._d if k[0] == path]
+            for k in stale:
+                del self._d[k]
+            # Clean up order deque too
+            self._order = type(self._order)(k for k in self._order if k[0] != path)
+
 
 # Module-level shared cache
 ART = ArtCache()
@@ -142,7 +188,7 @@ def art_async(path: str, size: int, callback):
             ART.put(path, size, pb)
         else:
             pb = cached
-        GLib.idle_add(callback, pb)
+        GLib.idle_add(callback, pb, priority=GLib.PRIORITY_HIGH)
 
     threading.Thread(target=_work, daemon=True).start()
 

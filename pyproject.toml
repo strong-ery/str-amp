@@ -28,3 +28,6 @@ stramp = "stramp.main:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["stramp"]
+
+[tool.hatch.build.targets.wheel.shared-data]
+"stramp.desktop" = "share/applications/stramp.desktop"
