@@ -28,6 +28,21 @@ APP_CSS = """
     font-size: 72px;
 }
 
+/* ── Fix-art overlay button (bottom-right corner of album art) ── */
+.fix-art-btn {
+    border-radius: 50%;
+    padding: 5px;
+    background-color: alpha(black, 0.48);
+    border: none;
+    color: white;
+    min-width: 28px; min-height: 28px;
+    -gtk-icon-size: 14px;
+    margin: 7px;
+}
+.fix-art-btn:hover {
+    background-color: alpha(black, 0.72);
+}
+
 /* ── Track info ── */
 .track-title  { font-size: 17px; font-weight: bold; color: @window_fg_color; }
 .track-artist { font-size: 13px; color: alpha(@window_fg_color, 0.6); }
@@ -41,7 +56,6 @@ APP_CSS = """
     -gtk-icon-size: 20px;
 }
 .transport-btn:hover { background-color: alpha(@accent_color, 0.15); color: @accent_color; }
-
 .play-btn {
     border-radius: 50px; padding: 14px;
     background-color: @accent_color;
@@ -68,6 +82,44 @@ APP_CSS = """
 .time-label {
     font-size: 11px; font-family: monospace;
     color: alpha(@window_fg_color, 0.45);
+}
+
+/* ── Volume ── */
+.vol-row { }
+.vol-icon {
+    color: alpha(@window_fg_color, 0.4);
+    -gtk-icon-size: 16px;
+    margin-right: 2px;
+}
+.vol-scale trough {
+    background-color: alpha(@accent_color, 0.14);
+    border-radius: 4px; min-height: 4px;
+}
+.vol-scale highlight {
+    background-color: alpha(@accent_color, 0.65);
+    border-radius: 4px;
+}
+.vol-scale slider {
+    background-color: alpha(@window_fg_color, 0.75);
+    border-radius: 50%;
+    min-width: 11px; min-height: 11px; margin: -4px;
+    box-shadow: 0 1px 3px alpha(black, 0.25);
+}
+.vol-scale:hover highlight { background-color: @accent_color; }
+.vol-scale:hover slider    { background-color: @accent_color; }
+
+/* ── Header / menu button ── */
+.header-row { margin-bottom: 0; }
+.menu-btn {
+    border-radius: 50px; padding: 6px;
+    background: none; border: none;
+    color: alpha(@window_fg_color, 0.45);
+    min-width: 28px; min-height: 28px;
+    -gtk-icon-size: 16px;
+}
+.menu-btn:hover {
+    background-color: alpha(@accent_color, 0.12);
+    color: @accent_color;
 }
 
 /* ── Sidebar ── */
@@ -106,6 +158,32 @@ APP_CSS = """
 .lib-title  { font-size: 13px; font-weight: 500; color: @window_fg_color; }
 .lib-title.playing { color: @accent_color; }
 .lib-artist { font-size: 11px; color: alpha(@window_fg_color, 0.5); }
+
+/* ── Download terminal (used by CSV batch install) ── */
+.terminal-scroll {
+    border-radius: 8px;
+    background-color: alpha(black, 0.35);
+    border: 1px solid alpha(@window_fg_color, 0.08);
+}
+.terminal-view {
+    font-family: monospace;
+    font-size: 11px;
+    color: alpha(@window_fg_color, 0.8);
+    background: transparent;
+    padding: 8px;
+}
+.terminal-view text { background: transparent; }
+
+/* ── Install progress bar (single-song download dialog) ── */
+.install-progress trough {
+    background-color: alpha(@accent_color, 0.18);
+    border-radius: 4px;
+    min-height: 6px;
+}
+.install-progress progress {
+    background-color: @accent_color;
+    border-radius: 4px;
+}
 
 listview { background: transparent; }
 listview > row { padding: 0; background: transparent; }

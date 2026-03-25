@@ -2,13 +2,10 @@
 """
 player.py — thin wrapper around python-mpv that owns playback state.
 """
-
 from __future__ import annotations
-
 import logging
-
+from pathlib import Path
 log = logging.getLogger(__name__)
-
 try:
     import mpv
 except ImportError:
@@ -16,34 +13,44 @@ except ImportError:
     raise
 
 
+def _ensure_mpris_plugin():
+    """Symlink mpv-mpris into the user scripts dir on first launch if available."""
+    src = Path("/usr/lib/mpv/mpris.so")
+    dst = Path.home() / ".config/mpv/scripts/mpris.so"
+    if src.exists() and not dst.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            dst.symlink_to(src)
+            log.debug("Symlinked mpris plugin: %s -> %s", src, dst)
+        except Exception:
+            log.debug("Could not symlink mpris plugin", exc_info=True)
+
+
 class Player:
     """
     Wraps an mpv.MPV instance and exposes simple play/pause/seek helpers.
-
     Callbacks
     ---------
     on_time_pos(value: float)  — called on every time-position tick
-    on_eof()                   — called when a track finishes naturally
     """
 
-    def __init__(self, on_time_pos=None, on_eof=None):
-        self._mpv = mpv.MPV(video=False, terminal=False, quiet=True)
+    def __init__(self, on_time_pos=None):
+        _ensure_mpris_plugin()
+        self._mpv = mpv.MPV(
+            video=False,
+            terminal=False,
+            quiet=True,
+        )
         self._on_time_pos_cb = on_time_pos
-        self._on_eof_cb      = on_eof
         self.is_playing      = False
-
-        self._mpv.observe_property("time-pos",    self._time_pos_handler)
-        self._mpv.observe_property("eof-reached", self._eof_handler)
+        # on_eof no longer used — StrampWindow handles advancement via time comparison
+        self._mpv.observe_property("time-pos", self._time_pos_handler)
 
     # ── Internal MPV handlers ─────────────────────────────────────────────
 
     def _time_pos_handler(self, _name, value):
         if value is not None and self._on_time_pos_cb:
             self._on_time_pos_cb(float(value))
-
-    def _eof_handler(self, _name, value):
-        if value and self._on_eof_cb:
-            self._on_eof_cb()
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -75,6 +82,13 @@ class Player:
             self._mpv.seek(position, "absolute")
         except Exception:
             log.debug("Seek to %.2f failed", position, exc_info=True)
+
+    def set_volume(self, volume: float):
+        """Set playback volume 0–100."""
+        try:
+            self._mpv.volume = max(0.0, min(100.0, volume))
+        except Exception:
+            log.debug("Volume set to %.2f failed", volume, exc_info=True)
 
     @property
     def time_pos(self) -> float:

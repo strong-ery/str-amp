@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 
 from stramp.library import art_async
 
@@ -20,7 +20,7 @@ def _apply_art(stack, img, pb):
 class QueueSidebar(Gtk.Box):
     """
     A vertical panel showing the next N tracks in the queue.
-    Call refresh(queue, queue_pos, jump_callback) to redraw.
+    Call refresh(queue, queue_pos, jump_callback, remove_callback) to redraw.
     """
 
     QUEUE_SHOW = 40
@@ -46,7 +46,15 @@ class QueueSidebar(Gtk.Box):
         self._box.set_margin_bottom(8)
         scroll.set_child(self._box)
 
-    def refresh(self, queue: list[dict], queue_pos: int, jump_callback):
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def refresh(
+        self,
+        queue: list[dict],
+        queue_pos: int,
+        jump_callback,
+        remove_callback=None,
+    ):
         """Rebuild the visible queue rows."""
         child = self._box.get_first_child()
         while child:
@@ -54,13 +62,24 @@ class QueueSidebar(Gtk.Box):
             self._box.remove(child)
             child = nxt
 
-        shown = queue[queue_pos : queue_pos + self.QUEUE_SHOW]
+        shown = queue[queue_pos: queue_pos + self.QUEUE_SHOW]
         for i, song in enumerate(shown):
-            playing = (i == 0)
-            row = self._make_row(song, playing, queue_pos + i, jump_callback)
-            self._box.append(row)
+            playing  = (i == 0)
+            revealer = self._make_row(
+                song, playing, queue_pos + i, jump_callback, remove_callback
+            )
+            self._box.append(revealer)
 
-    def _make_row(self, song: dict, playing: bool, idx: int, jump_callback) -> Gtk.Box:
+    # ── Row construction ──────────────────────────────────────────────────────
+
+    def _make_row(
+        self,
+        song: dict,
+        playing: bool,
+        idx: int,
+        jump_callback,
+        remove_callback,
+    ) -> Gtk.Revealer:
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         row.add_css_class("queue-row")
         if playing:
@@ -68,14 +87,16 @@ class QueueSidebar(Gtk.Box):
         row.set_margin_top(2)
         row.set_margin_bottom(2)
 
-        # Thumbnail
+        # ── Thumbnail ─────────────────────────────────────────────────────────
         stk = Gtk.Stack()
         stk.set_transition_type(Gtk.StackTransitionType.CROSSFADE)
         stk.set_transition_duration(180)
+
         img = Gtk.Image()
         img.set_pixel_size(48)
         img.add_css_class("art-frame")
         stk.add_named(img, "art")
+
         ph = Gtk.Label(label="♫")
         ph.add_css_class("queue-art-placeholder")
         ph.set_size_request(48, 48)
@@ -83,30 +104,76 @@ class QueueSidebar(Gtk.Box):
         ph.set_yalign(0.5)
         stk.add_named(ph, "placeholder")
         stk.set_visible_child_name("placeholder")
-        row.append(stk)
 
+        row.append(stk)
         art_async(song["path"], 48, lambda pb, s=stk, im=img: _apply_art(s, im, pb))
 
-        # Text
+        # ── Text ─────────────────────────────────────────────────────────────
         tb = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         tb.set_hexpand(True)
         tb.set_valign(Gtk.Align.CENTER)
+
         tl = Gtk.Label(label=song["track"])
         tl.add_css_class("queue-title")
         if playing:
             tl.add_css_class("playing")
         tl.set_ellipsize(3)
         tl.set_xalign(0)
+
         al = Gtk.Label(label=song["artist"])
         al.add_css_class("queue-artist")
         al.set_ellipsize(3)
         al.set_xalign(0)
+
         tb.append(tl)
         tb.append(al)
         row.append(tb)
 
+        # ── Wrap in Revealer (enables slide-away animation) ───────────────────
+        revealer = Gtk.Revealer()
+        revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_UP)
+        revealer.set_transition_duration(0)   # instant on initial build — no "pop-in" on refresh
+        revealer.set_reveal_child(True)
+        revealer.set_child(row)
+
+        # Restore remove-animation duration after the row has been painted
+        def _restore_duration(r=revealer):
+            r.set_transition_duration(450)
+            return False  # one-shot
+
+        GLib.timeout_add(80, _restore_duration)
+
+        # ── Left-click → jump ────────────────────────────────────────────────
         ck = Gtk.GestureClick()
+        ck.set_button(1)
         ck.connect("released", lambda g, n, x, y, pos=idx: jump_callback(pos))
         row.add_controller(ck)
 
-        return row
+        # ── Right-click → animated remove ────────────────────────────────────
+        if remove_callback is not None:
+            rc = Gtk.GestureClick()
+            rc.set_button(3)
+            rc.connect(
+                "released",
+                lambda g, n, x, y, r=revealer, qi=idx: self._animate_remove(r, qi, remove_callback),
+            )
+            row.add_controller(rc)
+
+            # Tooltip hint
+            row.set_tooltip_text("Right-click to remove from queue")
+
+        return revealer
+
+    # ── Remove animation ──────────────────────────────────────────────────────
+
+    def _animate_remove(
+        self,
+        revealer: Gtk.Revealer,
+        queue_idx: int,
+        remove_callback,
+    ):
+        """Slide the row up and out, then notify the window to drop it from the queue."""
+        revealer.set_transition_duration(450)
+        revealer.set_reveal_child(False)
+        # Fire the callback after the animation completes
+        GLib.timeout_add(470, remove_callback, queue_idx)
