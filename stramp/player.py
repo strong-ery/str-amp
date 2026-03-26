@@ -34,7 +34,7 @@ class Player:
     on_time_pos(value: float)  — called on every time-position tick
     """
 
-    def __init__(self, on_time_pos=None):
+    def __init__(self, on_time_pos=None, on_eof=None):
         _ensure_mpris_plugin()
         self._mpv = mpv.MPV(
             video=False,
@@ -42,9 +42,17 @@ class Player:
             quiet=True,
         )
         self._on_time_pos_cb = on_time_pos
+        self._on_eof_cb      = on_eof
         self.is_playing      = False
-        # on_eof no longer used — StrampWindow handles advancement via time comparison
+
         self._mpv.observe_property("time-pos", self._time_pos_handler)
+        self._mpv.register_event_callback(self._event_handler)
+
+    def _event_handler(self, event):
+        if event.get("event_id") == mpv.MpvEventID.END_FILE:
+            reason = event.get("event", {}).get("reason", "")
+            if reason == "eof" and self._on_eof_cb:
+                self._on_eof_cb()
 
     # ── Internal MPV handlers ─────────────────────────────────────────────
 

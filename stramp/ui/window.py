@@ -83,6 +83,7 @@ class StrampWindow(Adw.ApplicationWindow):
 
         self.player = Player(
             on_time_pos=self._on_time_pos,
+            on_eof=self._on_eof,
         )
 
         self._build_queue()
@@ -487,8 +488,9 @@ class StrampWindow(Adw.ApplicationWindow):
                 value, self.duration, self.seeking, self._advancing)
         if not self.seeking:
             GLib.idle_add(self._update_progress, value)
-        if self.duration > 0 and value >= self.duration - 0.33 and not self._advancing and not self.seeking and not self._dragging:
-            log.debug(">>> AUTO-ADVANCE triggered at %.2f", value)
+
+    def _on_eof(self):
+        if not self._advancing and not self.seeking and not self._dragging:
             self._advancing = True
             GLib.idle_add(self._on_next)
 
