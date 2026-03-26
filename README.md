@@ -15,6 +15,10 @@ A lightweight GTK4 music player for Linux, built for local libraries. Shuffle-fi
 - Native MPRIS2 integration — shows up in waybar, playerctl, and any MPRIS-aware tool
 - Waybar scroll-to-volume, click-to-pause, right-click-to-skip
 
+## Planned Features:
+
+- Local config saving for QOL such as your audio amplitude slider saving on close.
+
 ## Dependencies
 
 **System packages (pacman):**
