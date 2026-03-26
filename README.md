@@ -1,3 +1,5 @@
+![preview](3.png)
+
 # stramp
 A lightweight GTK4 music player for Linux, built for local libraries. Shuffle-first, minimal RAM, clean UI.
 
