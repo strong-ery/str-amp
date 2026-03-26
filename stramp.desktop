@@ -3,7 +3,7 @@ Type=Application
 Name=Stramp
 GenericName=Music Player
 Comment=Strong's compact GTK4 shuffle player for your local library
-Exec=sh -c 'PATH="$HOME/.local/bin:$PATH" stramp'
+Exec=sh -c 'PATH="$HOME/.local/bin:$PATH" stramp --waybar'
 Icon=audio-x-generic
 Terminal=false
 Categories=Audio;Music;Player;GTK;
