@@ -79,4 +79,6 @@ Stramp can download songs directly into your library via the **⋮** menu:
 ---
 
 *Some portions of this codebase were written with the assistance of generative AI tools.*
+
+*TTK_Gambit is not a real person and was not involved in the development of this project, it's a stale private github email reference, unfortunately nothing I can do about it*
 >>>>>>> ad83d9d (V1 files)
