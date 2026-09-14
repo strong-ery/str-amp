@@ -175,7 +175,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(
             settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting);
-        Theme.InitializeEqualizer(player.EqualizerBands, ApplyEqualizer);
+        Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer);
         ApplyEqualizer();
         ApplyDiscordPresenceSetting();
 
@@ -565,7 +565,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     private void ApplyEqualizer() =>
-        _player.ApplyEqualizer(_settings.EqualizerGains, _settings.EqualizerEnabled);
+        _player.ApplyEqualizer(
+            [.. _settings.EqualizerFrequencies.Select(hz => (float)hz)],
+            _settings.EqualizerGains,
+            _settings.EqualizerEnabled);
 
     private void ApplyDiscordPresenceSetting()
     {

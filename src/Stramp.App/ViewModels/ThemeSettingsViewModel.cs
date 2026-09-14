@@ -9,16 +9,31 @@ using Stramp.Core.Settings;
 
 namespace Stramp.App.ViewModels;
 
-/// <summary>One draggable EQ band.</summary>
+/// <summary>One EQ band: a draggable gain and an editable centre frequency.</summary>
 public partial class EqualizerBandViewModel : ViewModelBase
 {
-    private readonly Action<double> _onGainChanged;
+    /// <summary>
+    /// Range a centre frequency may be typed into. The audible band, give or take — the player
+    /// separately keeps bands ordered and below what the current sample rate can represent.
+    /// </summary>
+    public const double MinFrequencyHz = EqualizerBandLayout.MinFrequencyHz;
+    public const double MaxFrequencyHz = EqualizerBandLayout.MaxFrequencyHz;
 
-    public string Label { get; }
+    private readonly Action<bool> _onChanged;
+
+    /// <summary>
+    /// Swallows change notifications. Starts on, because assigning the initial values below runs
+    /// the same change handlers, and the owner cannot answer questions about a band it has not
+    /// finished adding to its collection yet.
+    /// </summary>
+    private bool _suppressNotify = true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(GainLabel))]
     public partial double Gain { get; set; }
+
+    [ObservableProperty]
+    public partial double Frequency { get; set; }
 
     /// <summary>
     /// The band's gain as shown above its slider. Always carries an explicit sign so a boost reads
@@ -26,16 +41,47 @@ public partial class EqualizerBandViewModel : ViewModelBase
     /// </summary>
     public string GainLabel => Gain.ToString("+0.#;-0.#;0", CultureInfo.InvariantCulture);
 
-    public EqualizerBandViewModel(float frequencyHz, double gain, Action<double> onGainChanged)
+    /// <param name="onChanged">Called after a change; the argument is true when it was the
+    /// centre frequency that moved rather than the gain.</param>
+    public EqualizerBandViewModel(double frequencyHz, double gain, Action<bool> onChanged)
     {
-        _onGainChanged = onGainChanged;
+        _onChanged = onChanged;
         Gain = gain;
-        Label = frequencyHz >= 1000
-            ? $"{frequencyHz / 1000:0.#}k"
-            : $"{frequencyHz:0}";
+        Frequency = frequencyHz;
+        _suppressNotify = false;
     }
 
-    partial void OnGainChanged(double value) => _onGainChanged(value);
+    /// <summary>Sets the centre without reporting it, for the owner's own bookkeeping.</summary>
+    public void SetFrequencyQuietly(double value)
+    {
+        var wasSuppressed = _suppressNotify;
+        _suppressNotify = true;
+        Frequency = value;
+        _suppressNotify = wasSuppressed;
+    }
+
+    partial void OnGainChanged(double value)
+    {
+        if (!_suppressNotify)
+            _onChanged(false);
+    }
+
+    partial void OnFrequencyChanged(double value)
+    {
+        if (_suppressNotify)
+            return;
+
+        // A typed-in frequency can be anything, including blank or absurd. Snap it back into range
+        // first; the owner then holds it between its neighbours.
+        var clamped = double.IsFinite(value)
+            ? Math.Clamp(value, MinFrequencyHz, MaxFrequencyHz)
+            : MinFrequencyHz;
+
+        if (Math.Abs(clamped - value) > 1e-9)
+            SetFrequencyQuietly(clamped);
+
+        _onChanged(true);
+    }
 }
 
 /// <summary>Backs the in-app theme panel: manual color picks, presets, and album-art color mode.</summary>
@@ -51,6 +97,14 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     private readonly Action _onDiscordSettingsChanged;
     private Action? _onEqualizerChanged;
     private bool _suppressApply;
+    private bool _suppressEqualizerApply;
+    private bool _applyingPreset;
+    private double[] _defaultFrequencies = [];
+
+    /// <summary>Slider limits, matching the range the player clamps gains to.</summary>
+    private const double MinBandGainDb = -20;
+    private const double MaxBandGainDb = 20;
+
 
     public ColorChannelEditor Primary { get; }
     public ColorChannelEditor Secondary { get; }
@@ -102,6 +156,17 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         Enum.GetValues<AudioNormalizationLevel>();
 
     public ObservableCollection<EqualizerBandViewModel> EqualizerBands { get; } = [];
+
+    /// <summary>Built-in curves offered above the band sliders.</summary>
+    public IReadOnlyList<EqualizerPreset> EqualizerPresets { get; } =
+        Stramp.Core.Playback.EqualizerPresets.All;
+
+    /// <summary>
+    /// The preset showing in the dropdown. Null whenever the bands do not match one — which is the
+    /// case at startup, and again as soon as anything is adjusted by hand.
+    /// </summary>
+    [ObservableProperty]
+    public partial EqualizerPreset? SelectedEqualizerPreset { get; set; }
 
     [ObservableProperty]
     public partial bool DiscordRichPresenceEnabled { get; set; }
@@ -212,37 +277,148 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _onDiscordSettingsChanged();
     }
 
-    /// <summary>Builds the band sliders once the player has told us what bands it supports.</summary>
-    public void InitializeEqualizer(IReadOnlyList<float> bandFrequencies, Action onEqualizerChanged)
+    /// <summary>Builds the band controls once the player has told us what bands it defaults to.</summary>
+    public void InitializeEqualizer(IReadOnlyList<float> defaultBandFrequencies, Action onEqualizerChanged)
     {
         _onEqualizerChanged = onEqualizerChanged;
+        _defaultFrequencies = [.. defaultBandFrequencies.Select(f => (double)f)];
         EqualizerBands.Clear();
 
-        if (bandFrequencies.Count == 0)
+        var count = _defaultFrequencies.Length;
+        if (count == 0)
             return;
 
-        while (_settings.EqualizerGains.Count < bandFrequencies.Count)
-            _settings.EqualizerGains.Add(0);
+        // Settings written before the bands became adjustable carry gains but no frequencies, and
+        // the band count can change between versions; fill either from the backend's defaults.
+        Resize(_settings.EqualizerGains, count, _ => 0);
+        Resize(_settings.EqualizerFrequencies, count, i => _defaultFrequencies[i]);
 
-        for (var i = 0; i < bandFrequencies.Count; i++)
+        for (var i = 0; i < count; i++)
         {
             var index = i;
             EqualizerBands.Add(new EqualizerBandViewModel(
-                bandFrequencies[i],
+                _settings.EqualizerFrequencies[i],
                 _settings.EqualizerGains[i],
-                gain =>
-                {
-                    _settings.EqualizerGains[index] = gain;
-                    _onEqualizerChanged?.Invoke();
-                }));
+                frequencyMoved => OnBandChanged(index, frequencyMoved)));
         }
     }
 
-    [RelayCommand]
-    private void ResetEqualizer()
+    /// <summary>Writes the bands back to settings and hands the whole layout to the player.</summary>
+    private void OnBandChanged(int index, bool frequencyMoved)
     {
-        foreach (var band in EqualizerBands)
-            band.Gain = 0;
+        // Each band closes over its own index, and re-initialising replaces the whole collection;
+        // ignore anything arriving from a band that is no longer the one at that position.
+        if (_suppressEqualizerApply || index >= EqualizerBands.Count ||
+            _settings.EqualizerGains.Count < EqualizerBands.Count ||
+            _settings.EqualizerFrequencies.Count < EqualizerBands.Count)
+            return;
+
+        if (frequencyMoved)
+            ConstrainBand(index);
+
+        // Adjusting anything by hand means the bands are no longer the preset's curve, so the
+        // dropdown should stop claiming they are.
+        if (!_applyingPreset)
+            SelectedEqualizerPreset = null;
+
+        for (var i = 0; i < EqualizerBands.Count; i++)
+        {
+            _settings.EqualizerGains[i] = EqualizerBands[i].Gain;
+            _settings.EqualizerFrequencies[i] = EqualizerBands[i].Frequency;
+        }
+
+        _onEqualizerChanged?.Invoke();
+    }
+
+    /// <summary>Holds an edited centre between its neighbours; see <see cref="EqualizerBandLayout"/>.</summary>
+    private void ConstrainBand(int index)
+    {
+        var band = EqualizerBands[index];
+        var clamped = Math.Round(
+            EqualizerBandLayout.Constrain([.. EqualizerBands.Select(b => b.Frequency)], index, band.Frequency), 2);
+
+        if (Math.Abs(clamped - band.Frequency) > 1e-9)
+            band.SetFrequencyQuietly(clamped);
+    }
+
+    partial void OnSelectedEqualizerPresetChanged(EqualizerPreset? value)
+    {
+        // Null means the selection was cleared because the bands drifted off the curve, not that
+        // the user picked something; there is nothing to load in that case.
+        if (value is null || _applyingPreset)
+            return;
+
+        _applyingPreset = true;
+        try
+        {
+            ApplyEqualizerPreset(value);
+        }
+        finally
+        {
+            _applyingPreset = false;
+        }
+    }
+
+    private void ApplyEqualizerPreset(EqualizerPreset preset)
+    {
+        if (EqualizerBands.Count == 0)
+            return;
+
+        // The bundled presets each carry their own band centres, so when the shapes line up we can
+        // reproduce the curve exactly by moving the bands as well. Otherwise the curve is resampled
+        // onto wherever the bands currently sit.
+        if (preset.Points.Count == EqualizerBands.Count)
+            SetBands(
+                [.. preset.Points.Select(p => (double)p.Hz)],
+                [.. preset.Points.Select(p => p.GainDb)]);
+        else
+            SetBands(null, preset.GainsFor([.. EqualizerBands.Select(b => (float)b.Frequency)]));
+
+        // Picking a curve is a request to hear it; leaving it staged behind a switch that is still
+        // off would just look broken.
+        EqualizerEnabled = true;
+    }
+
+    /// <summary>Returns every band to the centre frequency the backend started with.</summary>
+    [RelayCommand]
+    private void ResetEqualizerBands() => SetBands(_defaultFrequencies, null);
+
+    [RelayCommand]
+    private void ResetEqualizer() => SetBands(null, new double[EqualizerBands.Count]);
+
+    /// <summary>
+    /// Moves the bands, then tells the player a single time. Setting them one by one would re-solve
+    /// and retune the whole filter bank once per band for what is one click.
+    /// </summary>
+    /// <param name="frequencies">New centre frequencies, or null to leave them where they are.</param>
+    /// <param name="gains">New gains in dB, or null to leave them as they are.</param>
+    private void SetBands(IReadOnlyList<double>? frequencies, IReadOnlyList<double>? gains)
+    {
+        _suppressEqualizerApply = true;
+        for (var i = 0; i < EqualizerBands.Count; i++)
+        {
+            // Set quietly: a preset is a complete, already-ordered layout, so the neighbour
+            // clamp that guards single edits would only fight it half-applied.
+            if (frequencies is not null && i < frequencies.Count)
+                EqualizerBands[i].SetFrequencyQuietly(Math.Clamp(
+                    Math.Round(frequencies[i], 2),
+                    EqualizerBandViewModel.MinFrequencyHz,
+                    EqualizerBandViewModel.MaxFrequencyHz));
+
+            if (gains is not null && i < gains.Count)
+                EqualizerBands[i].Gain = Math.Round(Math.Clamp(gains[i], MinBandGainDb, MaxBandGainDb), 1);
+        }
+        _suppressEqualizerApply = false;
+
+        OnBandChanged(0, frequencyMoved: false);
+    }
+
+    private static void Resize(List<double> values, int count, Func<int, double> fallback)
+    {
+        while (values.Count < count)
+            values.Add(fallback(values.Count));
+        if (values.Count > count)
+            values.RemoveRange(count, values.Count - count);
     }
 
     private void ApplyLive()

@@ -30,9 +30,15 @@ public interface IMediaPlayer : IDisposable
     /// <summary>Seeks to an absolute position in seconds.</summary>
     void Seek(double positionSeconds);
 
-    /// <summary>Center frequencies (Hz) of the equalizer bands, empty if the backend has no EQ.</summary>
-    IReadOnlyList<float> EqualizerBands { get; }
+    /// <summary>
+    /// Center frequencies (Hz) the equalizer starts out with, empty if the backend has no EQ. The
+    /// band count is fixed by this list; the centres themselves are the caller's to change.
+    /// </summary>
+    IReadOnlyList<float> DefaultEqualizerBands { get; }
 
-    /// <summary>Applies per-band gains in dB (-20..+20). Passing enabled:false bypasses the EQ.</summary>
-    void ApplyEqualizer(IReadOnlyList<double> gainsDb, bool enabled);
+    /// <summary>
+    /// Applies the equalizer: where each band sits (Hz) and its gain in dB (-20..+20). Pass an
+    /// empty band list to keep the backend's defaults, or enabled:false to bypass the EQ.
+    /// </summary>
+    void ApplyEqualizer(IReadOnlyList<float> centreFrequencies, IReadOnlyList<double> gainsDb, bool enabled);
 }

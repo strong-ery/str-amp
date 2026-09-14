@@ -56,4 +56,10 @@ public sealed class AppSettings
 
     /// <summary>Per-band gains in dB. Empty means "flat"; resized to the backend's band count on load.</summary>
     public List<double> EqualizerGains { get; set; } = [];
+
+    /// <summary>
+    /// Per-band centre frequencies in Hz. Empty means "use the backend's defaults", which is also
+    /// what settings written before the bands became adjustable will say.
+    /// </summary>
+    public List<double> EqualizerFrequencies { get; set; } = [];
 }

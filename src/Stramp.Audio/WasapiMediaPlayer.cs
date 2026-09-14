@@ -13,7 +13,11 @@ namespace Stramp.Audio;
 [SupportedOSPlatform("windows")]
 public sealed class WasapiMediaPlayer : IMediaPlayer
 {
-    private static readonly float[] BandFrequencies =
+    /// <summary>
+    /// Band centres used until the user picks their own. Ten bands, matching the layout the
+    /// bundled presets were authored against.
+    /// </summary>
+    private static readonly float[] DefaultBandFrequencies =
         [63, 110, 250, 370, 650, 1200, 2130, 4550, 6850, 16000];
 
     private readonly object _gate = new();
@@ -22,7 +26,8 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     private MediaFoundationReader? _reader;
     private GainSampleProvider? _normalizer;
     private EqualizerSampleProvider? _equalizer;
-    private double[] _equalizerGains = new double[BandFrequencies.Length];
+    private float[] _equalizerFrequencies = [.. DefaultBandFrequencies];
+    private double[] _equalizerGains = new double[DefaultBandFrequencies.Length];
     private bool _equalizerEnabled;
     private double _volume = 100;
     private double _normalizationGainDb;
@@ -84,7 +89,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         }
     }
 
-    public IReadOnlyList<float> EqualizerBands => BandFrequencies;
+    public IReadOnlyList<float> DefaultEqualizerBands => DefaultBandFrequencies;
 
     public WasapiMediaPlayer()
     {
@@ -109,8 +114,8 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 RepositionInRead = true,
             });
             var normalizer = new GainSampleProvider(reader.ToSampleProvider(), _normalizationGainDb);
-            var equalizer = new EqualizerSampleProvider(normalizer, BandFrequencies);
-            equalizer.Update(_equalizerGains, _equalizerEnabled);
+            var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
+            equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
 
             // Shared mode is intentional: this is the normal Windows music-app path, supports the
             // system volume mixer, and lets Windows perform the one required 44.1 -> 48 kHz conversion
@@ -179,16 +184,24 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         }
     }
 
-    public void ApplyEqualizer(IReadOnlyList<double> gainsDb, bool enabled)
+    public void ApplyEqualizer(IReadOnlyList<float> centreFrequencies, IReadOnlyList<double> gainsDb, bool enabled)
     {
+        ArgumentNullException.ThrowIfNull(centreFrequencies);
         ArgumentNullException.ThrowIfNull(gainsDb);
+
         lock (_gate)
         {
-            _equalizerGains = new double[BandFrequencies.Length];
+            // An empty band list means "whatever the backend defaults to", so a caller that has no
+            // saved layout yet does not have to invent one.
+            var frequencies = centreFrequencies.Count > 0 ? centreFrequencies : DefaultBandFrequencies;
+
+            _equalizerFrequencies = [.. frequencies];
+            _equalizerGains = new double[_equalizerFrequencies.Length];
             for (var i = 0; i < Math.Min(_equalizerGains.Length, gainsDb.Count); i++)
                 _equalizerGains[i] = Math.Clamp(gainsDb[i], -20, 20);
+
             _equalizerEnabled = enabled;
-            _equalizer?.Update(_equalizerGains, enabled);
+            _equalizer?.Update(_equalizerFrequencies, _equalizerGains, enabled);
         }
     }
 
@@ -311,7 +324,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     ///
     /// Boosts are real boosts: nothing is pre-attenuated to make room, so raising one band does not
     /// quieten the others. The peak limiter on the output only engages on frames that would
-    /// actually have clipped, and gain changes crossfade rather than snap.
+    /// actually have clipped, and both gain and centre-frequency changes crossfade rather than snap.
     /// </summary>
     private sealed class EqualizerSampleProvider : ISampleProvider
     {
@@ -320,6 +333,9 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         /// <summary>Gain difference below which a band counts as unchanged / flat.</summary>
         private const double GainEpsilon = 1e-9;
+
+        /// <summary>Centre-frequency difference below which a band counts as unmoved.</summary>
+        private const float FrequencyEpsilon = 1e-3f;
 
         /// <summary>Length of the crossfade that retunes a band after a slider moves.</summary>
         private const float RetuneSeconds = 0.02f;
@@ -332,6 +348,16 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         /// that close to Nyquist is too warped to be the band it claims to be.
         /// </summary>
         private const float MaxCentreFrequencyRatio = 0.45f;
+
+        /// <summary>Lowest centre frequency a band may be placed at.</summary>
+        private const float MinCentreFrequency = 10;
+
+        /// <summary>
+        /// Smallest ratio allowed between one band's centre and the next. Bands are kept strictly
+        /// ascending so band <i>n</i> on screen is always band <i>n</i> in the bank, but the margin
+        /// is deliberately tiny — some presets really do put two bands a sixth of an octave apart.
+        /// </summary>
+        private const float MinBandSpacingRatio = 1.01f;
 
         /// <summary>Refinement passes used to linearise the band-interaction solve.</summary>
         private const int SolverPasses = 3;
@@ -354,18 +380,14 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         private const double BandwidthScale = 1.5;
 
         private readonly ISampleProvider _source;
-        private readonly float[] _frequencies;
-        private readonly float[] _qFactors;
         private readonly float _limiterRelease;
         private readonly int _crossfadeSamples;
         private readonly object _settingsGate = new();
-        private double[] _pendingGains;
-        private bool _pendingEnabled;
-        private bool _settingsChanged = true;
+        private BandPlan? _pendingPlan;
         private bool _resetRequested;
 
         // Touched only by the audio thread once construction is done.
-        private double[] _activeGains;
+        private BandPlan _activePlan;
         private CrossfadingBiQuadFilter[][]? _filters;
         private float _limiterGain = 1;
         private int _tailSamples;
@@ -374,13 +396,11 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         public EqualizerSampleProvider(ISampleProvider source, IReadOnlyList<float> frequencies)
         {
+            ArgumentNullException.ThrowIfNull(frequencies);
             _source = source;
-            _frequencies = [.. frequencies];
-            _qFactors = ComputeQFactors(_frequencies);
-            _pendingGains = new double[_frequencies.Length];
-            _activeGains = new double[_frequencies.Length];
             _crossfadeSamples = Math.Max(1, (int)(RetuneSeconds * WaveFormat.SampleRate));
             _limiterRelease = 1 - MathF.Exp(-1 / (LimiterReleaseSeconds * WaveFormat.SampleRate));
+            _activePlan = CreatePlan(frequencies, new double[frequencies.Count], enabled: false);
         }
 
         public int Read(Span<float> buffer)
@@ -428,20 +448,19 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             return read;
         }
 
-        public void Update(IReadOnlyList<double> gainsDb, bool enabled)
+        /// <summary>
+        /// Stages a new band layout. Everything expensive — sanitising the frequencies, sizing each
+        /// band's Q, and solving the interaction between them — happens here on the caller's thread,
+        /// so the audio thread only ever picks up a finished plan.
+        /// </summary>
+        public void Update(IReadOnlyList<float> centreFrequencies, IReadOnlyList<double> gainsDb, bool enabled)
         {
-            var target = new double[_frequencies.Length];
-            for (var i = 0; i < Math.Min(target.Length, gainsDb.Count); i++)
-                target[i] = Math.Clamp(gainsDb[i], -20, 20);
+            ArgumentNullException.ThrowIfNull(centreFrequencies);
+            ArgumentNullException.ThrowIfNull(gainsDb);
 
-            var solved = SolveBandGains(target);
-
+            var plan = CreatePlan(centreFrequencies, gainsDb, enabled);
             lock (_settingsGate)
-            {
-                _pendingGains = solved;
-                _pendingEnabled = enabled;
-                _settingsChanged = true;
-            }
+                _pendingPlan = plan;
         }
 
         public void Reset()
@@ -450,36 +469,49 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 _resetRequested = true;
         }
 
+        private BandPlan CreatePlan(IReadOnlyList<float> centreFrequencies, IReadOnlyList<double> gainsDb, bool enabled)
+        {
+            var frequencies = SanitiseFrequencies(centreFrequencies);
+            var qFactors = ComputeQFactors(frequencies);
+
+            var target = new double[frequencies.Length];
+            if (enabled)
+                for (var i = 0; i < Math.Min(target.Length, gainsDb.Count); i++)
+                    target[i] = Math.Clamp(gainsDb[i], -20, 20);
+
+            // "Off" is a flat bank rather than a bypass, so switching it fades instead of cutting;
+            // a peaking biquad at 0 dB is an exact pass-through.
+            var filterGains = HasAnyGain(target)
+                ? SolveBandGains(frequencies, qFactors, target)
+                : target;
+
+            return new BandPlan(frequencies, qFactors, filterGains, HasAnyGain(filterGains));
+        }
+
         /// <summary>
-        /// Picks up pending settings and reports whether the bank still has to run. A disabled EQ
-        /// keeps processing until its bands have crossfaded back to flat, so switching it off
-        /// fades rather than cuts.
+        /// Picks up a pending plan and reports whether the bank still has to run. A flattened EQ
+        /// keeps processing until its bands have crossfaded back to unity, and only then bypasses.
         /// </summary>
         private bool RefreshFilters()
         {
-            double[] gains;
-            bool enabled, reset;
+            BandPlan? incoming;
+            bool reset;
             lock (_settingsGate)
             {
                 reset = _resetRequested;
                 _resetRequested = false;
 
-                if (!reset)
-                {
-                    if (!_settingsChanged)
-                        return _filters is not null && (_tailSamples > 0 || HasAnyGain(_activeGains));
+                if (_pendingPlan is null && !reset)
+                    return _filters is not null && (_tailSamples > 0 || _activePlan.HasAnyGain);
 
-                    // Restarting a crossfade that is still running snaps the output back to the
-                    // old response, and dragging a slider sends updates far faster than a
-                    // crossfade takes. Hold the newest settings — _settingsChanged stays set — and
-                    // pick them up when the one in flight finishes, a buffer or two away.
-                    if (_tailSamples > 0)
-                        return true;
-                }
+                // Restarting a crossfade that is still running snaps the output back to the old
+                // response, and dragging a slider sends updates far faster than a crossfade takes.
+                // Hold the newest plan and pick it up when the one in flight finishes.
+                if (_pendingPlan is not null && _tailSamples > 0 && !reset)
+                    return true;
 
-                gains = _pendingGains;
-                enabled = _pendingEnabled;
-                _settingsChanged = false;
+                incoming = _pendingPlan;
+                _pendingPlan = null;
             }
 
             if (reset)
@@ -488,51 +520,53 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 _tailSamples = 0;
             }
 
-            // A peaking biquad at 0 dB is an exact pass-through, so "off" is just a flat bank and
-            // the same crossfade carries the transition in either direction.
-            var target = enabled ? gains : new double[_frequencies.Length];
+            var plan = incoming ?? _activePlan;
 
-            if (_filters is null)
+            // A different band count is a different bank; there is nothing to crossfade from.
+            if (_filters is null || plan.Frequencies.Length != _activePlan.Frequencies.Length)
             {
-                BuildFilters(target);
-                _activeGains = target;
-                return HasAnyGain(target);
+                _activePlan = plan;
+                BuildFilters(plan);
+                return plan.HasAnyGain;
             }
 
-            for (var band = 0; band < _frequencies.Length; band++)
+            for (var band = 0; band < plan.Frequencies.Length; band++)
             {
-                if (Math.Abs(target[band] - _activeGains[band]) < GainEpsilon)
+                var moved = Math.Abs(plan.Frequencies[band] - _activePlan.Frequencies[band]) >= FrequencyEpsilon;
+                var regained = Math.Abs(plan.FilterGains[band] - _activePlan.FilterGains[band]) >= GainEpsilon;
+                if (!moved && !regained)
                     continue;
 
                 for (var channel = 0; channel < _filters.Length; channel++)
                 {
                     var filter = _filters[channel][band];
                     filter.Standby.SetPeakingEq(
-                        WaveFormat.SampleRate, CentreFrequency(band), _qFactors[band], BandGain(target, band));
+                        WaveFormat.SampleRate, CentreFrequency(plan, band), plan.QFactors[band], BandGain(plan, band));
                     filter.BeginCrossfade();
                 }
 
                 _tailSamples = _crossfadeSamples * WaveFormat.Channels;
             }
 
-            _activeGains = target;
-            return _tailSamples > 0 || HasAnyGain(target);
+            _activePlan = plan;
+            return _tailSamples > 0 || plan.HasAnyGain;
         }
 
-        private void BuildFilters(double[] gains)
+        private void BuildFilters(BandPlan plan)
         {
             var channels = WaveFormat.Channels;
             _filters = new CrossfadingBiQuadFilter[channels][];
             for (var channel = 0; channel < channels; channel++)
             {
-                _filters[channel] = new CrossfadingBiQuadFilter[_frequencies.Length];
-                for (var band = 0; band < _frequencies.Length; band++)
+                _filters[channel] = new CrossfadingBiQuadFilter[plan.Frequencies.Length];
+                for (var band = 0; band < plan.Frequencies.Length; band++)
                 {
-                    var frequency = CentreFrequency(band);
-                    var gainDb = BandGain(gains, band);
+                    var frequency = CentreFrequency(plan, band);
+                    var q = plan.QFactors[band];
+                    var gainDb = BandGain(plan, band);
                     _filters[channel][band] = new CrossfadingBiQuadFilter(
-                        BiQuadFilter.PeakingEQ(WaveFormat.SampleRate, frequency, _qFactors[band], gainDb),
-                        BiQuadFilter.PeakingEQ(WaveFormat.SampleRate, frequency, _qFactors[band], gainDb),
+                        BiQuadFilter.PeakingEQ(WaveFormat.SampleRate, frequency, q, gainDb),
+                        BiQuadFilter.PeakingEQ(WaveFormat.SampleRate, frequency, q, gainDb),
                         _crossfadeSamples);
                 }
             }
@@ -548,22 +582,45 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         }
 
         /// <summary>
-        /// Whether a band's centre is far enough below Nyquist for a peaking filter to actually be
-        /// the band it claims to be. At 48 kHz they all are; at low rates the top band is not.
+        /// Puts a caller-supplied band list into a shape the filter bank can use: finite, positive,
+        /// strictly ascending and inside the sample rate. Bands are nudged rather than sorted, so a
+        /// frequency typed under one slider can never jump to a different slider.
         /// </summary>
-        private bool IsRealisable(int band) =>
-            _frequencies[band] < WaveFormat.SampleRate * MaxCentreFrequencyRatio;
+        private float[] SanitiseFrequencies(IReadOnlyList<float> centreFrequencies)
+        {
+            var ceiling = WaveFormat.SampleRate * MaxCentreFrequencyRatio;
+            var result = new float[centreFrequencies.Count];
+            var floor = MinCentreFrequency;
+
+            for (var i = 0; i < result.Length; i++)
+            {
+                var value = centreFrequencies[i];
+                if (!float.IsFinite(value) || value <= 0)
+                    value = floor;
+
+                // Keep ascending, but never push a band past what the sample rate can represent —
+                // one parked at the ceiling is rendered flat rather than being misplaced.
+                result[i] = Math.Min(Math.Max(value, floor), ceiling);
+                floor = result[i] * MinBandSpacingRatio;
+            }
+
+            return result;
+        }
 
         /// <summary>
-        /// Centre frequency the biquad is built at. Always a legal frequency for the sample rate —
-        /// an unrealisable band is pinned to the limit and forced flat by <see cref="BandGain"/>,
-        /// rather than being squashed down onto the band below it.
+        /// Whether a band's centre is far enough below Nyquist for a peaking filter to actually be
+        /// the band it claims to be. At 48 kHz a 16 kHz band is; at 22 kHz it is not.
         /// </summary>
-        private float CentreFrequency(int band) =>
-            Math.Min(_frequencies[band], WaveFormat.SampleRate * MaxCentreFrequencyRatio);
+        private bool IsRealisable(BandPlan plan, int band) =>
+            plan.Frequencies[band] < WaveFormat.SampleRate * MaxCentreFrequencyRatio;
+
+        /// <summary>Centre frequency the biquad is built at; always legal for the sample rate.</summary>
+        private float CentreFrequency(BandPlan plan, int band) =>
+            Math.Min(plan.Frequencies[band], WaveFormat.SampleRate * MaxCentreFrequencyRatio);
 
         /// <summary>Gain a band's filter is driven at: zero, i.e. pass-through, if unrealisable.</summary>
-        private float BandGain(double[] gains, int band) => IsRealisable(band) ? (float)gains[band] : 0;
+        private float BandGain(BandPlan plan, int band) =>
+            IsRealisable(plan, band) ? (float)plan.FilterGains[band] : 0;
 
         private static bool HasAnyGain(double[] gains)
         {
@@ -580,10 +637,11 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         /// the bands so the response at each centre frequency lands on the number that was asked
         /// for, which is what makes one slider move one part of the spectrum and nothing else.
         /// </summary>
-        private double[] SolveBandGains(double[] target)
+        private double[] SolveBandGains(float[] frequencies, float[] qFactors, double[] target)
         {
             var count = target.Length;
             var solved = (double[])target.Clone();
+            var ceiling = WaveFormat.SampleRate * MaxCentreFrequencyRatio;
 
             for (var pass = 0; pass < SolverPasses; pass++)
             {
@@ -594,10 +652,10 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                     // rather than a fixed reference. A band sitting at zero still needs a usable
                     // column, since it may be asked to trim a neighbour's spill.
                     var reference = Math.Max(Math.Abs(solved[column]), 1);
-                    var realisable = IsRealisable(column);
+                    var realisable = frequencies[column] < ceiling;
                     for (var row = 0; row < count; row++)
                         interaction[row, column] = realisable
-                            ? PeakingResponseDb(_frequencies[row], column, reference) / reference
+                            ? PeakingResponseDb(frequencies[row], frequencies[column], qFactors[column], reference) / reference
                             : row == column ? 1 : 0;
                 }
 
@@ -634,17 +692,12 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         }
 
         /// <summary>Response, in dB, that one band's peaking filter has at a given frequency.</summary>
-        private double PeakingResponseDb(double frequency, int band, double gainDb)
+        private double PeakingResponseDb(double frequency, float centre, float q, double gainDb)
         {
-            if (!IsRealisable(band))
-                return 0;
-
-            var centre = CentreFrequency(band);
-
             // The RBJ peaking-EQ coefficients the biquad itself is built from.
             var a = Math.Pow(10, gainDb / 40);
             var w0 = 2 * Math.PI * centre / WaveFormat.SampleRate;
-            var alpha = Math.Sin(w0) / (2 * _qFactors[band]);
+            var alpha = Math.Sin(w0) / (2 * q);
             var cosW0 = Math.Cos(w0);
             var w = 2 * Math.PI * frequency / WaveFormat.SampleRate;
 
@@ -710,7 +763,8 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         /// <summary>
         /// Derives each band's Q from the spacing of its neighbours so its bell spans roughly the
         /// gap it owns. A single Q shared by unevenly spaced bands makes the closely spaced ones
-        /// pile up, which both skews the response and leaves the solve above more to undo.
+        /// pile up, which both skews the response and leaves the solve above more to undo. Since
+        /// the centres are user-adjustable, this is recomputed whenever they move.
         /// </summary>
         private static float[] ComputeQFactors(float[] frequencies)
         {
@@ -718,8 +772,8 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             for (var band = 0; band < frequencies.Length; band++)
             {
                 // The wider of the two neighbouring gaps, so a band always reaches its furthest
-                // neighbour; sizing to the average instead leaves a hole above 6.85 kHz, where the
-                // next band sits more than an octave away.
+                // neighbour; sizing to the average instead leaves a hole wherever one gap is much
+                // bigger than the other.
                 var below = band > 0 ? Math.Log2(frequencies[band] / frequencies[band - 1]) : 0;
                 var above = band < frequencies.Length - 1
                     ? Math.Log2(frequencies[band + 1] / frequencies[band])
@@ -732,5 +786,16 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             }
             return qFactors;
         }
+
+        /// <summary>
+        /// A finished band layout: where the bands sit, how wide each one ended up, and the gains
+        /// the filters are driven at (which are not the slider values — see
+        /// <see cref="SolveBandGains"/>). Immutable, so the audio thread adopts one atomically.
+        /// </summary>
+        private sealed record BandPlan(
+            float[] Frequencies,
+            float[] QFactors,
+            double[] FilterGains,
+            bool HasAnyGain);
     }
 }
