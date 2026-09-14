@@ -241,7 +241,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         LibraryRows.Clear();
         foreach (var song in songs)
-            LibraryRows.Add(new SongRow(song));
+        {
+            var row = new SongRow(song);
+            LibraryRows.Add(row);
+            _artProvider.GetArtAsync(row.Song.Path, bitmap => row.ArtBitmap = bitmap);
+        }
         RefreshCurrentHighlight();
     }
 
