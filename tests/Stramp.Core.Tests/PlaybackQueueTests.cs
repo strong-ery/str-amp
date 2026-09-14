@@ -108,6 +108,23 @@ public class PlaybackQueueTests
     }
 
     [Fact]
+    public void RestoreOrderKeepingCurrent_RestoresLibraryOrderAndCurrentPosition()
+    {
+        var queue = new PlaybackQueue();
+        var library = ThreeSongs();
+        queue.Build(library, shuffled: false);
+        queue.JumpTo(1);
+        var current = queue.Current;
+        queue.ReshuffleKeepingCurrent(library);
+
+        queue.RestoreOrderKeepingCurrent(library);
+
+        Assert.Equal(library, queue.Songs);
+        Assert.Equal(1, queue.Position);
+        Assert.Equal(current, queue.Current);
+    }
+
+    [Fact]
     public void RemoveAt_BeforeCurrent_ShiftsPositionBack()
     {
         var queue = new PlaybackQueue();

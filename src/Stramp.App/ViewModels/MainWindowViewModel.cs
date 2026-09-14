@@ -339,6 +339,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         if (Shuffled)
             Reshuffle();
+        else
+        {
+            _queue.RestoreOrderKeepingCurrent(_activeSongs);
+            RefreshQueueRows();
+        }
     }
 
     [RelayCommand]

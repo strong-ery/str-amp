@@ -44,6 +44,26 @@ public sealed class PlaybackQueue
         PlayFromLibrary(current, library, shuffled: true);
     }
 
+    /// <summary>Restores library/playlist order without changing the currently playing track.</summary>
+    public void RestoreOrderKeepingCurrent(IEnumerable<Song> library)
+    {
+        var current = Current;
+        _songs = library.ToList();
+
+        if (current is null)
+        {
+            Position = 0;
+            return;
+        }
+
+        Position = _songs.FindIndex(song => song.Path == current.Path);
+        if (Position >= 0)
+            return;
+
+        _songs.Insert(0, current);
+        Position = 0;
+    }
+
     /// <summary>Advances to the next queued track, or rebuilds the queue from the library if at the end.</summary>
     public void AdvanceOrRebuild(IEnumerable<Song> library, bool shuffled)
     {
