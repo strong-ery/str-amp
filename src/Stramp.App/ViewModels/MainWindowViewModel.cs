@@ -302,6 +302,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void PlaySong(SongRow row)
     {
         _queue.PlayFromLibrary(row.Song, _activeSongs, Shuffled);
+        StartNormalizationWarmup();
         LoadCurrent();
     }
 
@@ -415,6 +416,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             _queue.RestoreOrderKeepingCurrent(_activeSongs);
             RefreshQueueRows();
+            StartNormalizationWarmup();
         }
     }
 
@@ -512,8 +514,33 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             return;
 
         _normalizationWarmupCts = new CancellationTokenSource();
+        var prioritizedPaths = BuildNormalizationCacheOrder();
         _ = _loudnessNormalizer.CacheLibraryAsync(
-            _library.Select(song => song.Path), _normalizationWarmupCts.Token);
+            prioritizedPaths, _normalizationWarmupCts.Token);
+    }
+
+    private IReadOnlyList<string> BuildNormalizationCacheOrder()
+    {
+        var paths = new List<string>(_library.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Cache what will play next first. Once the queue is exhausted, sweep every remaining
+        // library track so leaving STRAMP open eventually produces a complete disk cache.
+        var queueStart = Math.Clamp(_queue.Position, 0, _queue.Songs.Count);
+        for (var index = queueStart; index < _queue.Songs.Count; index++)
+        {
+            var path = _queue.Songs[index].Path;
+            if (seen.Add(path))
+                paths.Add(path);
+        }
+
+        foreach (var song in _library)
+        {
+            if (seen.Add(song.Path))
+                paths.Add(song.Path);
+        }
+
+        return paths;
     }
 
     private void CancelNormalizationWarmup()
@@ -593,6 +620,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         _queue.ReshuffleKeepingCurrent(_activeSongs);
         RefreshQueueRows();
+        StartNormalizationWarmup();
     }
 
     partial void OnVolumeChanged(double value)
