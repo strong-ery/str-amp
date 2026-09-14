@@ -1,19 +1,17 @@
 using Stramp.Core.Models;
+using Stramp.Core.Settings;
 
 namespace Stramp.Core.Library;
 
 /// <summary>
-/// Finds .m3u/.m3u8 playlists under the library folder and resolves their entries against songs
-/// we already scanned, so playlists show up without needing a separate import step.
+/// Parses .m3u/.m3u8 path lists, resolves them against the library (or disk), and discovers
+/// playlists that still live under the music folder.
 /// </summary>
 public static class PlaylistScanner
 {
     public static List<Playlist> Scan(string musicDir, IReadOnlyList<Song> library)
     {
-        var byPath = new Dictionary<string, Song>(StringComparer.OrdinalIgnoreCase);
-        foreach (var song in library)
-            byPath[Path.GetFullPath(song.Path)] = song;
-
+        var byPath = IndexByPath(library);
         var playlists = new List<Playlist>();
 
         IEnumerable<string> files;
@@ -31,7 +29,7 @@ public static class PlaylistScanner
 
         foreach (var file in files)
         {
-            var songs = ReadEntries(file, byPath);
+            var songs = ResolveSongs(ParsePaths(file), byPath);
             if (songs.Count > 0)
             {
                 playlists.Add(new Playlist
@@ -46,9 +44,13 @@ public static class PlaylistScanner
         return playlists;
     }
 
-    private static List<Song> ReadEntries(string playlistFile, Dictionary<string, Song> byPath)
+    /// <summary>
+    /// Reads absolute file paths from an .m3u/.m3u8. Relative entries are resolved against the
+    /// playlist file's directory. Comments and blank lines are skipped.
+    /// </summary>
+    public static List<string> ParsePaths(string playlistFile)
     {
-        var songs = new List<Song>();
+        var paths = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         string[] lines;
@@ -58,7 +60,7 @@ public static class PlaylistScanner
         }
         catch
         {
-            return songs;
+            return paths;
         }
 
         var baseDir = Path.GetDirectoryName(playlistFile) ?? string.Empty;
@@ -67,6 +69,10 @@ public static class PlaylistScanner
         {
             var line = raw.Trim();
             if (line.Length == 0 || line.StartsWith('#'))
+                continue;
+
+            // Skip network streams — we only import local files.
+            if (line.Contains("://", StringComparison.Ordinal))
                 continue;
 
             string full;
@@ -79,10 +85,99 @@ public static class PlaylistScanner
                 continue;
             }
 
-            if (byPath.TryGetValue(full, out var song) && seen.Add(full))
+            if (seen.Add(full))
+                paths.Add(full);
+        }
+
+        return paths;
+    }
+
+    /// <summary>Builds playlists from previously imported path lists without touching the original m3u.</summary>
+    public static List<Playlist> FromSaved(IEnumerable<SavedPlaylist> saved, IReadOnlyList<Song> library)
+    {
+        var byPath = IndexByPath(library);
+        var playlists = new List<Playlist>();
+
+        foreach (var entry in saved)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Name) || entry.SongPaths.Count == 0)
+                continue;
+
+            var songs = ResolveSongs(entry.SongPaths, byPath);
+            if (songs.Count == 0)
+                continue;
+
+            playlists.Add(new Playlist { Name = entry.Name, Songs = songs });
+        }
+
+        playlists.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+        return playlists;
+    }
+
+    /// <summary>
+    /// Maps playlist paths to Song objects: prefer an already-scanned library entry, otherwise
+    /// read tags from disk when the file still exists.
+    /// </summary>
+    public static List<Song> ResolveSongs(IEnumerable<string> paths, IReadOnlyList<Song> library) =>
+        ResolveSongs(paths, IndexByPath(library));
+
+    private static List<Song> ResolveSongs(IEnumerable<string> paths, Dictionary<string, Song> byPath)
+    {
+        var songs = new List<Song>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var raw in paths)
+        {
+            string full;
+            try
+            {
+                full = Path.GetFullPath(raw);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (!seen.Add(full))
+                continue;
+
+            if (byPath.TryGetValue(full, out var song))
+            {
                 songs.Add(song);
+                continue;
+            }
+
+            if (!File.Exists(full))
+                continue;
+
+            try
+            {
+                songs.Add(LibraryScanner.ReadSong(full));
+            }
+            catch
+            {
+                // Unreadable audio — skip this entry.
+            }
         }
 
         return songs;
+    }
+
+    private static Dictionary<string, Song> IndexByPath(IReadOnlyList<Song> library)
+    {
+        var byPath = new Dictionary<string, Song>(StringComparer.OrdinalIgnoreCase);
+        foreach (var song in library)
+        {
+            try
+            {
+                byPath[Path.GetFullPath(song.Path)] = song;
+            }
+            catch
+            {
+                // Skip songs with unusable paths.
+            }
+        }
+
+        return byPath;
     }
 }

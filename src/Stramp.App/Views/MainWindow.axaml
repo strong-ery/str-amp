@@ -88,6 +88,13 @@
                             <TextBlock Text="Open Library…" />
                         </StackPanel>
                     </Button>
+                    <Button Click="OnImportPlaylistClicked" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                            Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{x:Static app:Icons.Playlist}" Width="16" Height="16" />
+                            <TextBlock Text="Import Playlist…" />
+                        </StackPanel>
+                    </Button>
                     <TextBlock Text="{Binding StatusText}" Foreground="OrangeRed" Margin="4,0,0,0"
                                VerticalAlignment="Center" />
                 </DockPanel>
@@ -121,9 +128,10 @@
                             </TextBox.InnerLeftContent>
                         </TextBox>
 
-                        <Panel>
+                        <Grid RowDefinitions="*">
                             <!-- Source menu: All Songs first, then playlists -->
-                            <ListBox x:Name="SourceList" Classes="flat-list" ItemsSource="{Binding LibrarySources}"
+                            <ListBox x:Name="SourceList" Grid.Row="0" Classes="flat-list"
+                                     ItemsSource="{Binding LibrarySources}"
                                      IsVisible="{Binding IsBrowsingSources}" Tapped="OnSourceTapped">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:LibrarySourceRow">
@@ -144,22 +152,33 @@
                             </ListBox>
 
                             <!-- Songs of the selected source -->
-                            <ListBox x:Name="LibraryList" Classes="flat-list" ItemsSource="{Binding LibraryRows}"
+                            <ListBox x:Name="LibraryList" Grid.Row="0" Classes="flat-list"
+                                     ItemsSource="{Binding LibraryRows}"
                                      IsVisible="{Binding !IsBrowsingSources}" Tapped="OnLibraryTapped">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:SongRow">
                                         <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}">
-                                            <StackPanel Orientation="Vertical" Spacing="2">
-                                                <TextBlock Text="{Binding Title}" Classes="queue-title"
-                                                           TextTrimming="CharacterEllipsis" />
-                                                <TextBlock Text="{Binding Artist}" FontSize="11" Opacity="0.65"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
+                                            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                                <Border Grid.Column="0" Classes="art-frame" Width="40" Height="40">
+                                                    <Grid>
+                                                        <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="18" Height="18" Opacity="0.35"
+                                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                  IsVisible="{Binding ArtBitmap, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                                        <Image Source="{Binding ArtBitmap}" Stretch="UniformToFill"
+                                                               RenderOptions.BitmapInterpolationMode="HighQuality"
+                                                               IsVisible="{Binding ArtBitmap, Converter={StaticResource NullToBool}}" />
+                                                    </Grid>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Title}" Classes="queue-title" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding Artist}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </Grid>
                                         </Border>
                                     </DataTemplate>
                                 </ListBox.ItemTemplate>
                             </ListBox>
-                        </Panel>
+                        </Grid>
                     </DockPanel>
                 </Border>
 
