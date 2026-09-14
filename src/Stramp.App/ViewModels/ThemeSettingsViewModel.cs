@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,7 +17,14 @@ public partial class EqualizerBandViewModel : ViewModelBase
     public string Label { get; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GainLabel))]
     public partial double Gain { get; set; }
+
+    /// <summary>
+    /// The band's gain as shown above its slider. Always carries an explicit sign so a boost reads
+    /// "+3" against a cut's "-3", and only shows a decimal when the value actually has one.
+    /// </summary>
+    public string GainLabel => Gain.ToString("+0.#;-0.#;0", CultureInfo.InvariantCulture);
 
     public EqualizerBandViewModel(float frequencyHz, double gain, Action<double> onGainChanged)
     {

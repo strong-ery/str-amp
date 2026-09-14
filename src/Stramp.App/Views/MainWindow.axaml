@@ -477,6 +477,8 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:EqualizerBandViewModel">
                                                     <StackPanel Spacing="4" Width="44">
+                                                        <TextBlock Text="{Binding GainLabel}" FontSize="10"
+                                                                   Opacity="0.85" HorizontalAlignment="Center" />
                                                         <Slider Orientation="Vertical" Height="110"
                                                                 Minimum="-20" Maximum="20"
                                                                 Value="{Binding Gain}"
