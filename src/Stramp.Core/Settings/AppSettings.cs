@@ -1,3 +1,5 @@
+using Stramp.Core.Playback;
+
 namespace Stramp.Core.Settings;
 
 public sealed class AppSettings
@@ -5,6 +7,7 @@ public sealed class AppSettings
     public string? LibraryPath { get; set; }
     public double Volume { get; set; } = 100;
     public bool Shuffle { get; set; } = true;
+    public LoopMode LoopMode { get; set; } = LoopMode.Off;
     public double WindowWidth { get; set; } = 980;
     public double WindowHeight { get; set; } = 640;
     public bool LibraryPanelOpen { get; set; } = true;

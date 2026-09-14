@@ -267,6 +267,10 @@
                             <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
                                 <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
                             </Button>
+                            <Button Classes="transport" Classes.active="{Binding IsLoopActive}"
+                                    Command="{Binding ToggleLoopCommand}" ToolTip.Tip="{Binding LoopToolTip}">
+                                <PathIcon Data="{Binding LoopIcon}" Width="18" Height="18" />
+                            </Button>
                         </StackPanel>
 
                         <Grid Grid.Column="3" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
@@ -293,6 +297,10 @@
                             </Button>
                             <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
                                 <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
+                            </Button>
+                            <Button Classes="transport" Classes.active="{Binding IsLoopActive}"
+                                    Command="{Binding ToggleLoopCommand}" ToolTip.Tip="{Binding LoopToolTip}">
+                                <PathIcon Data="{Binding LoopIcon}" Width="18" Height="18" />
                             </Button>
                         </StackPanel>
 

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -96,6 +97,21 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial bool Shuffled { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLoopActive))]
+    [NotifyPropertyChangedFor(nameof(LoopIcon))]
+    [NotifyPropertyChangedFor(nameof(LoopToolTip))]
+    public partial LoopMode LoopMode { get; set; }
+
+    public bool IsLoopActive => LoopMode != LoopMode.Off;
+    public Geometry LoopIcon => LoopMode == LoopMode.Track ? Icons.RepeatOne : Icons.Repeat;
+    public string LoopToolTip => LoopMode switch
+    {
+        LoopMode.Playlist => "Loop: Playlist",
+        LoopMode.Track => "Loop: Track",
+        _ => "Loop: Off"
+    };
+
+    [ObservableProperty]
     public partial string StatusText { get; set; } = "";
 
     [ObservableProperty]
@@ -135,6 +151,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _settings = settings;
 
         Shuffled = settings.Shuffle;
+        LoopMode = settings.LoopMode;
         Volume = settings.Volume;
         _player.Volume = settings.Volume;
         IsLibraryOpen = settings.LibraryPanelOpen;
@@ -430,6 +447,24 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         SettingsService.Save(_settings);
     }
 
+    partial void OnLoopModeChanged(LoopMode value)
+    {
+        _settings.LoopMode = value;
+        SettingsService.Save(_settings);
+    }
+
+    [RelayCommand]
+    private void ToggleLoop()
+    {
+        LoopMode = LoopMode switch
+        {
+            LoopMode.Off => LoopMode.Playlist,
+            LoopMode.Playlist => LoopMode.Track,
+            LoopMode.Track => LoopMode.Off,
+            _ => LoopMode.Off
+        };
+    }
+
     [RelayCommand]
     private void Reshuffle()
     {
@@ -569,6 +604,25 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         Dispatcher.UIThread.Post(() =>
         {
+            if (LoopMode == LoopMode.Track)
+            {
+                var song = _queue.Current;
+                if (song is not null)
+                {
+                    StartPlayback(song.Path);
+                    _isAdvancing = false;
+                    return;
+                }
+            }
+
+            if (LoopMode == LoopMode.Off && !_queue.HasNext)
+            {
+                IsPlaying = false;
+                _player.Pause();
+                _isAdvancing = false;
+                return;
+            }
+
             _queue.AdvanceOrRebuild(_activeSongs, Shuffled);
             LoadCurrent();
         });
