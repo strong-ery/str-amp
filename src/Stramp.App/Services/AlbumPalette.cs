@@ -20,6 +20,7 @@ public static class AlbumPalette
     private const int DirectHueBuckets = 36;
     private const int DirectHueWindow = 2;
     private const int HueBuckets = 24;
+    private const double MinimumAccentLuminance = 0.18;
 
     public static ArtPalette? ExtractInferred(Bitmap source)
     {
@@ -99,7 +100,7 @@ public static class AlbumPalette
             primaryColor,
             secondaryColor,
             InferredSampleSize);
-        return new ArtPalette(primaryColor, secondaryColor, background);
+        return EnsureReadableAccents(new ArtPalette(primaryColor, secondaryColor, background));
     }
 
     /// <summary>
@@ -115,18 +116,76 @@ public static class AlbumPalette
         var top = FindDirectionalHue(pixels, fromTop: true);
         var bottom = FindDirectionalHue(pixels, fromTop: false);
         if (top is null || bottom is null)
-            return ExtractRgbDominants(pixels);
+            return EnsureReadableAccents(ExtractRgbDominants(pixels));
 
         var primary = ExtractDominantHueColor(
             pixels, top.Value.Hue, top.Value.StartRow, top.Value.EndRow);
         var secondary = ExtractDominantHueColor(
             pixels, bottom.Value.Hue, bottom.Value.StartRow, bottom.Value.EndRow);
         if (primary is null || secondary is null)
-            return ExtractRgbDominants(pixels);
+            return EnsureReadableAccents(ExtractRgbDominants(pixels));
 
         var background = ExtractBackgroundColor(
             pixels, top.Value.Hue, bottom.Value.Hue, primary.Value.Color, secondary.Value.Color);
-        return new ArtPalette(primary.Value.Color, secondary.Value.Color, background);
+        return EnsureReadableAccents(
+            new ArtPalette(primary.Value.Color, secondary.Value.Color, background));
+    }
+
+    /// <summary>
+    /// Raises only HSL lightness until each accent reaches a perceptual luminance floor. Hue and
+    /// saturation remain fixed, so a sampled navy stays navy rather than washing toward grey.
+    /// The independently sampled background deliberately remains dark and untouched.
+    /// </summary>
+    private static ArtPalette? EnsureReadableAccents(ArtPalette? palette) => palette is { } value
+        ? EnsureReadableAccents(value)
+        : null;
+
+    private static ArtPalette EnsureReadableAccents(ArtPalette palette) => palette with
+    {
+        Primary = EnsureMinimumLuminance(palette.Primary, MinimumAccentLuminance),
+        Secondary = EnsureMinimumLuminance(palette.Secondary, MinimumAccentLuminance),
+    };
+
+    private static Color EnsureMinimumLuminance(Color color, double minimumLuminance)
+    {
+        if (RelativeLuminance(color) >= minimumLuminance)
+            return color;
+
+        var (hue, saturation, originalLightness) = ToHsl(
+            color.R / 255.0, color.G / 255.0, color.B / 255.0);
+        var low = originalLightness;
+        var high = 1.0;
+
+        // Find the smallest lightness increase that clears the floor. Binary search avoids
+        // over-brightening naturally dark cover colors while accounting for blue appearing
+        // darker than yellow at the same raw channel values.
+        for (var iteration = 0; iteration < 12; iteration++)
+        {
+            var candidateLightness = (low + high) / 2;
+            var candidate = FromHsl(hue, saturation, candidateLightness);
+            if (RelativeLuminance(candidate) < minimumLuminance)
+                low = candidateLightness;
+            else
+                high = candidateLightness;
+        }
+
+        var lifted = FromHsl(hue, saturation, high);
+        return Color.FromArgb(color.A, lifted.R, lifted.G, lifted.B);
+    }
+
+    private static double RelativeLuminance(Color color)
+    {
+        static double Linearize(byte channel)
+        {
+            var value = channel / 255.0;
+            return value <= 0.04045
+                ? value / 12.92
+                : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+
+        return 0.2126 * Linearize(color.R) +
+               0.7152 * Linearize(color.G) +
+               0.0722 * Linearize(color.B);
     }
 
     private static byte[]? SamplePixels(Bitmap source, int sampleSize)
