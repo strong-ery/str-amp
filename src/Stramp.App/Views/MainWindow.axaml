@@ -45,6 +45,10 @@
             <Grid DockPanel.Dock="Top" Height="34" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
                 <Menu Grid.Column="0" VerticalAlignment="Center" Margin="6,0,0,0">
                     <MenuItem Header="stramp">
+                        <MenuItem Header="Layout">
+                            <MenuItem Header="Equalize Side Panels" Command="{Binding EqualizeSidePanelsCommand}" />
+                            <MenuItem Header="Toggle Library Panel" Command="{Binding ToggleLibraryOpenCommand}" />
+                        </MenuItem>
                         <MenuItem Header="Styling">
                             <MenuItem Header="Theme…" Command="{Binding OpenSettingsCommand}" />
                         </MenuItem>
@@ -70,13 +74,24 @@
                 </StackPanel>
             </Grid>
 
-            <Grid ColumnDefinitions="Auto,3*,1.2*" Margin="16,6,16,16" RowDefinitions="Auto,*">
+            <Grid x:Name="MainContentGrid" Margin="16,6,16,16" RowDefinitions="Auto,*">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" MinWidth="0" MaxWidth="600" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="280" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="280" MinWidth="160" MaxWidth="600" />
+                </Grid.ColumnDefinitions>
 
                 <!-- Header -->
-                <DockPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,0,0,12">
+                <DockPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,0,0,12">
                     <Button Classes="transport" Command="{Binding ToggleLibraryOpenCommand}"
                             ToolTip.Tip="Show/hide library" DockPanel.Dock="Left" Margin="0,0,8,0">
                         <PathIcon Data="{x:Static app:Icons.Menu}" Width="18" Height="18" />
+                    </Button>
+                    <Button Classes="transport" Command="{Binding EqualizeSidePanelsCommand}"
+                            ToolTip.Tip="Equalize side panel widths" DockPanel.Dock="Left" Margin="0,0,8,0">
+                        <PathIcon Data="{x:Static app:Icons.EqualizePanels}" Width="17" Height="17" />
                     </Button>
                     <Button Classes="transport" Command="{Binding OpenSettingsCommand}"
                             ToolTip.Tip="Settings" DockPanel.Dock="Left" Margin="0,0,10,0">
@@ -100,17 +115,8 @@
                 </DockPanel>
 
                 <!-- Library (collapsible): source menu, then the song list for the chosen source -->
-                <Border Grid.Row="1" Grid.Column="0"
-                        Width="{Binding IsLibraryOpen, Converter={StaticResource LibraryWidth}}"
-                        Margin="{Binding IsLibraryOpen, Converter={StaticResource LibraryMargin}}"
-                        ClipToBounds="True" HorizontalAlignment="Left">
-                    <Border.Transitions>
-                        <Transitions>
-                            <DoubleTransition Property="Width" Duration="0:0:0.22" Easing="CubicEaseInOut" />
-                            <ThicknessTransition Property="Margin" Duration="0:0:0.22" Easing="CubicEaseInOut" />
-                        </Transitions>
-                    </Border.Transitions>
-                    <DockPanel Width="280">
+                <Border x:Name="LibraryBorder" Grid.Row="1" Grid.Column="0" ClipToBounds="True" HorizontalAlignment="Stretch">
+                    <DockPanel HorizontalAlignment="Stretch">
                         <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,6">
                             <Button Grid.Column="0" Classes="transport" Width="24" Height="24" Padding="3"
                                     Margin="0,0,6,0" IsVisible="{Binding !IsBrowsingSources}"
@@ -182,8 +188,24 @@
                     </DockPanel>
                 </Border>
 
+                <!-- Left Splitter -->
+                <GridSplitter x:Name="LeftSplitter" Grid.Row="1" Grid.Column="1"
+                              Width="8" Margin="1,0" Background="Transparent"
+                              ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                              HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                              IsVisible="{Binding IsLibraryOpen}">
+                    <GridSplitter.Template>
+                        <ControlTemplate>
+                            <Border Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                <Border Width="2" CornerRadius="1" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                                        Background="{DynamicResource AppIconBrush}" Opacity="0.15" />
+                            </Border>
+                        </ControlTemplate>
+                    </GridSplitter.Template>
+                </GridSplitter>
+
                 <!-- Player -->
-                <Grid Grid.Row="1" Grid.Column="1" RowDefinitions="*,Auto,Auto,Auto,Auto" Margin="10,0">
+                <Grid Grid.Row="1" Grid.Column="2" RowDefinitions="*,Auto,Auto,Auto,Auto" Margin="10,0">
                     <Border x:Name="NowPlayingCard" Grid.Row="0" Classes="now-playing-card" ClipToBounds="True"
                             SizeChanged="OnViewportSizeChanged">
                         <Grid>
@@ -262,8 +284,23 @@
                     </Grid>
                 </Grid>
 
+                <!-- Right Splitter -->
+                <GridSplitter x:Name="RightSplitter" Grid.Row="1" Grid.Column="3"
+                              Width="8" Margin="1,0" Background="Transparent"
+                              ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                              HorizontalAlignment="Center" VerticalAlignment="Stretch">
+                    <GridSplitter.Template>
+                        <ControlTemplate>
+                            <Border Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                <Border Width="2" CornerRadius="1" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                                        Background="{DynamicResource AppIconBrush}" Opacity="0.15" />
+                            </Border>
+                        </ControlTemplate>
+                    </GridSplitter.Template>
+                </GridSplitter>
+
                 <!-- Queue sidebar -->
-                <DockPanel Grid.Row="1" Grid.Column="2" Margin="10,0,0,0">
+                <DockPanel Grid.Row="1" Grid.Column="4" Margin="10,0,0,0">
                     <TextBlock Text="UP NEXT" Classes="section-header" DockPanel.Dock="Top" />
                     <ListBox x:Name="QueueList" Classes="flat-list" ItemsSource="{Binding QueueRows}" Tapped="OnQueueTapped">
                         <ListBox.ItemTemplate>

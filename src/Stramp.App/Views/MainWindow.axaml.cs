@@ -85,10 +85,16 @@ public partial class MainWindow : Window
                     vm.Volume = volume;
             });
 
+        LeftSplitter.DragDelta += OnLeftSplitterDragDelta;
+        LeftSplitter.DragCompleted += OnLeftSplitterDragCompleted;
+        RightSplitter.DragDelta += OnRightSplitterDragDelta;
+        RightSplitter.DragCompleted += OnRightSplitterDragCompleted;
+
         Opened += (_, _) =>
         {
             _frameTimer.Start();
             SetUpThumbnailToolbar();
+            UpdateColumnWidths();
         };
         Closed += (_, _) =>
         {
@@ -158,6 +164,7 @@ public partial class MainWindow : Window
 
         _observedViewModel.PropertyChanged += OnViewModelPropertyChanged;
         _observedViewModel.VisualizerFeed.WaveformReady += OnWaveformReady;
+        UpdateColumnWidths();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -167,6 +174,63 @@ public partial class MainWindow : Window
             _thumbnailToolbar?.SetPlaying(ViewModel?.IsPlaying ?? false);
             _mediaKeys.SetPlaybackState(ViewModel?.IsPlaying ?? false);
         }
+        else if (e.PropertyName is nameof(MainWindowViewModel.IsLibraryOpen) or
+                 nameof(MainWindowViewModel.LeftPanelWidth) or
+                 nameof(MainWindowViewModel.RightPanelWidth))
+        {
+            UpdateColumnWidths();
+        }
+    }
+
+    private ColumnDefinition? LeftColumn =>
+        MainContentGrid?.ColumnDefinitions.Count > 0 ? MainContentGrid.ColumnDefinitions[0] : null;
+
+    private ColumnDefinition? RightColumn =>
+        MainContentGrid?.ColumnDefinitions.Count > 4 ? MainContentGrid.ColumnDefinitions[4] : null;
+
+    private void UpdateColumnWidths()
+    {
+        if (ViewModel is not { } vm || LeftColumn is not { } leftCol || RightColumn is not { } rightCol)
+            return;
+
+        if (vm.IsLibraryOpen)
+        {
+            if (!leftCol.Width.IsAbsolute || Math.Abs(leftCol.Width.Value - vm.LeftPanelWidth) > 0.5)
+                leftCol.Width = new GridLength(vm.LeftPanelWidth);
+            LeftSplitter.IsVisible = true;
+        }
+        else
+        {
+            leftCol.Width = new GridLength(0);
+            LeftSplitter.IsVisible = false;
+        }
+
+        if (!rightCol.Width.IsAbsolute || Math.Abs(rightCol.Width.Value - vm.RightPanelWidth) > 0.5)
+            rightCol.Width = new GridLength(vm.RightPanelWidth);
+    }
+
+    private void OnLeftSplitterDragDelta(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && LeftColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.LeftPanelWidth = w.Value;
+    }
+
+    private void OnLeftSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && LeftColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.LeftPanelWidth = w.Value;
+    }
+
+    private void OnRightSplitterDragDelta(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && RightColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.RightPanelWidth = w.Value;
+    }
+
+    private void OnRightSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && RightColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.RightPanelWidth = w.Value;
     }
 
     private void OnWaveformReady() => WaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
