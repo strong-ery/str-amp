@@ -24,7 +24,7 @@ public static class ThemeService
     public static void ApplyFromArt(ArtPalette palette) => ApplyColors(
         palette.Primary,
         palette.Secondary,
-        AlbumPalette.DeriveBackground(palette.Primary));
+        palette.Background);
 
     private static void ApplyColors(Color primary, Color secondary, Color background)
     {

@@ -30,7 +30,7 @@ public partial class EqualizerBandViewModel : ViewModelBase
     partial void OnGainChanged(double value) => _onGainChanged(value);
 }
 
-/// <summary>Backs the in-app theme panel: manual color picks, presets, and the album-art toggle.</summary>
+/// <summary>Backs the in-app theme panel: manual color picks, presets, and album-art color mode.</summary>
 public partial class ThemeSettingsViewModel : ViewModelBase
 {
     private static readonly Color DefaultPrimary = Color.Parse("#7C5CFF");
@@ -57,7 +57,13 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     ];
 
     [ObservableProperty]
-    public partial bool DeriveFromArt { get; set; }
+    [NotifyPropertyChangedFor(nameof(UsesManualColors))]
+    public partial AlbumArtColorMode ArtColorMode { get; set; }
+
+    public IReadOnlyList<AlbumArtColorMode> ArtColorModes { get; } =
+        Enum.GetValues<AlbumArtColorMode>();
+
+    public bool UsesManualColors => ArtColorMode == AlbumArtColorMode.None;
 
     [ObservableProperty]
     public partial bool ShowRingVisualizer { get; set; }
@@ -97,7 +103,8 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _onManualColorsChanged = onManualColorsChanged;
         _onNormalizationChanged = onNormalizationChanged ?? (() => { });
 
-        DeriveFromArt = settings.DeriveColorsFromArt;
+        ArtColorMode = settings.ArtColorMode ??
+            (settings.DeriveColorsFromArt ? AlbumArtColorMode.Inferred : AlbumArtColorMode.None);
         ShowRingVisualizer = settings.ShowRingVisualizer;
         ShowBottomVisualizer = settings.ShowBottomVisualizer;
         AnimateAlbumArt = settings.AnimateAlbumArt;
@@ -115,9 +122,10 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     {
     }
 
-    partial void OnDeriveFromArtChanged(bool value)
+    partial void OnArtColorModeChanged(AlbumArtColorMode value)
     {
-        _settings.DeriveColorsFromArt = value;
+        _settings.ArtColorMode = value;
+        _settings.DeriveColorsFromArt = value != AlbumArtColorMode.None;
         SettingsService.Save(_settings);
         _onManualColorsChanged();
     }
@@ -224,7 +232,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _suppressApply = false;
 
         // Picking a preset is an explicit manual choice, so stop following the artwork.
-        DeriveFromArt = false;
+        ArtColorMode = AlbumArtColorMode.None;
         ApplyLive();
     }
 
@@ -236,7 +244,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         Secondary.SetColor(DefaultSecondary);
         Background.SetColor(DefaultBackground);
         _suppressApply = false;
-        DeriveFromArt = true;
+        ArtColorMode = AlbumArtColorMode.Inferred;
         ApplyLive();
     }
 

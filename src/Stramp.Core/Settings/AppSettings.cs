@@ -2,6 +2,13 @@ using Stramp.Core.Playback;
 
 namespace Stramp.Core.Settings;
 
+public enum AlbumArtColorMode
+{
+    None,
+    Inferred,
+    Direct,
+}
+
 public sealed class AppSettings
 {
     public string? LibraryPath { get; set; }
@@ -25,6 +32,9 @@ public sealed class AppSettings
 
     /// <summary>When on (the default), theme colors follow the current album art instead of the manual picks above.</summary>
     public bool DeriveColorsFromArt { get; set; } = true;
+
+    /// <summary>Null only for settings files created before the three-way art color option existed.</summary>
+    public AlbumArtColorMode? ArtColorMode { get; set; }
 
     public bool ShowRingVisualizer { get; set; } = true;
     public bool ShowBottomVisualizer { get; set; } = true;

@@ -496,15 +496,16 @@
                             <TextBlock Text="THEME" Classes="section-header" Margin="0,6,0,0" />
 
                             <StackPanel Spacing="6">
-                                <ToggleSwitch IsChecked="{Binding Theme.DeriveFromArt}"
-                                              OnContent="Match colors to album art"
-                                              OffContent="Match colors to album art" />
+                                <TextBlock Text="Album art color matching" Classes="field-label" />
+                                <ComboBox ItemsSource="{Binding Theme.ArtColorModes}"
+                                          SelectedItem="{Binding Theme.ArtColorMode}"
+                                          HorizontalAlignment="Left" MinWidth="140" />
                                 <TextBlock Classes="field-hint"
-                                           Text="Accent and background colors follow the artwork of whatever's playing. Turn this off to pick your own." />
+                                           Text="Inferred creates a polished palette; Direct searches inward from the cover's top and bottom for real colors; None uses your manual theme." />
                             </StackPanel>
 
-                            <StackPanel Spacing="8" IsEnabled="{Binding !Theme.DeriveFromArt}"
-                                        Opacity="{Binding !Theme.DeriveFromArt, Converter={StaticResource EnabledOpacity}}">
+                            <StackPanel Spacing="8" IsEnabled="{Binding Theme.UsesManualColors}"
+                                        Opacity="{Binding Theme.UsesManualColors, Converter={StaticResource EnabledOpacity}}">
                                 <TextBlock Text="Presets" Classes="field-label" />
                                 <ItemsControl ItemsSource="{Binding Theme.Presets}">
                                     <ItemsControl.ItemsPanel>

@@ -41,8 +41,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>False until the current queue entry has actually been handed to the player.</summary>
     private bool _playerHasCurrentTrack;
 
-    /// <summary>Colors pulled from the current cover, kept so toggling the option can re-apply them.</summary>
-    private ArtPalette? _artPalette;
+    /// <summary>Both current-cover modes are cached so switching the dropdown is instant.</summary>
+    private ArtPalette? _inferredArtPalette;
+    private ArtPalette? _directArtPalette;
 
     public ObservableCollection<SongRow> LibraryRows { get; } = [];
     public ObservableCollection<SongRow> QueueRows { get; } = [];
@@ -561,8 +562,17 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>Re-applies the theme from whichever source is currently active (artwork or manual picks).</summary>
     private void ApplyTheme()
     {
-        if (_settings.DeriveColorsFromArt && _artPalette is { } palette)
-            ThemeService.ApplyFromArt(palette);
+        var palette = _settings.ArtColorMode switch
+        {
+            AlbumArtColorMode.Inferred when CurrentArtBitmap is not null =>
+                _inferredArtPalette ??= AlbumPalette.ExtractInferred(CurrentArtBitmap),
+            AlbumArtColorMode.Direct when CurrentArtBitmap is not null =>
+                _directArtPalette ??= AlbumPalette.ExtractDirect(CurrentArtBitmap),
+            _ => null,
+        };
+
+        if (palette is { } artPalette)
+            ThemeService.ApplyFromArt(artPalette);
         else
             ThemeService.Apply(_settings);
     }
@@ -686,6 +696,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         ProgressSeconds = 0;
         ElapsedText = "0:00";
         CurrentArtBitmap = null;
+        _inferredArtPalette = null;
+        _directArtPalette = null;
         _reportedPosition = 0;
         _sincePositionReport.Reset();
 
@@ -709,7 +721,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 return;
 
             CurrentArtBitmap = bitmap;
-            _artPalette = bitmap is null ? null : AlbumPalette.Extract(bitmap);
+            _inferredArtPalette = null;
+            _directArtPalette = null;
             ApplyTheme();
         });
 
