@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Rendering;
 
 namespace Stramp.App.Controls;
 
@@ -11,7 +12,7 @@ namespace Stramp.App.Controls;
 /// color, the rest dimmed, with a playhead line. Click or drag anywhere to scrub. Falls back to a
 /// flat bar until the waveform for the current track has been decoded.
 /// </summary>
-public sealed class WaveformSeekBar : Control
+public sealed class WaveformSeekBar : Control, ICustomHitTest
 {
     public static readonly StyledProperty<double> ProgressProperty =
         AvaloniaProperty.Register<WaveformSeekBar, double>(nameof(Progress));
@@ -109,6 +110,13 @@ public sealed class WaveformSeekBar : Control
 
     private double PositionFrom(PointerEventArgs e) =>
         Bounds.Width <= 0 ? 0 : Math.Clamp(e.GetPosition(this).X / Bounds.Width, 0, 1);
+
+    /// <summary>
+    /// Treat the whole control as the seek target. Without this, transparent space around short
+    /// waveform bars can fall through hit testing and forces the pointer onto a painted bar.
+    /// </summary>
+    public bool HitTest(Point point) =>
+        point.X >= 0 && point.X <= Bounds.Width && point.Y >= 0 && point.Y <= Bounds.Height;
 
     public override void Render(DrawingContext context)
     {
