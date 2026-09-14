@@ -62,4 +62,11 @@ public sealed class AppSettings
     /// what settings written before the bands became adjustable will say.
     /// </summary>
     public List<double> EqualizerFrequencies { get; set; } = [];
+
+    /// <summary>Amounts for the five post-equalizer effects, 0-100 each. Zero means off.</summary>
+    public double ClarityAmount { get; set; }
+    public double AmbienceAmount { get; set; }
+    public double SurroundAmount { get; set; }
+    public double DynamicBoostAmount { get; set; }
+    public double BassBoostAmount { get; set; }
 }

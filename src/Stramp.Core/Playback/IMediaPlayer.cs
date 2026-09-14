@@ -41,4 +41,7 @@ public interface IMediaPlayer : IDisposable
     /// empty band list to keep the backend's defaults, or enabled:false to bypass the EQ.
     /// </summary>
     void ApplyEqualizer(IReadOnlyList<float> centreFrequencies, IReadOnlyList<double> gainsDb, bool enabled);
+
+    /// <summary>Applies the post-equalizer enhancement effects. Amounts of zero bypass them.</summary>
+    void ApplyEffects(AudioEffectSettings settings);
 }

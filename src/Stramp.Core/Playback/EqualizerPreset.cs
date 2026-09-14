@@ -9,8 +9,15 @@ namespace Stramp.Core.Playback;
 /// </summary>
 /// <param name="Name">Display name.</param>
 /// <param name="Points">Curve points, ascending by frequency.</param>
-public sealed record EqualizerPreset(string Name, IReadOnlyList<EqualizerPresetPoint> Points)
+/// <param name="Effects">Amounts for the five enhancement effects that sit after the equalizer.</param>
+public sealed record EqualizerPreset(
+    string Name,
+    IReadOnlyList<EqualizerPresetPoint> Points,
+    AudioEffectSettings? Effects = null)
 {
+    /// <summary>The effect amounts this preset asks for; all off when it names none.</summary>
+    public AudioEffectSettings EffectAmounts => Effects ?? AudioEffectSettings.None;
+
     /// <summary>
     /// The curve sampled at each of <paramref name="bandFrequencies"/>, interpolated linearly in
     /// log frequency — the axis the bands are spaced on and the one the curve was drawn against.

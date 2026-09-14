@@ -2,6 +2,7 @@ using NAudio.CoreAudioApi;
 using NAudio.Dsp;
 using NAudio.Wave;
 using System.Runtime.Versioning;
+using Stramp.Audio.Effects;
 using Stramp.Core.Playback;
 
 namespace Stramp.Audio;
@@ -26,9 +27,11 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     private MediaFoundationReader? _reader;
     private GainSampleProvider? _normalizer;
     private EqualizerSampleProvider? _equalizer;
+    private AudioEffectChain? _effects;
     private float[] _equalizerFrequencies = [.. DefaultBandFrequencies];
     private double[] _equalizerGains = new double[DefaultBandFrequencies.Length];
     private bool _equalizerEnabled;
+    private AudioEffectSettings _effectSettings = AudioEffectSettings.None;
     private double _volume = 100;
     private double _normalizationGainDb;
     private bool _disposed;
@@ -116,6 +119,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             var normalizer = new GainSampleProvider(reader.ToSampleProvider(), _normalizationGainDb);
             var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
             equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
+            var effects = new AudioEffectChain(equalizer, _effectSettings);
 
             // Shared mode is intentional: this is the normal Windows music-app path, supports the
             // system volume mixer, and lets Windows perform the one required 44.1 -> 48 kHz conversion
@@ -130,13 +134,14 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 .GetAwaiter()
                 .GetResult();
 
-            output.Init(equalizer);
+            output.Init(effects);
             output.Volume = (float)(_volume / 100.0);
             output.PlaybackStopped += (_, e) => HandlePlaybackStopped(output, e);
 
             _reader = reader;
             _normalizer = normalizer;
             _equalizer = equalizer;
+            _effects = effects;
             _output = output;
             output.Play();
             _positionTimer.Change(0, 100);
@@ -181,6 +186,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             var seconds = Math.Clamp(positionSeconds, 0, _reader.TotalTime.TotalSeconds);
             _reader.CurrentTime = TimeSpan.FromSeconds(seconds);
             _equalizer?.Reset();
+            _effects?.Reset();
         }
     }
 
@@ -202,6 +208,16 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
             _equalizerEnabled = enabled;
             _equalizer?.Update(_equalizerFrequencies, _equalizerGains, enabled);
+        }
+    }
+
+    public void ApplyEffects(AudioEffectSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        lock (_gate)
+        {
+            _effectSettings = settings.Clamped();
+            _effects?.Update(_effectSettings);
         }
     }
 
@@ -250,6 +266,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         _reader = null;
         _normalizer = null;
         _equalizer = null;
+        _effects = null;
 
         if (output is not null)
         {
@@ -323,14 +340,12 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     /// the spectrum and leaves the rest where it was.
     ///
     /// Boosts are real boosts: nothing is pre-attenuated to make room, so raising one band does not
-    /// quieten the others. The peak limiter on the output only engages on frames that would
-    /// actually have clipped, and both gain and centre-frequency changes crossfade rather than snap.
+    /// quieten the others. Gain and centre-frequency changes crossfade rather than snap. Boosting
+    /// can push the signal past full scale; holding it back is the job of the peak limiter at the
+    /// end of the chain, not of this stage.
     /// </summary>
     private sealed class EqualizerSampleProvider : ISampleProvider
     {
-        /// <summary>Peak level the limiter holds the output to, a hair under full scale.</summary>
-        private const float Ceiling = 0.999f;
-
         /// <summary>Gain difference below which a band counts as unchanged / flat.</summary>
         private const double GainEpsilon = 1e-9;
 
@@ -339,9 +354,6 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         /// <summary>Length of the crossfade that retunes a band after a slider moves.</summary>
         private const float RetuneSeconds = 0.02f;
-
-        /// <summary>Time constant for the limiter to let go again after a peak.</summary>
-        private const float LimiterReleaseSeconds = 0.25f;
 
         /// <summary>
         /// Bands centred above this fraction of the sample rate are left flat: a peaking biquad
@@ -380,7 +392,6 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         private const double BandwidthScale = 1.5;
 
         private readonly ISampleProvider _source;
-        private readonly float _limiterRelease;
         private readonly int _crossfadeSamples;
         private readonly object _settingsGate = new();
         private BandPlan? _pendingPlan;
@@ -389,7 +400,6 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         // Touched only by the audio thread once construction is done.
         private BandPlan _activePlan;
         private CrossfadingBiQuadFilter[][]? _filters;
-        private float _limiterGain = 1;
         private int _tailSamples;
 
         public WaveFormat WaveFormat => _source.WaveFormat;
@@ -399,7 +409,6 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             ArgumentNullException.ThrowIfNull(frequencies);
             _source = source;
             _crossfadeSamples = Math.Max(1, (int)(RetuneSeconds * WaveFormat.SampleRate));
-            _limiterRelease = 1 - MathF.Exp(-1 / (LimiterReleaseSeconds * WaveFormat.SampleRate));
             _activePlan = CreatePlan(frequencies, new double[frequencies.Count], enabled: false);
         }
 
@@ -413,33 +422,22 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             var channels = WaveFormat.Channels;
             for (var frame = 0; frame + channels <= read; frame += channels)
             {
-                var peak = 0f;
                 for (var channel = 0; channel < channels; channel++)
                 {
                     var sample = buffer[frame + channel];
                     foreach (var filter in _filters[channel])
                         sample = filter.Transform(sample);
-                    buffer[frame + channel] = sample;
-                    peak = MathF.Max(peak, MathF.Abs(sample));
-                }
 
-                if (!float.IsFinite(peak))
-                {
                     // A bad sample from the decoder can latch in the feedback path; flush the
                     // delay lines rather than play out the result of a diverged filter.
-                    ResetFilterState();
-                    buffer.Slice(frame, channels).Clear();
-                    continue;
+                    if (!float.IsFinite(sample))
+                    {
+                        ResetFilterState();
+                        sample = 0;
+                    }
+
+                    buffer[frame + channel] = sample;
                 }
-
-                // Instant attack, exponential release: the gain only ever drops on a frame that
-                // would have exceeded the ceiling, so anything below it passes through untouched.
-                var required = peak > Ceiling ? Ceiling / peak : 1f;
-                _limiterGain = MathF.Min(required, _limiterGain + (1 - _limiterGain) * _limiterRelease);
-
-                if (_limiterGain < 1)
-                    for (var channel = 0; channel < channels; channel++)
-                        buffer[frame + channel] *= _limiterGain;
             }
 
             if (_tailSamples > 0)
@@ -578,7 +576,6 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 foreach (var channel in _filters)
                     foreach (var filter in channel)
                         filter.Reset();
-            _limiterGain = 1;
         }
 
         /// <summary>
