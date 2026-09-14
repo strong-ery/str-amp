@@ -56,31 +56,35 @@ public sealed class AudioVisualizerFeed
             return envelope;
 
         var samplesPerBucket = Math.Max(1, pcm.Length / buckets);
-        var loudest = 0f;
+        var maxRms = 0f;
 
         for (var b = 0; b < buckets; b++)
         {
             var start = (int)((long)b * pcm.Length / buckets);
             var end = Math.Min(pcm.Length, start + samplesPerBucket);
+            var count = Math.Max(1, end - start);
 
-            var peak = 0f;
+            double sumSq = 0;
             for (var i = start; i < end; i++)
             {
-                var v = Math.Abs(pcm[i]);
-                if (v > peak)
-                    peak = v;
+                var v = pcm[i];
+                sumSq += v * v;
             }
 
-            envelope[b] = peak;
-            if (peak > loudest)
-                loudest = peak;
+            var rms = (float)Math.Sqrt(sumSq / count);
+            envelope[b] = rms;
+            if (rms > maxRms)
+                maxRms = rms;
         }
 
-        // Normalize against the track's own peak so quiet masters still fill the bar.
-        if (loudest > 0.0001f)
+        // Normalize RMS against max track energy and apply perceptual power curve (gamma 0.7)
+        if (maxRms > 0.0001f)
         {
             for (var b = 0; b < buckets; b++)
-                envelope[b] = Math.Clamp(envelope[b] / loudest, 0f, 1f);
+            {
+                var norm = Math.Clamp(envelope[b] / maxRms, 0f, 1f);
+                envelope[b] = (float)Math.Pow(norm, 0.7);
+            }
         }
 
         return envelope;
