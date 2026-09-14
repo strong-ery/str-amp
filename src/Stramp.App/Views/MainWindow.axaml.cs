@@ -96,6 +96,7 @@ public partial class MainWindow : Window
             SetUpThumbnailToolbar();
             UpdateColumnWidths();
         };
+        SizeChanged += (_, _) => UpdateColumnWidths();
         Closed += (_, _) =>
         {
             _frameTimer.Stop();
@@ -194,10 +195,30 @@ public partial class MainWindow : Window
         if (ViewModel is not { } vm || LeftColumn is not { } leftCol || RightColumn is not { } rightCol)
             return;
 
-        if (vm.IsLibraryOpen)
+        var availableWidth = Bounds.Width > 0 ? Bounds.Width - 32 : Width - 32;
+        const double minCenterWidth = 260;
+        const double splitterWidth = 8;
+
+        double leftRequested = vm.IsLibraryOpen ? Math.Max(160, vm.LeftPanelWidth) : 0;
+        double rightRequested = vm.IsUpNextOpen ? Math.Max(160, vm.RightPanelWidth) : 0;
+
+        double splittersTotal = (vm.IsLibraryOpen ? splitterWidth : 0) + (vm.IsUpNextOpen ? splitterWidth : 0);
+        double availableForSides = Math.Max(0, availableWidth - minCenterWidth - splittersTotal);
+        double totalRequestedSides = leftRequested + rightRequested;
+
+        double leftTarget = leftRequested;
+        double rightTarget = rightRequested;
+
+        if (totalRequestedSides > availableForSides && totalRequestedSides > 0)
         {
-            if (!leftCol.Width.IsAbsolute || Math.Abs(leftCol.Width.Value - vm.LeftPanelWidth) > 0.5)
-                leftCol.Width = new GridLength(vm.LeftPanelWidth);
+            double scale = availableForSides / totalRequestedSides;
+            leftTarget *= scale;
+            rightTarget *= scale;
+        }
+
+        if (vm.IsLibraryOpen && leftTarget > 10)
+        {
+            leftCol.Width = new GridLength(leftTarget);
             LeftSplitter.IsVisible = true;
         }
         else
@@ -206,10 +227,9 @@ public partial class MainWindow : Window
             LeftSplitter.IsVisible = false;
         }
 
-        if (vm.IsUpNextOpen)
+        if (vm.IsUpNextOpen && rightTarget > 10)
         {
-            if (!rightCol.Width.IsAbsolute || Math.Abs(rightCol.Width.Value - vm.RightPanelWidth) > 0.5)
-                rightCol.Width = new GridLength(vm.RightPanelWidth);
+            rightCol.Width = new GridLength(rightTarget);
             RightSplitter.IsVisible = true;
         }
         else
@@ -288,6 +308,9 @@ public partial class MainWindow : Window
     /// <summary>Keeps the artwork and the ring around it proportional to the viewport.</summary>
     private void OnViewportSizeChanged(object? sender, SizeChangedEventArgs e)
     {
+        if (ViewModel is { } vm)
+            vm.IsCompactControlBar = e.NewSize.Width < 420;
+
         var shortSide = Math.Min(e.NewSize.Width, e.NewSize.Height);
         var artSize = Math.Clamp(shortSide * 0.26, 64, 260);
 

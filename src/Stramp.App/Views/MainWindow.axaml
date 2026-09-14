@@ -15,7 +15,8 @@
         Background="{DynamicResource AppBackgroundBrush}"
         WindowDecorations="BorderOnly"
         ExtendClientAreaToDecorationsHint="True"
-        Width="980" Height="640">
+        Width="980" Height="640"
+        MinWidth="680" MinHeight="480">
 
     <Design.DataContext>
         <vm:MainWindowViewModel />
@@ -85,31 +86,35 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Header -->
-                <DockPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,0,0,12">
-                    <Button Classes="transport" Command="{Binding EqualizeSidePanelsCommand}"
-                            ToolTip.Tip="Equalize side panel widths" DockPanel.Dock="Left" Margin="0,0,8,0">
-                        <PathIcon Data="{x:Static app:Icons.EqualizePanels}" Width="17" Height="17" />
-                    </Button>
-                    <Button Classes="transport" Command="{Binding OpenSettingsCommand}"
-                            ToolTip.Tip="Settings" DockPanel.Dock="Left" Margin="0,0,10,0">
-                        <PathIcon Data="{x:Static app:Icons.Settings}" Width="17" Height="17" />
-                    </Button>
-                    <Button Click="OnOpenLibraryClicked" DockPanel.Dock="Right" HorizontalAlignment="Right">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Data="{x:Static app:Icons.FolderOpen}" Width="16" Height="16" />
-                            <TextBlock Text="Open Library…" />
-                        </StackPanel>
-                    </Button>
-                    <Button Click="OnImportPlaylistClicked" DockPanel.Dock="Right" HorizontalAlignment="Right"
-                            Margin="0,0,8,0">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <PathIcon Data="{x:Static app:Icons.Playlist}" Width="16" Height="16" />
-                            <TextBlock Text="Import Playlist…" />
-                        </StackPanel>
-                    </Button>
-                    <TextBlock Text="{Binding StatusText}" Foreground="OrangeRed" Margin="4,0,0,0"
-                               VerticalAlignment="Center" />
-                </DockPanel>
+                <Grid Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button Classes="transport" Command="{Binding EqualizeSidePanelsCommand}"
+                                ToolTip.Tip="Equalize side panel widths">
+                            <PathIcon Data="{x:Static app:Icons.EqualizePanels}" Width="17" Height="17" />
+                        </Button>
+                        <Button Classes="transport" Command="{Binding OpenSettingsCommand}"
+                                ToolTip.Tip="Settings">
+                            <PathIcon Data="{x:Static app:Icons.Settings}" Width="17" Height="17" />
+                        </Button>
+                        <TextBlock Text="{Binding StatusText}" Foreground="OrangeRed" Margin="4,0,0,0"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Button Click="OnImportPlaylistClicked" ToolTip.Tip="Import Playlist…">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon Data="{x:Static app:Icons.Playlist}" Width="16" Height="16" />
+                                <TextBlock Text="Import Playlist…" />
+                            </StackPanel>
+                        </Button>
+                        <Button Click="OnOpenLibraryClicked" ToolTip.Tip="Open Library…">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <PathIcon Data="{x:Static app:Icons.FolderOpen}" Width="16" Height="16" />
+                                <TextBlock Text="Open Library…" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
 
                 <!-- Library (collapsible): source menu, then the song list for the chosen source -->
                 <Border x:Name="LibraryBorder" Grid.Row="1" Grid.Column="0" ClipToBounds="True" HorizontalAlignment="Stretch">
@@ -275,7 +280,9 @@
                                    TextAlignment="Right" FontSize="12" Opacity="0.7" />
                     </Grid>
 
-                    <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" Margin="0,16,0,0">
+                    <!-- Normal Control Bar (Volume on the right side) when there is enough room -->
+                    <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" Margin="0,16,0,0"
+                          IsVisible="{Binding !IsCompactControlBar}">
                         <StackPanel Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
                             <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
                                     ToolTip.Tip="Shuffle">
@@ -299,6 +306,33 @@
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </Grid>
+
+                    <!-- Compact Control Bar (Volume underneath media buttons) when room is constrained -->
+                    <StackPanel Grid.Row="2" Spacing="8" Margin="0,12,0,0" HorizontalAlignment="Center"
+                                IsVisible="{Binding IsCompactControlBar}">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                            <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
+                                    ToolTip.Tip="Shuffle">
+                                <PathIcon Data="{x:Static app:Icons.Shuffle}" Width="18" Height="18" />
+                            </Button>
+                            <Button Classes="transport" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous">
+                                <PathIcon Data="{x:Static app:Icons.SkipPrevious}" Width="20" Height="20" />
+                            </Button>
+                            <Button Classes="play-pause" Command="{Binding PlayPauseCommand}">
+                                <PathIcon Data="{Binding IsPlaying, Converter={StaticResource PlayPauseIcon}}" Width="24" Height="24" />
+                            </Button>
+                            <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
+                                <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
+                            </Button>
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="Auto,*" Width="160" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <PathIcon Grid.Column="0" Data="{x:Static app:Icons.VolumeHigh}" Width="16" Height="16" Opacity="0.7"
+                                      VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
                 </Grid>
 
                 <!-- Right Splitter -->
@@ -398,7 +432,7 @@
         <!-- In-app settings dialog -->
         <Border x:Name="SettingsScrim" Classes="dialog-scrim" IsVisible="{Binding IsSettingsOpen}"
                 PointerPressed="OnScrimPressed">
-            <Border Classes="dialog-card" Width="560" MaxHeight="660"
+            <Border Classes="dialog-card" Width="560" MaxWidth="560" MaxHeight="660" Margin="16"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
                 <DockPanel Margin="22">
                     <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">

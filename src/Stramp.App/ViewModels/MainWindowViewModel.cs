@@ -114,6 +114,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial double RightPanelWidth { get; set; } = 280;
 
     [ObservableProperty]
+    public partial bool IsCompactControlBar { get; set; }
+
+    [ObservableProperty]
     public partial bool IsSettingsOpen { get; set; }
 
     public AudioVisualizerFeed VisualizerFeed { get; } = new();
