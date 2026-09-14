@@ -20,10 +20,12 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     private readonly Timer _positionTimer;
     private WasapiPlayer? _output;
     private MediaFoundationReader? _reader;
+    private GainSampleProvider? _normalizer;
     private EqualizerSampleProvider? _equalizer;
     private double[] _equalizerGains = new double[BandFrequencies.Length];
     private bool _equalizerEnabled;
     private double _volume = 100;
+    private double _normalizationGainDb;
     private bool _disposed;
 
     public event Action<double>? TimePositionChanged;
@@ -65,6 +67,23 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         }
     }
 
+    public double NormalizationGainDb
+    {
+        get
+        {
+            lock (_gate)
+                return _normalizationGainDb;
+        }
+        set
+        {
+            lock (_gate)
+            {
+                _normalizationGainDb = Math.Clamp(value, -60, 24);
+                _normalizer?.SetGainDb(_normalizationGainDb);
+            }
+        }
+    }
+
     public IReadOnlyList<float> EqualizerBands => BandFrequencies;
 
     public WasapiMediaPlayer()
@@ -89,7 +108,8 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 RequestFloatOutput = true,
                 RepositionInRead = true,
             });
-            var equalizer = new EqualizerSampleProvider(reader.ToSampleProvider(), BandFrequencies);
+            var normalizer = new GainSampleProvider(reader.ToSampleProvider(), _normalizationGainDb);
+            var equalizer = new EqualizerSampleProvider(normalizer, BandFrequencies);
             equalizer.Update(_equalizerGains, _equalizerEnabled);
 
             // Shared mode is intentional: this is the normal Windows music-app path, supports the
@@ -110,6 +130,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             output.PlaybackStopped += (_, e) => HandlePlaybackStopped(output, e);
 
             _reader = reader;
+            _normalizer = normalizer;
             _equalizer = equalizer;
             _output = output;
             output.Play();
@@ -214,6 +235,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         var reader = _reader;
         _output = null;
         _reader = null;
+        _normalizer = null;
         _equalizer = null;
 
         if (output is not null)
@@ -234,6 +256,50 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             CloseCurrentPlayback();
         }
         _positionTimer.Dispose();
+    }
+
+    /// <summary>Applies a constant gain with a short smoothing ramp when it changes mid-track.</summary>
+    private sealed class GainSampleProvider : ISampleProvider
+    {
+        private readonly ISampleProvider _source;
+        private readonly float _smoothingFactor;
+        private float _currentGain;
+        private float _targetGain;
+
+        public WaveFormat WaveFormat => _source.WaveFormat;
+
+        public GainSampleProvider(ISampleProvider source, double gainDb)
+        {
+            _source = source;
+            _currentGain = DbToLinear(gainDb);
+            _targetGain = _currentGain;
+            _smoothingFactor = 1 - MathF.Exp(-1 / (0.02f * WaveFormat.SampleRate));
+        }
+
+        public void SetGainDb(double gainDb) =>
+            Volatile.Write(ref _targetGain, DbToLinear(gainDb));
+
+        public int Read(Span<float> buffer)
+        {
+            var read = _source.Read(buffer);
+            var target = Volatile.Read(ref _targetGain);
+            var channels = WaveFormat.Channels;
+
+            for (var frame = 0; frame < read; frame += channels)
+            {
+                _currentGain += (target - _currentGain) * _smoothingFactor;
+                if (MathF.Abs(target - _currentGain) < 0.000001f)
+                    _currentGain = target;
+
+                for (var channel = 0; channel < channels && frame + channel < read; channel++)
+                    buffer[frame + channel] *= _currentGain;
+            }
+
+            return read;
+        }
+
+        private static float DbToLinear(double gainDb) =>
+            (float)Math.Pow(10, Math.Clamp(gainDb, -60, 24) / 20);
     }
 
     /// <summary>Interleaved, per-channel parametric EQ with automatic anti-clipping headroom.</summary>

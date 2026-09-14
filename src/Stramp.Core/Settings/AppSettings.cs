@@ -34,6 +34,10 @@ public sealed class AppSettings
 
     public bool EqualizerEnabled { get; set; }
 
+    /// <summary>Applies cached per-track loudness gain during playback without modifying files.</summary>
+    public bool AudioNormalizationEnabled { get; set; }
+    public AudioNormalizationLevel AudioNormalizationLevel { get; set; } = AudioNormalizationLevel.Normal;
+
     /// <summary>Per-band gains in dB. Empty means "flat"; resized to the backend's band count on load.</summary>
     public List<double> EqualizerGains { get; set; } = [];
 }

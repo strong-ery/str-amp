@@ -10,7 +10,7 @@
         x:Class="Stramp.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         x:Name="Root"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/Stramp.ico"
         Title="stramp"
         Background="{DynamicResource AppBackgroundBrush}"
         WindowDecorations="BorderOnly"
@@ -443,6 +443,20 @@
                                               OnContent="Album art animation" OffContent="Album art animation" />
                                 <ToggleSwitch IsChecked="{Binding Theme.ShowWaveformProgress}"
                                               OnContent="Waveform progress bar" OffContent="Waveform progress bar" />
+                            </StackPanel>
+
+                            <TextBlock Text="AUDIO" Classes="section-header" Margin="0,6,0,0" />
+
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding Theme.NormalizeAudio}"
+                                              OnContent="Normalize track loudness"
+                                              OffContent="Normalize track loudness" />
+                                <ComboBox ItemsSource="{Binding Theme.NormalizationLevels}"
+                                          SelectedItem="{Binding Theme.NormalizationLevel}"
+                                          IsEnabled="{Binding Theme.NormalizeAudio}"
+                                          HorizontalAlignment="Left" MinWidth="140" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Analyzes and caches the library in the background, then applies a constant clipping-safe gain. No compression, limiting, or file changes." />
                             </StackPanel>
 
                             <TextBlock Text="EQUALIZER" Classes="section-header" Margin="0,6,0,0" />

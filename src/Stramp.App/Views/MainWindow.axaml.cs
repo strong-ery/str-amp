@@ -41,6 +41,7 @@ public partial class MainWindow : Window
     private float _hihatPulse;
 
     private ThumbnailToolbar? _thumbnailToolbar;
+    private WindowsWindowIcon? _windowIcon;
     private readonly MediaKeyController _mediaKeys;
     private MainWindowViewModel? _observedViewModel;
 
@@ -101,6 +102,7 @@ public partial class MainWindow : Window
         {
             _frameTimer.Stop();
             _thumbnailToolbar?.Dispose();
+            _windowIcon?.Dispose();
             _mediaKeys.Dispose();
         };
         PropertyChanged += OnWindowPropertyChanged;
@@ -118,9 +120,13 @@ public partial class MainWindow : Window
         if (handle is null || handle == IntPtr.Zero)
             return;
 
+        _windowIcon = new WindowsWindowIcon();
+        _windowIcon.TryApply(handle.Value,
+            Path.Combine(AppContext.BaseDirectory, "Assets", "Stramp.ico"));
+
         _thumbnailToolbar = new ThumbnailToolbar();
-        if (_thumbnailToolbar.TryInitialize(handle.Value))
-            Win32Properties.AddWndProcHookCallback(this, OnWndProc);
+        _thumbnailToolbar.TryInitialize(handle.Value);
+        Win32Properties.AddWndProcHookCallback(this, OnWndProc);
 
         _mediaKeys.AttachWindowsMediaKeys(handle.Value, ViewModel?.IsPlaying ?? false);
     }
@@ -129,6 +135,12 @@ public partial class MainWindow : Window
     {
         const uint wmCommand = 0x0111;
         const int thbnClicked = 0x1800;
+
+        if (_windowIcon?.TryHandleMessage(msg, wParam, out var icon) == true)
+        {
+            handled = true;
+            return icon;
+        }
 
         if (msg == wmCommand && (wParam.ToInt64() >> 16 & 0xFFFF) == thbnClicked)
         {

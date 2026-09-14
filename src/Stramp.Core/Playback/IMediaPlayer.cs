@@ -11,6 +11,9 @@ public interface IMediaPlayer : IDisposable
     /// <summary>Volume, 0-100.</summary>
     double Volume { get; set; }
 
+    /// <summary>Constant per-track loudness gain in dB. This is separate from user volume.</summary>
+    double NormalizationGainDb { get; set; }
+
     /// <summary>Fires with the current time position (seconds) as playback progresses.</summary>
     event Action<double>? TimePositionChanged;
 

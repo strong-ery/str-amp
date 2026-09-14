@@ -3,6 +3,7 @@ using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stramp.App.Services;
+using Stramp.Core.Playback;
 using Stramp.Core.Settings;
 
 namespace Stramp.App.ViewModels;
@@ -38,6 +39,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
 
     private readonly AppSettings _settings;
     private readonly Action _onManualColorsChanged;
+    private readonly Action _onNormalizationChanged;
     private Action? _onEqualizerChanged;
     private bool _suppressApply;
 
@@ -75,12 +77,25 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool EqualizerEnabled { get; set; }
 
+    [ObservableProperty]
+    public partial bool NormalizeAudio { get; set; }
+
+    [ObservableProperty]
+    public partial AudioNormalizationLevel NormalizationLevel { get; set; }
+
+    public IReadOnlyList<AudioNormalizationLevel> NormalizationLevels { get; } =
+        Enum.GetValues<AudioNormalizationLevel>();
+
     public ObservableCollection<EqualizerBandViewModel> EqualizerBands { get; } = [];
 
-    public ThemeSettingsViewModel(AppSettings settings, Action onManualColorsChanged)
+    public ThemeSettingsViewModel(
+        AppSettings settings,
+        Action onManualColorsChanged,
+        Action? onNormalizationChanged = null)
     {
         _settings = settings;
         _onManualColorsChanged = onManualColorsChanged;
+        _onNormalizationChanged = onNormalizationChanged ?? (() => { });
 
         DeriveFromArt = settings.DeriveColorsFromArt;
         ShowRingVisualizer = settings.ShowRingVisualizer;
@@ -89,6 +104,8 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         BottomVisualizerOpacity = settings.BottomVisualizerOpacity;
         ShowWaveformProgress = settings.ShowWaveformProgress;
         EqualizerEnabled = settings.EqualizerEnabled;
+        NormalizeAudio = settings.AudioNormalizationEnabled;
+        NormalizationLevel = settings.AudioNormalizationLevel;
         Primary = new ColorChannelEditor(ParseOrDefault(settings.PrimaryAccentColor, DefaultPrimary), ApplyLive);
         Secondary = new ColorChannelEditor(ParseOrDefault(settings.SecondaryAccentColor, DefaultSecondary), ApplyLive);
         Background = new ColorChannelEditor(ParseOrDefault(settings.BackgroundColor, DefaultBackground), ApplyLive);
@@ -137,6 +154,20 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _settings.EqualizerEnabled = value;
         SettingsService.Save(_settings);
         _onEqualizerChanged?.Invoke();
+    }
+
+    partial void OnNormalizeAudioChanged(bool value)
+    {
+        _settings.AudioNormalizationEnabled = value;
+        SettingsService.Save(_settings);
+        _onNormalizationChanged();
+    }
+
+    partial void OnNormalizationLevelChanged(AudioNormalizationLevel value)
+    {
+        _settings.AudioNormalizationLevel = value;
+        SettingsService.Save(_settings);
+        _onNormalizationChanged();
     }
 
     /// <summary>Builds the band sliders once the player has told us what bands it supports.</summary>

@@ -22,6 +22,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly PlaybackQueue _queue = new();
     private readonly AppSettings _settings;
     private readonly AlbumArtProvider _artProvider = new();
+    private readonly LoudnessNormalizationService _loudnessNormalizer = new();
+    private CancellationTokenSource? _normalizationCts;
+    private CancellationTokenSource? _normalizationWarmupCts;
+    private string? _pendingPlaybackPath;
     private List<Song> _library = [];
 
     /// <summary>Songs of the selected source (All Songs or a playlist) — what the queue is built from.</summary>
@@ -158,7 +162,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IsUpNextOpen = settings.UpNextPanelOpen;
         LeftPanelWidth = settings.LeftPanelWidth > 0 ? settings.LeftPanelWidth : 280;
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
-        Theme = new ThemeSettingsViewModel(settings, ApplyTheme);
+        Theme = new ThemeSettingsViewModel(settings, ApplyTheme, ApplyNormalizationSetting);
         Theme.InitializeEqualizer(player.EqualizerBands, ApplyEqualizer);
         ApplyEqualizer();
 
@@ -176,6 +180,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         LibraryPath = directory;
         _library = LibraryScanner.Scan(directory);
+        CancelNormalizationWarmup();
         _settings.LibraryPath = directory;
         SettingsService.Save(_settings);
 
@@ -192,6 +197,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         StatusText = "";
         _queue.Build(_activeSongs, Shuffled);
         LoadCurrent(autoPlay: false);
+        StartNormalizationWarmup();
     }
 
     private void PopulateSources(string directory)
@@ -322,6 +328,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (song is null)
             return;
 
+        if (_pendingPlaybackPath is not null)
+            return;
+
         // Nothing handed to the player yet (fresh launch) — start this track rather than toggling.
         if (!_playerHasCurrentTrack)
         {
@@ -336,6 +345,37 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void StartPlayback(string path)
     {
+        CancelNormalizationAnalysis();
+
+        if (!_settings.AudioNormalizationEnabled)
+        {
+            _player.NormalizationGainDb = 0;
+            StartPlaybackNow(path);
+            return;
+        }
+
+        if (_loudnessNormalizer.TryGetGainDb(
+            path, _settings.AudioNormalizationLevel, out var cachedGain))
+        {
+            _player.NormalizationGainDb = cachedGain;
+            StartPlaybackNow(path);
+            return;
+        }
+
+        // Do not let either the previous track or this track play at the wrong loudness while the
+        // one-time analysis runs. Cached tracks bypass this path and start immediately.
+        _player.Pause();
+        _playerHasCurrentTrack = false;
+        IsPlaying = false;
+        _sincePositionReport.Reset();
+        _pendingPlaybackPath = path;
+        _normalizationCts = new CancellationTokenSource();
+        _ = AnalyzeAndApplyNormalizationAsync(path, startPlayback: true, _normalizationCts.Token);
+    }
+
+    private void StartPlaybackNow(string path)
+    {
+        _pendingPlaybackPath = null;
         _player.Play(path);
         _playerHasCurrentTrack = true;
         IsPlaying = true;
@@ -407,6 +447,89 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ApplyEqualizer() =>
         _player.ApplyEqualizer(_settings.EqualizerGains, _settings.EqualizerEnabled);
+
+    private void ApplyNormalizationSetting()
+    {
+        var currentPath = _queue.Current?.Path;
+        if (!_settings.AudioNormalizationEnabled)
+        {
+            var pendingPath = _pendingPlaybackPath;
+            CancelNormalizationAnalysis();
+            _player.NormalizationGainDb = 0;
+
+            if (pendingPath is not null && currentPath == pendingPath)
+                StartPlaybackNow(pendingPath);
+            return;
+        }
+
+        if (!_playerHasCurrentTrack || currentPath is null || _pendingPlaybackPath is not null)
+            return;
+
+        CancelNormalizationAnalysis();
+
+        if (_loudnessNormalizer.TryGetGainDb(
+            currentPath, _settings.AudioNormalizationLevel, out var cachedGain))
+        {
+            _player.NormalizationGainDb = cachedGain;
+            return;
+        }
+
+        _player.NormalizationGainDb = 0;
+        _normalizationCts = new CancellationTokenSource();
+        _ = AnalyzeAndApplyNormalizationAsync(
+            currentPath, startPlayback: false, _normalizationCts.Token);
+    }
+
+    private async Task AnalyzeAndApplyNormalizationAsync(
+        string path, bool startPlayback, CancellationToken ct)
+    {
+        var gainDb = await _loudnessNormalizer.GetGainDbAsync(
+            path, _settings.AudioNormalizationLevel, ct);
+        if (ct.IsCancellationRequested)
+            return;
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (ct.IsCancellationRequested || !_settings.AudioNormalizationEnabled ||
+                _queue.Current?.Path != path)
+                return;
+
+            // The user may have selected another preset while analysis was running. Measurements
+            // are target-independent, so derive the gain again from the now-cached values.
+            _player.NormalizationGainDb = _loudnessNormalizer.TryGetGainDb(
+                path, _settings.AudioNormalizationLevel, out var currentGain)
+                ? currentGain
+                : gainDb ?? 0;
+            if (startPlayback && _pendingPlaybackPath == path)
+                StartPlaybackNow(path);
+        });
+    }
+
+    private void StartNormalizationWarmup()
+    {
+        CancelNormalizationWarmup();
+        if (_library.Count == 0)
+            return;
+
+        _normalizationWarmupCts = new CancellationTokenSource();
+        _ = _loudnessNormalizer.CacheLibraryAsync(
+            _library.Select(song => song.Path), _normalizationWarmupCts.Token);
+    }
+
+    private void CancelNormalizationWarmup()
+    {
+        _normalizationWarmupCts?.Cancel();
+        _normalizationWarmupCts?.Dispose();
+        _normalizationWarmupCts = null;
+    }
+
+    private void CancelNormalizationAnalysis()
+    {
+        _normalizationCts?.Cancel();
+        _normalizationCts?.Dispose();
+        _normalizationCts = null;
+        _pendingPlaybackPath = null;
+    }
 
     /// <summary>Re-applies the theme from whichever source is currently active (artwork or manual picks).</summary>
     private void ApplyTheme()
@@ -634,5 +757,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         return $"{total / 60}:{total % 60:D2}";
     }
 
-    public void Dispose() => _player.Dispose();
+    public void Dispose()
+    {
+        CancelNormalizationAnalysis();
+        CancelNormalizationWarmup();
+        _loudnessNormalizer.Dispose();
+        _player.Dispose();
+    }
 }
