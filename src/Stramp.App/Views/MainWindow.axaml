@@ -206,7 +206,7 @@
                 </GridSplitter>
 
                 <!-- Player -->
-                <Grid Grid.Row="1" Grid.Column="2" RowDefinitions="*,Auto,Auto,Auto,Auto" Margin="10,0">
+                <Grid Grid.Row="1" Grid.Column="2" RowDefinitions="*,Auto,Auto" Margin="10,0">
                     <Border x:Name="NowPlayingCard" Grid.Row="0" Classes="now-playing-card" ClipToBounds="True"
                             SizeChanged="OnViewportSizeChanged">
                         <Grid>
@@ -275,27 +275,29 @@
                                    TextAlignment="Right" FontSize="12" Opacity="0.7" />
                     </Grid>
 
-                    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8"
-                                Margin="0,16,0,0">
-                        <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
-                                ToolTip.Tip="Shuffle">
-                            <PathIcon Data="{x:Static app:Icons.Shuffle}" Width="18" Height="18" />
-                        </Button>
-                        <Button Classes="transport" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous">
-                            <PathIcon Data="{x:Static app:Icons.SkipPrevious}" Width="20" Height="20" />
-                        </Button>
-                        <Button Classes="play-pause" Command="{Binding PlayPauseCommand}">
-                            <PathIcon Data="{Binding IsPlaying, Converter={StaticResource PlayPauseIcon}}" Width="24" Height="24" />
-                        </Button>
-                        <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
-                            <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
-                        </Button>
-                    </StackPanel>
+                    <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" Margin="0,16,0,0">
+                        <StackPanel Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                            <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
+                                    ToolTip.Tip="Shuffle">
+                                <PathIcon Data="{x:Static app:Icons.Shuffle}" Width="18" Height="18" />
+                            </Button>
+                            <Button Classes="transport" Command="{Binding PreviousCommand}" ToolTip.Tip="Previous">
+                                <PathIcon Data="{x:Static app:Icons.SkipPrevious}" Width="20" Height="20" />
+                            </Button>
+                            <Button Classes="play-pause" Command="{Binding PlayPauseCommand}">
+                                <PathIcon Data="{Binding IsPlaying, Converter={StaticResource PlayPauseIcon}}" Width="24" Height="24" />
+                            </Button>
+                            <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
+                                <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
+                            </Button>
+                        </StackPanel>
 
-                    <Grid Grid.Row="3" ColumnDefinitions="Auto,*" Margin="0,16,0,0">
-                        <PathIcon Grid.Column="0" Data="{x:Static app:Icons.VolumeHigh}" Width="16" Height="16" Opacity="0.7"
-                                  VerticalAlignment="Center" Margin="0,0,10,0" />
-                        <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Volume}" />
+                        <Grid Grid.Column="3" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                            <PathIcon Grid.Column="0" Data="{x:Static app:Icons.VolumeHigh}" Width="16" Height="16" Opacity="0.7"
+                                      VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                                    HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                        </Grid>
                     </Grid>
                 </Grid>
 
