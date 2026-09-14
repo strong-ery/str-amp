@@ -14,7 +14,7 @@ namespace Stramp.Audio;
 public sealed class WasapiMediaPlayer : IMediaPlayer
 {
     private static readonly float[] BandFrequencies =
-        [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
+        [63, 110, 250, 370, 650, 1200, 2130, 4550, 6850, 16000];
 
     private readonly object _gate = new();
     private readonly Timer _positionTimer;
