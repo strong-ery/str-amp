@@ -226,6 +226,31 @@ public partial class MainWindow : Window
             ViewModel?.LoadLibrary(folder);
     }
 
+    private async void OnImportPlaylistClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import playlist",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Playlist")
+                {
+                    Patterns = ["*.m3u", "*.m3u8"],
+                    MimeTypes = ["audio/x-mpegurl", "application/vnd.apple.mpegurl"],
+                },
+            ],
+        });
+
+        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        if (path is null || ViewModel is null)
+            return;
+
+        var error = ViewModel.ImportPlaylist(path);
+        if (error is not null)
+            ViewModel.StatusText = error;
+    }
+
     private void OnLibraryTapped(object? sender, TappedEventArgs e)
     {
         if (RowFrom(e) is { } row)

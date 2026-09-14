@@ -2,7 +2,7 @@ using Stramp.Core.Models;
 
 namespace Stramp.Core.Library;
 
-/// <summary>A named subset of the library — currently sourced from .m3u/.m3u8 files on disk.</summary>
+/// <summary>A named subset of songs — from an imported playlist or an .m3u/.m3u8 under the library.</summary>
 public sealed class Playlist
 {
     public required string Name { get; init; }

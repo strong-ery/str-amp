@@ -10,6 +10,9 @@ public sealed class AppSettings
     public bool LibraryPanelOpen { get; set; } = true;
     public List<string> RemovedSongPaths { get; set; } = [];
 
+    /// <summary>Playlists imported from .m3u/.m3u8; persisted so the source file is not needed again.</summary>
+    public List<SavedPlaylist> Playlists { get; set; } = [];
+
     public string PrimaryAccentColor { get; set; } = "#7C5CFF";
     public string SecondaryAccentColor { get; set; } = "#FF5C93";
     public string BackgroundColor { get; set; } = "#0E0E12";

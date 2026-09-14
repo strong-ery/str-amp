@@ -167,8 +167,61 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LibrarySources.Clear();
         LibrarySources.Add(new LibrarySourceRow("All Songs", _library));
 
-        foreach (var playlist in PlaylistScanner.Scan(directory, _library))
+        var importedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var playlist in PlaylistScanner.FromSaved(_settings.Playlists, _library))
+        {
+            importedNames.Add(playlist.Name);
             LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
+        }
+
+        if (!Directory.Exists(directory))
+            return;
+
+        foreach (var playlist in PlaylistScanner.Scan(directory, _library))
+        {
+            // Prefer the imported copy when the same name still exists as a file under the library.
+            if (importedNames.Contains(playlist.Name))
+                continue;
+            LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
+        }
+    }
+
+    /// <summary>
+    /// Parses an .m3u/.m3u8 once, stores its song paths in settings, and adds it to the source menu.
+    /// Returns null on success, or a short error message for the status line.
+    /// </summary>
+    public string? ImportPlaylist(string playlistFile)
+    {
+        var paths = PlaylistScanner.ParsePaths(playlistFile);
+        if (paths.Count == 0)
+            return "No local song paths found in that playlist.";
+
+        var songs = PlaylistScanner.ResolveSongs(paths, _library);
+        if (songs.Count == 0)
+            return "None of the songs in that playlist could be found on disk.";
+
+        var name = Path.GetFileNameWithoutExtension(playlistFile);
+        if (string.IsNullOrWhiteSpace(name))
+            name = "Imported Playlist";
+
+        _settings.Playlists.RemoveAll(p =>
+            string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        _settings.Playlists.Add(new SavedPlaylist
+        {
+            Name = name,
+            SongPaths = paths,
+        });
+        SettingsService.Save(_settings);
+
+        PopulateSources(LibraryPath);
+
+        var imported = LibrarySources.FirstOrDefault(s =>
+            string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (imported is not null)
+            SelectSource(imported);
+
+        StatusText = "";
+        return null;
     }
 
     [RelayCommand]
