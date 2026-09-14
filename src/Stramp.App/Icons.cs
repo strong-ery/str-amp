@@ -35,6 +35,16 @@ public static class Icons
         "M4 6H2v14a2 2 0 002 2h14v-2H4V6zm16-4H8a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zm-6 12a2.5 2.5 0 110-5 2.5 2.5 0 010 5zm2-6V5h3V3h-4v6.5a2.5 2.5 0 101 2V8z");
     public static readonly Geometry Settings = Geometry.Parse(
         "M19.14 12.94a7.07 7.07 0 000-1.88l2.03-1.58a.5.5 0 00.12-.64l-1.92-3.32a.5.5 0 00-.6-.22l-2.39.96a7 7 0 00-1.62-.94l-.36-2.54a.5.5 0 00-.5-.42h-3.84a.5.5 0 00-.5.42l-.36 2.54c-.58.24-1.12.56-1.62.94l-2.39-.96a.5.5 0 00-.6.22L2.67 8.84a.5.5 0 00.12.64l2.03 1.58a7.07 7.07 0 000 1.88l-2.03 1.58a.5.5 0 00-.12.64l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.38 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.56 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 00-.12-.64l-2.03-1.58zM12 15.6A3.6 3.6 0 1112 8.4a3.6 3.6 0 010 7.2z");
+    public static readonly Geometry EqualizePanels = Geometry.Parse(
+        "M4 4h5v16H4V4zm11 0h5v16h-5V4zm-5 7h4v2h-4v-2z");
+    public static readonly Geometry PanelLeft = Geometry.Parse(
+        "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm5 2H4v12h5V6zm2 0v12h9V6h-9z");
+    public static readonly Geometry PanelRight = Geometry.Parse(
+        "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm9 2H4v12h9V6zm2 0v12h5V6h-5z");
+    public static readonly Geometry FullScreen = Geometry.Parse(
+        "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z");
+    public static readonly Geometry FullScreenExit = Geometry.Parse(
+        "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z");
     public static readonly Geometry WindowMinimize = Geometry.Parse("M4 11h16v2H4z");
     public static readonly Geometry WindowMaximize = Geometry.Parse("M4 4h16v16H4V4zm2 2v12h12V6H6z");
     public static readonly Geometry WindowRestore = Geometry.Parse(

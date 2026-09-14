@@ -85,11 +85,18 @@ public partial class MainWindow : Window
                     vm.Volume = volume;
             });
 
+        LeftSplitter.DragDelta += OnLeftSplitterDragDelta;
+        LeftSplitter.DragCompleted += OnLeftSplitterDragCompleted;
+        RightSplitter.DragDelta += OnRightSplitterDragDelta;
+        RightSplitter.DragCompleted += OnRightSplitterDragCompleted;
+
         Opened += (_, _) =>
         {
             _frameTimer.Start();
             SetUpThumbnailToolbar();
+            UpdateColumnWidths();
         };
+        SizeChanged += (_, _) => UpdateColumnWidths();
         Closed += (_, _) =>
         {
             _frameTimer.Stop();
@@ -158,6 +165,7 @@ public partial class MainWindow : Window
 
         _observedViewModel.PropertyChanged += OnViewModelPropertyChanged;
         _observedViewModel.VisualizerFeed.WaveformReady += OnWaveformReady;
+        UpdateColumnWidths();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -167,6 +175,92 @@ public partial class MainWindow : Window
             _thumbnailToolbar?.SetPlaying(ViewModel?.IsPlaying ?? false);
             _mediaKeys.SetPlaybackState(ViewModel?.IsPlaying ?? false);
         }
+        else if (e.PropertyName is nameof(MainWindowViewModel.IsLibraryOpen) or
+                 nameof(MainWindowViewModel.IsUpNextOpen) or
+                 nameof(MainWindowViewModel.LeftPanelWidth) or
+                 nameof(MainWindowViewModel.RightPanelWidth))
+        {
+            UpdateColumnWidths();
+        }
+    }
+
+    private ColumnDefinition? LeftColumn =>
+        MainContentGrid?.ColumnDefinitions.Count > 0 ? MainContentGrid.ColumnDefinitions[0] : null;
+
+    private ColumnDefinition? RightColumn =>
+        MainContentGrid?.ColumnDefinitions.Count > 4 ? MainContentGrid.ColumnDefinitions[4] : null;
+
+    private void UpdateColumnWidths()
+    {
+        if (ViewModel is not { } vm || LeftColumn is not { } leftCol || RightColumn is not { } rightCol)
+            return;
+
+        var availableWidth = Bounds.Width > 0 ? Bounds.Width - 32 : Width - 32;
+        const double minCenterWidth = 260;
+        const double splitterWidth = 8;
+
+        double leftRequested = vm.IsLibraryOpen ? Math.Max(160, vm.LeftPanelWidth) : 0;
+        double rightRequested = vm.IsUpNextOpen ? Math.Max(160, vm.RightPanelWidth) : 0;
+
+        double splittersTotal = (vm.IsLibraryOpen ? splitterWidth : 0) + (vm.IsUpNextOpen ? splitterWidth : 0);
+        double availableForSides = Math.Max(0, availableWidth - minCenterWidth - splittersTotal);
+        double totalRequestedSides = leftRequested + rightRequested;
+
+        double leftTarget = leftRequested;
+        double rightTarget = rightRequested;
+
+        if (totalRequestedSides > availableForSides && totalRequestedSides > 0)
+        {
+            double scale = availableForSides / totalRequestedSides;
+            leftTarget *= scale;
+            rightTarget *= scale;
+        }
+
+        if (vm.IsLibraryOpen && leftTarget > 10)
+        {
+            leftCol.Width = new GridLength(leftTarget);
+            LeftSplitter.IsVisible = true;
+        }
+        else
+        {
+            leftCol.Width = new GridLength(0);
+            LeftSplitter.IsVisible = false;
+        }
+
+        if (vm.IsUpNextOpen && rightTarget > 10)
+        {
+            rightCol.Width = new GridLength(rightTarget);
+            RightSplitter.IsVisible = true;
+        }
+        else
+        {
+            rightCol.Width = new GridLength(0);
+            RightSplitter.IsVisible = false;
+        }
+    }
+
+    private void OnLeftSplitterDragDelta(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && LeftColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.LeftPanelWidth = w.Value;
+    }
+
+    private void OnLeftSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && LeftColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.LeftPanelWidth = w.Value;
+    }
+
+    private void OnRightSplitterDragDelta(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && RightColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.RightPanelWidth = w.Value;
+    }
+
+    private void OnRightSplitterDragCompleted(object? sender, VectorEventArgs e)
+    {
+        if (ViewModel is { } vm && RightColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
+            vm.RightPanelWidth = w.Value;
     }
 
     private void OnWaveformReady() => WaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
@@ -174,6 +268,8 @@ public partial class MainWindow : Window
     private MainWindowViewModel? ViewModel => DataContext as MainWindowViewModel;
 
     // ── Window chrome ────────────────────────────────────────────────────────
+
+    private WindowState _previousWindowState = WindowState.Normal;
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -188,18 +284,54 @@ public partial class MainWindow : Window
 
     private void OnMaximizeClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => ToggleMaximized();
 
+    private void OnToggleFullScreenClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => ToggleFullScreen();
+
     private void OnCloseClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
 
-    private void ToggleMaximized() =>
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    private void ToggleMaximized()
+    {
+        if (WindowState == WindowState.FullScreen)
+            WindowState = WindowState.Maximized;
+        else
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+
+    private void ToggleFullScreen()
+    {
+        if (WindowState == WindowState.FullScreen)
+        {
+            WindowState = _previousWindowState == WindowState.FullScreen ? WindowState.Normal : _previousWindowState;
+        }
+        else
+        {
+            _previousWindowState = WindowState;
+            WindowState = WindowState.FullScreen;
+        }
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (e.Key == Key.F11 || (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Alt)))
+        {
+            ToggleFullScreen();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && WindowState == WindowState.FullScreen)
+        {
+            ToggleFullScreen();
+            e.Handled = true;
+        }
+    }
 
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == WindowStateProperty)
         {
-            var maximized = WindowState == WindowState.Maximized;
-            MaximizeIcon.Data = maximized ? Icons.WindowRestore : Icons.WindowMaximize;
-            ResizeGrips.IsVisible = !maximized;
+            var isMaximized = WindowState == WindowState.Maximized;
+            MaximizeIcon.Data = isMaximized ? Icons.WindowRestore : Icons.WindowMaximize;
+            ResizeGrips.IsVisible = WindowState == WindowState.Normal;
         }
     }
 
@@ -214,6 +346,9 @@ public partial class MainWindow : Window
     /// <summary>Keeps the artwork and the ring around it proportional to the viewport.</summary>
     private void OnViewportSizeChanged(object? sender, SizeChangedEventArgs e)
     {
+        if (ViewModel is { } vm)
+            vm.IsCompactControlBar = e.NewSize.Width < 420;
+
         var shortSide = Math.Min(e.NewSize.Width, e.NewSize.Height);
         var artSize = Math.Clamp(shortSide * 0.26, 64, 260);
 
