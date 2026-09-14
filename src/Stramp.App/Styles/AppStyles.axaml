@@ -1,0 +1,191 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- PathIcon doesn't inherit TextElement.Foreground, so it's invisible against a dark
+       background unless given an explicit color. -->
+  <Style Selector="PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AppIconBrush}" />
+  </Style>
+
+  <!-- Flat, icon-only transport buttons (prev/next/shuffle/reshuffle) -->
+  <Style Selector="Button.transport">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="10" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.transport:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+  </Style>
+
+  <!-- Shuffle is a plain flat button; "active" just tints the icon instead of filling a pill,
+       matching the original's minimal .shuffle-active look rather than a stock toggle chrome. -->
+  <Style Selector="Button.transport.active PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+  </Style>
+
+  <!-- The big centered play/pause button -->
+  <Style Selector="Button.play-pause">
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="26" />
+    <Setter Property="Width" Value="52" />
+    <Setter Property="Height" Value="52" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.play-pause PathIcon">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.play-pause:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
+  </Style>
+
+  <Style Selector="TextBlock.section-header">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+  </Style>
+
+  <Style Selector="Border.now-playing-card">
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="CornerRadius" Value="12" />
+  </Style>
+
+  <Style Selector="Border.art-frame">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="{DynamicResource AppPlaceholderBackgroundBrush}" />
+  </Style>
+
+  <Style Selector="Border.queue-row">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="6" />
+    <Setter Property="BorderThickness" Value="3,0,0,0" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.13" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <!-- Barely-there hover so rows feel alive without adding visual noise. -->
+  <Style Selector="ListBox.flat-list ListBoxItem:pointerover Border.queue-row">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+  <Style Selector="Border.queue-row.playing">
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppAccentBrush}" />
+  </Style>
+  <Style Selector="Border.queue-row.playing TextBlock.queue-title">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+
+  <!-- Library/queue lists: no chrome of their own at all — the only highlight is our own
+       Border.queue-row/.playing classes above, applied per-item in the DataTemplate. -->
+  <Style Selector="ListBox.flat-list">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ListBox.flat-list ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Margin" Value="0,1" />
+  </Style>
+  <Style Selector="ListBox.flat-list ListBoxItem /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.flat-list ListBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.flat-list ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.flat-list ListBoxItem:selected:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.flat-list ListBoxItem:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Custom window chrome -->
+  <Style Selector="Button.window-button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.window-button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+  <Style Selector="Button.window-button.close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#E81123" />
+  </Style>
+  <Style Selector="Button.window-button.close:pointerover PathIcon">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.window-button PathIcon">
+    <Setter Property="Width" Value="11" />
+    <Setter Property="Height" Value="11" />
+    <Setter Property="Opacity" Value="0.75" />
+  </Style>
+
+  <!-- In-app dialog -->
+  <Style Selector="Border.dialog-scrim">
+    <Setter Property="Background" Value="#B0000000" />
+  </Style>
+  <Style Selector="Border.dialog-card">
+    <Setter Property="Background" Value="{DynamicResource AppDialogBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="BoxShadow" Value="0 18 50 0 #90000000" />
+  </Style>
+  <Style Selector="TextBlock.dialog-title">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="TextBlock.field-label">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Opacity" Value="0.75" />
+  </Style>
+  <Style Selector="TextBlock.field-hint">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Opacity" Value="0.5" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+  <Style Selector="Border.swatch">
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="34" />
+  </Style>
+  <Style Selector="Border.eq-panel">
+    <Setter Property="Background" Value="{DynamicResource AppPlaceholderBackgroundBrush}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="10,12" />
+  </Style>
+
+  <Style Selector="Button.preset">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Padding" Value="7,5" />
+  </Style>
+  <Style Selector="Button.preset:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+
+</Styles>

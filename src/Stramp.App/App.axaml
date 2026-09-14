@@ -1,0 +1,38 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Stramp.App.App"
+             xmlns:local="using:Stramp.App"
+             RequestedThemeVariant="Default">
+             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+
+    <Application.DataTemplates>
+        <local:ViewLocator />
+    </Application.DataTemplates>
+
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="AppIconBrush" Color="#26262B" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="AppIconBrush" Color="#F2F2F5" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <SolidColorBrush x:Key="AppAccentBrush" Color="#7C5CFF" />
+            <SolidColorBrush x:Key="AppAccentBrushLight" Color="#9580FF" />
+            <SolidColorBrush x:Key="AppSecondaryAccentBrush" Color="#FF5C93" />
+            <SolidColorBrush x:Key="AppBackgroundBrush" Color="#0E0E12" />
+            <SolidColorBrush x:Key="AppSubtleBackgroundBrush" Color="#207C5CFF" />
+            <SolidColorBrush x:Key="AppPlaceholderBackgroundBrush" Color="#147C5CFF" />
+            <SolidColorBrush x:Key="AppHoverBrush" Color="#167C5CFF" />
+            <SolidColorBrush x:Key="AppDialogBackgroundBrush" Color="#1A1A20" />
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <FluentTheme />
+        <StyleInclude Source="avares://Stramp.App/Styles/AppStyles.axaml" />
+    </Application.Styles>
+</Application>

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Stramp.App/Stramp.App.csproj" />
+    <Project Path="src/Stramp.Audio/Stramp.Audio.csproj" />
+    <Project Path="src/Stramp.Core/Stramp.Core.csproj" />
+    <Project Path="src/Stramp.Integrations.Linux/Stramp.Integrations.Linux.csproj" />
+    <Project Path="src/Stramp.Integrations.Windows/Stramp.Integrations.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Stramp.Core.Tests/Stramp.Core.Tests.csproj" />
+  </Folder>
+</Solution>
