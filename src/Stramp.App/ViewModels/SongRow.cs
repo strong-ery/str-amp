@@ -15,7 +15,7 @@ public partial class SongRow(Song song) : ObservableObject
     [ObservableProperty]
     public partial bool IsCurrent { get; set; }
 
-    /// <summary>Thumbnail for queue rows (library rows don't load art — matches the original design). Null until loaded.</summary>
+    /// <summary>Thumbnail for queue and library rows. Null until loaded.</summary>
     [ObservableProperty]
     public partial Bitmap? ArtBitmap { get; set; }
 }
