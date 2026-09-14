@@ -269,6 +269,8 @@ public partial class MainWindow : Window
 
     // ── Window chrome ────────────────────────────────────────────────────────
 
+    private WindowState _previousWindowState = WindowState.Normal;
+
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
@@ -282,18 +284,54 @@ public partial class MainWindow : Window
 
     private void OnMaximizeClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => ToggleMaximized();
 
+    private void OnToggleFullScreenClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => ToggleFullScreen();
+
     private void OnCloseClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
 
-    private void ToggleMaximized() =>
-        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    private void ToggleMaximized()
+    {
+        if (WindowState == WindowState.FullScreen)
+            WindowState = WindowState.Maximized;
+        else
+            WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
+
+    private void ToggleFullScreen()
+    {
+        if (WindowState == WindowState.FullScreen)
+        {
+            WindowState = _previousWindowState == WindowState.FullScreen ? WindowState.Normal : _previousWindowState;
+        }
+        else
+        {
+            _previousWindowState = WindowState;
+            WindowState = WindowState.FullScreen;
+        }
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+
+        if (e.Key == Key.F11 || (e.Key == Key.Enter && e.KeyModifiers.HasFlag(KeyModifiers.Alt)))
+        {
+            ToggleFullScreen();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && WindowState == WindowState.FullScreen)
+        {
+            ToggleFullScreen();
+            e.Handled = true;
+        }
+    }
 
     private void OnWindowPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
     {
         if (e.Property == WindowStateProperty)
         {
-            var maximized = WindowState == WindowState.Maximized;
-            MaximizeIcon.Data = maximized ? Icons.WindowRestore : Icons.WindowMaximize;
-            ResizeGrips.IsVisible = !maximized;
+            var isMaximized = WindowState == WindowState.Maximized;
+            MaximizeIcon.Data = isMaximized ? Icons.WindowRestore : Icons.WindowMaximize;
+            ResizeGrips.IsVisible = WindowState == WindowState.Normal;
         }
     }
 

@@ -41,6 +41,10 @@ public static class Icons
         "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm5 2H4v12h5V6zm2 0v12h9V6h-9z");
     public static readonly Geometry PanelRight = Geometry.Parse(
         "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2zm9 2H4v12h9V6zm2 0v12h5V6h-5z");
+    public static readonly Geometry FullScreen = Geometry.Parse(
+        "M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z");
+    public static readonly Geometry FullScreenExit = Geometry.Parse(
+        "M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z");
     public static readonly Geometry WindowMinimize = Geometry.Parse("M4 11h16v2H4z");
     public static readonly Geometry WindowMaximize = Geometry.Parse("M4 4h16v16H4V4zm2 2v12h12V6H6z");
     public static readonly Geometry WindowRestore = Geometry.Parse(

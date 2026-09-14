@@ -46,6 +46,7 @@
             <Grid DockPanel.Dock="Top" Height="34" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
                 <Menu Grid.Column="0" VerticalAlignment="Center" Margin="6,0,0,0">
                     <MenuItem Header="stramp">
+                        <MenuItem Header="Toggle Fullscreen" Click="OnToggleFullScreenClicked" InputGesture="F11" />
                         <MenuItem Header="Layout">
                             <MenuItem Header="Equalize Side Panels" Command="{Binding EqualizeSidePanelsCommand}" />
                             <MenuItem Header="Toggle Library Panel" Command="{Binding ToggleLibraryOpenCommand}" />
