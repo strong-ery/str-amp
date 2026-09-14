@@ -5,6 +5,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Stramp.App.Services;
 using Stramp.App.ViewModels;
 using Stramp.Core.Dsp;
 using Stramp.Integrations.Windows;
@@ -40,6 +41,7 @@ public partial class MainWindow : Window
     private float _hihatPulse;
 
     private ThumbnailToolbar? _thumbnailToolbar;
+    private readonly MediaKeyController _mediaKeys;
     private MainWindowViewModel? _observedViewModel;
 
     public MainWindow()
@@ -71,6 +73,18 @@ public partial class MainWindow : Window
         WaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
         WaveformBar.ScrubCompleted += fraction => ViewModel?.CompleteScrub(fraction);
 
+        _mediaKeys = new MediaKeyController(
+            this,
+            () => ViewModel?.PlayPauseCommand.Execute(null),
+            () => ViewModel?.NextCommand.Execute(null),
+            () => ViewModel?.PreviousCommand.Execute(null),
+            () => ViewModel?.Volume ?? 0,
+            volume =>
+            {
+                if (ViewModel is { } vm)
+                    vm.Volume = volume;
+            });
+
         Opened += (_, _) =>
         {
             _frameTimer.Start();
@@ -80,6 +94,7 @@ public partial class MainWindow : Window
         {
             _frameTimer.Stop();
             _thumbnailToolbar?.Dispose();
+            _mediaKeys.Dispose();
         };
         PropertyChanged += OnWindowPropertyChanged;
         DataContextChanged += OnDataContextChanged;
@@ -99,6 +114,8 @@ public partial class MainWindow : Window
         _thumbnailToolbar = new ThumbnailToolbar();
         if (_thumbnailToolbar.TryInitialize(handle.Value))
             Win32Properties.AddWndProcHookCallback(this, OnWndProc);
+
+        _mediaKeys.AttachWindowsMediaKeys(handle.Value, ViewModel?.IsPlaying ?? false);
     }
 
     private IntPtr OnWndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -146,7 +163,10 @@ public partial class MainWindow : Window
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(MainWindowViewModel.IsPlaying))
+        {
             _thumbnailToolbar?.SetPlaying(ViewModel?.IsPlaying ?? false);
+            _mediaKeys.SetPlaybackState(ViewModel?.IsPlaying ?? false);
+        }
     }
 
     private void OnWaveformReady() => WaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
