@@ -493,6 +493,21 @@
                                 </Border>
                             </StackPanel>
 
+                            <TextBlock Text="DISCORD" Classes="section-header" Margin="0,6,0,0" />
+
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding Theme.DiscordRichPresenceEnabled}"
+                                              OnContent="Show now playing on Discord"
+                                              OffContent="Show now playing on Discord" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Requires the Discord desktop app to be running. Shows the track title, artist, and a live progress bar to your friends." />
+                                <TextBox Text="{Binding Theme.DiscordClientId}"
+                                         PlaceholderText="Custom Discord Application ID (optional)"
+                                         IsEnabled="{Binding Theme.DiscordRichPresenceEnabled}" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Advanced: leave blank to use str-amp's built-in Discord app. Only set this to point at your own Discord Application (discord.com/developers/applications) instead." />
+                            </StackPanel>
+
                             <TextBlock Text="THEME" Classes="section-header" Margin="0,6,0,0" />
 
                             <StackPanel Spacing="6">

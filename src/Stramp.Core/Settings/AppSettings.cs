@@ -44,6 +44,12 @@ public sealed class AppSettings
 
     public bool EqualizerEnabled { get; set; }
 
+    public bool DiscordRichPresenceEnabled { get; set; }
+
+    /// <summary>Null/empty uses str-amp's built-in Discord application (see DiscordPresenceService).
+    /// Only needed to point at a different Discord Application, e.g. for local testing.</summary>
+    public string? DiscordClientId { get; set; }
+
     /// <summary>Applies cached per-track loudness gain during playback without modifying files.</summary>
     public bool AudioNormalizationEnabled { get; set; }
     public AudioNormalizationLevel AudioNormalizationLevel { get; set; } = AudioNormalizationLevel.Normal;

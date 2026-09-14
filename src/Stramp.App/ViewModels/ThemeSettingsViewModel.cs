@@ -40,6 +40,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     private readonly AppSettings _settings;
     private readonly Action _onManualColorsChanged;
     private readonly Action _onNormalizationChanged;
+    private readonly Action _onDiscordSettingsChanged;
     private Action? _onEqualizerChanged;
     private bool _suppressApply;
 
@@ -94,14 +95,25 @@ public partial class ThemeSettingsViewModel : ViewModelBase
 
     public ObservableCollection<EqualizerBandViewModel> EqualizerBands { get; } = [];
 
+    [ObservableProperty]
+    public partial bool DiscordRichPresenceEnabled { get; set; }
+
+    [ObservableProperty]
+    public partial string DiscordClientId { get; set; } = "";
+
     public ThemeSettingsViewModel(
         AppSettings settings,
         Action onManualColorsChanged,
-        Action? onNormalizationChanged = null)
+        Action? onNormalizationChanged = null,
+        Action? onDiscordSettingsChanged = null)
     {
         _settings = settings;
         _onManualColorsChanged = onManualColorsChanged;
         _onNormalizationChanged = onNormalizationChanged ?? (() => { });
+        _onDiscordSettingsChanged = onDiscordSettingsChanged ?? (() => { });
+
+        DiscordRichPresenceEnabled = settings.DiscordRichPresenceEnabled;
+        DiscordClientId = settings.DiscordClientId ?? "";
 
         ArtColorMode = settings.ArtColorMode ??
             (settings.DeriveColorsFromArt ? AlbumArtColorMode.Inferred : AlbumArtColorMode.None);
@@ -176,6 +188,20 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _settings.AudioNormalizationLevel = value;
         SettingsService.Save(_settings);
         _onNormalizationChanged();
+    }
+
+    partial void OnDiscordRichPresenceEnabledChanged(bool value)
+    {
+        _settings.DiscordRichPresenceEnabled = value;
+        SettingsService.Save(_settings);
+        _onDiscordSettingsChanged();
+    }
+
+    partial void OnDiscordClientIdChanged(string value)
+    {
+        _settings.DiscordClientId = value;
+        SettingsService.Save(_settings);
+        _onDiscordSettingsChanged();
     }
 
     /// <summary>Builds the band sliders once the player has told us what bands it supports.</summary>

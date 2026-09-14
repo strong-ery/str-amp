@@ -24,6 +24,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly PlaybackStateStore _playbackStateStore;
     private readonly AlbumArtProvider _artProvider = new();
     private readonly LoudnessNormalizationService _loudnessNormalizer = new();
+    private readonly DiscordPresenceService _discordPresence = new();
     private CancellationTokenSource? _normalizationCts;
     private CancellationTokenSource? _normalizationWarmupCts;
     private string? _pendingPlaybackPath;
@@ -172,9 +173,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IsUpNextOpen = settings.UpNextPanelOpen;
         LeftPanelWidth = settings.LeftPanelWidth > 0 ? settings.LeftPanelWidth : 280;
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
-        Theme = new ThemeSettingsViewModel(settings, ApplyTheme, ApplyNormalizationSetting);
+        Theme = new ThemeSettingsViewModel(
+            settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting);
         Theme.InitializeEqualizer(player.EqualizerBands, ApplyEqualizer);
         ApplyEqualizer();
+        ApplyDiscordPresenceSetting();
 
         LibraryPath = settings.LibraryPath
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Music");
@@ -437,6 +440,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IsPlaying = _player.TogglePause();
         if (IsPlaying)
             _sincePositionReport.Restart();
+        UpdateDiscordPresence();
         SavePlaybackState(force: true);
     }
 
@@ -507,6 +511,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _player.Seek(0);
             ProgressSeconds = 0;
             _reportedPosition = 0;
+            UpdateDiscordPresence();
             SavePlaybackState(force: true);
         }
         else
@@ -561,6 +566,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void ApplyEqualizer() =>
         _player.ApplyEqualizer(_settings.EqualizerGains, _settings.EqualizerEnabled);
+
+    private void ApplyDiscordPresenceSetting()
+    {
+        _discordPresence.Configure(_settings.DiscordClientId, _settings.DiscordRichPresenceEnabled);
+        UpdateDiscordPresence();
+    }
+
+    /// <summary>Pushes the current track/playback-state to Discord. A no-op when the integration
+    /// is off or not configured — see <see cref="DiscordPresenceService"/>.</summary>
+    private void UpdateDiscordPresence()
+    {
+        if (_queue.Current is { } song)
+            _discordPresence.UpdateNowPlaying(song, IsPlaying, ProgressSeconds, DurationSeconds);
+        else
+            _discordPresence.Clear();
+    }
 
     private void ApplyNormalizationSetting()
     {
@@ -784,6 +805,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         ProgressSeconds = seconds;
         _reportedPosition = seconds;
         _sincePositionReport.Restart();
+        UpdateDiscordPresence();
         SavePlaybackState(force: true);
     }
 
@@ -849,6 +871,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         RefreshQueueRows();
         RefreshCurrentHighlight();
+        UpdateDiscordPresence();
         SavePlaybackState(force: true);
     }
 
@@ -978,6 +1001,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CancelNormalizationAnalysis();
         CancelNormalizationWarmup();
         _loudnessNormalizer.Dispose();
+        _discordPresence.Dispose();
         _player.Dispose();
     }
 }
