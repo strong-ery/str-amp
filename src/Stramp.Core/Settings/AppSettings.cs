@@ -8,6 +8,7 @@ public sealed class AppSettings
     public double WindowWidth { get; set; } = 980;
     public double WindowHeight { get; set; } = 640;
     public bool LibraryPanelOpen { get; set; } = true;
+    public bool UpNextPanelOpen { get; set; } = true;
     public double LeftPanelWidth { get; set; } = 280;
     public double RightPanelWidth { get; set; } = 280;
     public List<string> RemovedSongPaths { get; set; } = [];

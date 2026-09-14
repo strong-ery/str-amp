@@ -48,6 +48,7 @@
                         <MenuItem Header="Layout">
                             <MenuItem Header="Equalize Side Panels" Command="{Binding EqualizeSidePanelsCommand}" />
                             <MenuItem Header="Toggle Library Panel" Command="{Binding ToggleLibraryOpenCommand}" />
+                            <MenuItem Header="Toggle Up Next Panel" Command="{Binding ToggleUpNextOpenCommand}" />
                         </MenuItem>
                         <MenuItem Header="Styling">
                             <MenuItem Header="Theme…" Command="{Binding OpenSettingsCommand}" />
@@ -80,15 +81,11 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" MinWidth="280" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="280" MinWidth="160" MaxWidth="600" />
+                    <ColumnDefinition Width="280" MinWidth="0" MaxWidth="600" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Header -->
                 <DockPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="5" Margin="0,0,0,12">
-                    <Button Classes="transport" Command="{Binding ToggleLibraryOpenCommand}"
-                            ToolTip.Tip="Show/hide library" DockPanel.Dock="Left" Margin="0,0,8,0">
-                        <PathIcon Data="{x:Static app:Icons.Menu}" Width="18" Height="18" />
-                    </Button>
                     <Button Classes="transport" Command="{Binding EqualizeSidePanelsCommand}"
                             ToolTip.Tip="Equalize side panel widths" DockPanel.Dock="Left" Margin="0,0,8,0">
                         <PathIcon Data="{x:Static app:Icons.EqualizePanels}" Width="17" Height="17" />
@@ -117,7 +114,7 @@
                 <!-- Library (collapsible): source menu, then the song list for the chosen source -->
                 <Border x:Name="LibraryBorder" Grid.Row="1" Grid.Column="0" ClipToBounds="True" HorizontalAlignment="Stretch">
                     <DockPanel HorizontalAlignment="Stretch">
-                        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*" Margin="0,0,0,6">
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
                             <Button Grid.Column="0" Classes="transport" Width="24" Height="24" Padding="3"
                                     Margin="0,0,6,0" IsVisible="{Binding !IsBrowsingSources}"
                                     Command="{Binding BackToSourcesCommand}" ToolTip.Tip="Back to playlists">
@@ -125,6 +122,10 @@
                             </Button>
                             <TextBlock Grid.Column="1" Text="{Binding LibraryHeaderText}" Classes="section-header"
                                        VerticalAlignment="Center" Margin="0" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="2" Classes="transport" Width="24" Height="24" Padding="3"
+                                    Command="{Binding ToggleLibraryOpenCommand}" ToolTip.Tip="Collapse library">
+                                <PathIcon Data="{x:Static app:Icons.PanelLeft}" Width="14" Height="14" />
+                            </Button>
                         </Grid>
 
                         <TextBox Text="{Binding SearchText}" PlaceholderText="Search…" DockPanel.Dock="Top"
@@ -209,6 +210,22 @@
                     <Border x:Name="NowPlayingCard" Grid.Row="0" Classes="now-playing-card" ClipToBounds="True"
                             SizeChanged="OnViewportSizeChanged">
                         <Grid>
+                            <!-- Small corner buttons to reopen collapsed panels -->
+                            <Button Classes="transport" Width="28" Height="28" Padding="5" Margin="10"
+                                    HorizontalAlignment="Left" VerticalAlignment="Top"
+                                    Command="{Binding ToggleLibraryOpenCommand}"
+                                    IsVisible="{Binding !IsLibraryOpen}"
+                                    ToolTip.Tip="Open library">
+                                <PathIcon Data="{x:Static app:Icons.PanelLeft}" Width="14" Height="14" Opacity="0.7" />
+                            </Button>
+                            <Button Classes="transport" Width="28" Height="28" Padding="5" Margin="10"
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Command="{Binding ToggleUpNextOpenCommand}"
+                                    IsVisible="{Binding !IsUpNextOpen}"
+                                    ToolTip.Tip="Open Up Next">
+                                <PathIcon Data="{x:Static app:Icons.PanelRight}" Width="14" Height="14" Opacity="0.7" />
+                            </Button>
+
                             <!-- Fills the card and shares its center with the album art, so the ring
                                  stays concentric with the artwork at any window size. -->
                             <controls:SpectrumVisualizerControl x:Name="Visualizer"
@@ -248,6 +265,7 @@
                             <controls:WaveformSeekBar x:Name="WaveformBar" Height="38"
                                 IsVisible="{Binding Theme.ShowWaveformProgress}"
                                 Progress="{Binding ProgressFraction}"
+                                Duration="{Binding DurationSeconds}"
                                 PlayedBrush="{DynamicResource AppAccentBrush}"
                                 RemainingBrush="{DynamicResource AppIconBrush}" />
                             <Slider x:Name="ProgressSlider" IsVisible="{Binding !Theme.ShowWaveformProgress}"
@@ -288,7 +306,8 @@
                 <GridSplitter x:Name="RightSplitter" Grid.Row="1" Grid.Column="3"
                               Width="8" Margin="1,0" Background="Transparent"
                               ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
-                              HorizontalAlignment="Center" VerticalAlignment="Stretch">
+                              HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                              IsVisible="{Binding IsUpNextOpen}">
                     <GridSplitter.Template>
                         <ControlTemplate>
                             <Border Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -299,47 +318,55 @@
                     </GridSplitter.Template>
                 </GridSplitter>
 
-                <!-- Queue sidebar -->
-                <DockPanel Grid.Row="1" Grid.Column="4" Margin="10,0,0,0">
-                    <TextBlock Text="UP NEXT" Classes="section-header" DockPanel.Dock="Top" />
-                    <ListBox x:Name="QueueList" Classes="flat-list" ItemsSource="{Binding QueueRows}" Tapped="OnQueueTapped">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate x:DataType="vm:SongRow">
-                                <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}" ToolTip.Tip="Right-click to remove from queue">
-                                    <Border.ContextMenu>
-                                        <ContextMenu>
-                                            <MenuItem Header="Remove from queue"
-                                                      Command="{Binding #Root.DataContext.RemoveFromQueueCommand}"
-                                                      CommandParameter="{Binding}">
-                                                <MenuItem.Icon>
-                                                    <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
-                                                </MenuItem.Icon>
-                                            </MenuItem>
-                                        </ContextMenu>
-                                    </Border.ContextMenu>
-                                    <!-- Grid rather than a StackPanel: a horizontal StackPanel hands children
-                                         infinite width, so ellipsising kicks in far too early. -->
-                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                        <Border Grid.Column="0" Classes="art-frame" Width="40" Height="40">
-                                            <Grid>
-                                                <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="18" Height="18" Opacity="0.35"
-                                                          HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                          IsVisible="{Binding ArtBitmap, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
-                                                <Image Source="{Binding ArtBitmap}" Stretch="UniformToFill"
-                                                       RenderOptions.BitmapInterpolationMode="HighQuality"
-                                                       IsVisible="{Binding ArtBitmap, Converter={StaticResource NullToBool}}" />
-                                            </Grid>
-                                        </Border>
-                                        <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Title}" Classes="queue-title" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{Binding Artist}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </DockPanel>
+                <!-- Queue sidebar (collapsible) -->
+                <Border x:Name="QueueBorder" Grid.Row="1" Grid.Column="4" ClipToBounds="True" HorizontalAlignment="Stretch">
+                    <DockPanel HorizontalAlignment="Stretch" Margin="10,0,0,0">
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                            <TextBlock Grid.Column="0" Text="UP NEXT" Classes="section-header" VerticalAlignment="Center" Margin="0" />
+                            <Button Grid.Column="1" Classes="transport" Width="24" Height="24" Padding="3"
+                                    Command="{Binding ToggleUpNextOpenCommand}" ToolTip.Tip="Collapse Up Next">
+                                <PathIcon Data="{x:Static app:Icons.PanelRight}" Width="14" Height="14" />
+                            </Button>
+                        </Grid>
+                        <ListBox x:Name="QueueList" Classes="flat-list" ItemsSource="{Binding QueueRows}" Tapped="OnQueueTapped">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:SongRow">
+                                    <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}" ToolTip.Tip="Right-click to remove from queue">
+                                        <Border.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Remove from queue"
+                                                          Command="{Binding #Root.DataContext.RemoveFromQueueCommand}"
+                                                          CommandParameter="{Binding}">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </Border.ContextMenu>
+                                        <!-- Grid rather than a StackPanel: a horizontal StackPanel hands children
+                                             infinite width, so ellipsising kicks in far too early. -->
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Grid.Column="0" Classes="art-frame" Width="40" Height="40">
+                                                <Grid>
+                                                    <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="18" Height="18" Opacity="0.35"
+                                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                              IsVisible="{Binding ArtBitmap, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                                    <Image Source="{Binding ArtBitmap}" Stretch="UniformToFill"
+                                                           RenderOptions.BitmapInterpolationMode="HighQuality"
+                                                           IsVisible="{Binding ArtBitmap, Converter={StaticResource NullToBool}}" />
+                                                </Grid>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Orientation="Vertical" Spacing="2" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Title}" Classes="queue-title" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Artist}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+                </Border>
             </Grid>
         </DockPanel>
 

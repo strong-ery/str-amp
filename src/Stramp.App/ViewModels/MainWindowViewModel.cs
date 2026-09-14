@@ -105,6 +105,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial bool IsLibraryOpen { get; set; } = true;
 
     [ObservableProperty]
+    public partial bool IsUpNextOpen { get; set; } = true;
+
+    [ObservableProperty]
     public partial double LeftPanelWidth { get; set; } = 280;
 
     [ObservableProperty]
@@ -132,6 +135,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         Volume = settings.Volume;
         _player.Volume = settings.Volume;
         IsLibraryOpen = settings.LibraryPanelOpen;
+        IsUpNextOpen = settings.UpNextPanelOpen;
         LeftPanelWidth = settings.LeftPanelWidth > 0 ? settings.LeftPanelWidth : 280;
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(settings, ApplyTheme);
@@ -347,6 +351,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void ToggleLibraryOpen() => IsLibraryOpen = !IsLibraryOpen;
 
     [RelayCommand]
+    private void ToggleUpNextOpen() => IsUpNextOpen = !IsUpNextOpen;
+
+    [RelayCommand]
     private void EqualizeSidePanels()
     {
         var avg = (LeftPanelWidth + RightPanelWidth) / 2.0;
@@ -354,6 +361,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LeftPanelWidth = avg;
         RightPanelWidth = avg;
         IsLibraryOpen = true;
+        IsUpNextOpen = true;
     }
 
     [RelayCommand]
@@ -381,6 +389,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     partial void OnIsLibraryOpenChanged(bool value)
     {
         _settings.LibraryPanelOpen = value;
+        SettingsService.Save(_settings);
+    }
+
+    partial void OnIsUpNextOpenChanged(bool value)
+    {
+        _settings.UpNextPanelOpen = value;
         SettingsService.Save(_settings);
     }
 

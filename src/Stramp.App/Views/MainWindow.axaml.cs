@@ -175,6 +175,7 @@ public partial class MainWindow : Window
             _mediaKeys.SetPlaybackState(ViewModel?.IsPlaying ?? false);
         }
         else if (e.PropertyName is nameof(MainWindowViewModel.IsLibraryOpen) or
+                 nameof(MainWindowViewModel.IsUpNextOpen) or
                  nameof(MainWindowViewModel.LeftPanelWidth) or
                  nameof(MainWindowViewModel.RightPanelWidth))
         {
@@ -205,8 +206,17 @@ public partial class MainWindow : Window
             LeftSplitter.IsVisible = false;
         }
 
-        if (!rightCol.Width.IsAbsolute || Math.Abs(rightCol.Width.Value - vm.RightPanelWidth) > 0.5)
-            rightCol.Width = new GridLength(vm.RightPanelWidth);
+        if (vm.IsUpNextOpen)
+        {
+            if (!rightCol.Width.IsAbsolute || Math.Abs(rightCol.Width.Value - vm.RightPanelWidth) > 0.5)
+                rightCol.Width = new GridLength(vm.RightPanelWidth);
+            RightSplitter.IsVisible = true;
+        }
+        else
+        {
+            rightCol.Width = new GridLength(0);
+            RightSplitter.IsVisible = false;
+        }
     }
 
     private void OnLeftSplitterDragDelta(object? sender, VectorEventArgs e)
