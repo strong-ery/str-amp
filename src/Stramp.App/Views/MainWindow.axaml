@@ -290,9 +290,6 @@
                         <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
                             <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
                         </Button>
-                        <Button Classes="transport" Command="{Binding ReshuffleCommand}" ToolTip.Tip="Reshuffle remaining">
-                            <PathIcon Data="{x:Static app:Icons.Refresh}" Width="18" Height="18" />
-                        </Button>
                     </StackPanel>
 
                     <Grid Grid.Row="3" ColumnDefinitions="Auto,*" Margin="0,16,0,0">
@@ -323,10 +320,16 @@
                     <DockPanel HorizontalAlignment="Stretch" Margin="10,0,0,0">
                         <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
                             <TextBlock Grid.Column="0" Text="UP NEXT" Classes="section-header" VerticalAlignment="Center" Margin="0" />
-                            <Button Grid.Column="1" Classes="transport" Width="24" Height="24" Padding="3"
-                                    Command="{Binding ToggleUpNextOpenCommand}" ToolTip.Tip="Collapse Up Next">
-                                <PathIcon Data="{x:Static app:Icons.PanelRight}" Width="14" Height="14" />
-                            </Button>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                <Button Classes="transport" Width="24" Height="24" Padding="3"
+                                        Command="{Binding ReshuffleCommand}" ToolTip.Tip="Reshuffle remaining">
+                                    <PathIcon Data="{x:Static app:Icons.Refresh}" Width="14" Height="14" />
+                                </Button>
+                                <Button Classes="transport" Width="24" Height="24" Padding="3"
+                                        Command="{Binding ToggleUpNextOpenCommand}" ToolTip.Tip="Collapse Up Next">
+                                    <PathIcon Data="{x:Static app:Icons.PanelRight}" Width="14" Height="14" />
+                                </Button>
+                            </StackPanel>
                         </Grid>
                         <ListBox x:Name="QueueList" Classes="flat-list" ItemsSource="{Binding QueueRows}" Tapped="OnQueueTapped">
                             <ListBox.ItemTemplate>
