@@ -4,7 +4,7 @@ namespace Stramp.Audio;
 
 /// <summary>
 /// Decodes an audio file to raw mono PCM via ffmpeg, entirely separate from playback. Used to feed
-/// the spectrum visualizer/beat detection without touching libvlc's own audio pipeline — playback
+/// the spectrum visualizer/beat detection without touching the WASAPI playback pipeline — playback
 /// keeps working normally even if ffmpeg is missing or decoding fails, since this is a purely
 /// supplementary feature.
 /// </summary>

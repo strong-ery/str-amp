@@ -113,7 +113,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public ThemeSettingsViewModel Theme { get; }
 
-    public MainWindowViewModel() : this(new LibVlcMediaPlayer(), SettingsService.Load())
+    public MainWindowViewModel() : this(new WasapiMediaPlayer(), SettingsService.Load())
     {
     }
 
