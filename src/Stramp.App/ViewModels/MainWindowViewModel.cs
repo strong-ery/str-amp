@@ -333,7 +333,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     [RelayCommand]
-    private void ToggleShuffle() => Shuffled = !Shuffled;
+    private void ToggleShuffle()
+    {
+        Shuffled = !Shuffled;
+
+        if (Shuffled)
+            Reshuffle();
+    }
 
     [RelayCommand]
     private void ToggleLibraryOpen() => IsLibraryOpen = !IsLibraryOpen;
