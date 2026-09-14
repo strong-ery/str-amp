@@ -21,12 +21,18 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly IMediaPlayer _player;
     private readonly PlaybackQueue _queue = new();
     private readonly AppSettings _settings;
+    private readonly PlaybackStateStore _playbackStateStore;
     private readonly AlbumArtProvider _artProvider = new();
     private readonly LoudnessNormalizationService _loudnessNormalizer = new();
     private CancellationTokenSource? _normalizationCts;
     private CancellationTokenSource? _normalizationWarmupCts;
     private string? _pendingPlaybackPath;
     private List<Song> _library = [];
+    private SavedPlaybackState? _savedPlaybackState;
+    private double _resumePositionSeconds;
+    private DateTime _lastPlaybackStateSaveUtc = DateTime.MinValue;
+    private bool _playbackStateReady;
+    private bool _disposed;
 
     /// <summary>Songs of the selected source (All Songs or a playlist) — what the queue is built from.</summary>
     private List<Song> _activeSongs = [];
@@ -150,10 +156,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
     }
 
-    public MainWindowViewModel(IMediaPlayer player, AppSettings settings)
+    public MainWindowViewModel(
+        IMediaPlayer player, AppSettings settings, PlaybackStateStore? playbackStateStore = null)
     {
         _player = player;
         _settings = settings;
+        _playbackStateStore = playbackStateStore ?? new PlaybackStateStore();
+        _savedPlaybackState = _playbackStateStore.Load();
 
         Shuffled = settings.Shuffle;
         LoopMode = settings.LoopMode;
@@ -185,8 +194,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _settings.LibraryPath = directory;
         SettingsService.Save(_settings);
 
-        _activeSongs = _library;
-        PopulateLibraryRows(_library);
         PopulateSources(directory);
 
         if (_library.Count == 0)
@@ -196,9 +203,90 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         StatusText = "";
-        _queue.Build(_activeSongs, Shuffled);
-        LoadCurrent(autoPlay: false);
+        if (!TryRestorePlaybackState(directory))
+        {
+            _activeSongs = _library;
+            CurrentSourceName = "All Songs";
+            IsBrowsingSources = true;
+            PopulateLibraryRows(_activeSongs);
+            _queue.Build(_activeSongs, Shuffled);
+            _playbackStateReady = true;
+            LoadCurrent(autoPlay: false);
+        }
         StartNormalizationWarmup();
+    }
+
+    private bool TryRestorePlaybackState(string directory)
+    {
+        var state = _savedPlaybackState;
+        _savedPlaybackState = null;
+        if (state is null || !string.Equals(
+                Path.GetFullPath(state.LibraryPath ?? ""),
+                Path.GetFullPath(directory),
+                StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var songsByPath = _library.ToDictionary(song => song.Path, StringComparer.OrdinalIgnoreCase);
+        var savedActiveSongs = ResolveSongs(state.ActiveSongPaths, songsByPath);
+        var namedSource = LibrarySources.FirstOrDefault(source =>
+            string.Equals(source.Name, state.SourceName, StringComparison.OrdinalIgnoreCase));
+
+        _activeSongs = string.Equals(state.SourceName, "All Songs", StringComparison.OrdinalIgnoreCase)
+            ? _library
+            : namedSource is not null
+                ? [.. namedSource.Songs]
+                : savedActiveSongs.Count > 0
+                    ? savedActiveSongs
+                    : _library;
+        CurrentSourceName = namedSource?.Name ??
+            (string.IsNullOrWhiteSpace(state.SourceName) ? "All Songs" : state.SourceName);
+        IsBrowsingSources = state.IsBrowsingSources;
+        PopulateLibraryRows(_activeSongs);
+
+        Shuffled = state.Shuffled;
+        LoopMode = state.LoopMode;
+        var restoredQueue = ResolveSongs(state.QueuePaths, songsByPath);
+        if (restoredQueue.Count > 0)
+        {
+            var position = state.QueuePosition;
+            if (!string.IsNullOrWhiteSpace(state.CurrentSongPath))
+            {
+                var currentIndex = restoredQueue.FindIndex(song => string.Equals(
+                    song.Path, state.CurrentSongPath, StringComparison.OrdinalIgnoreCase));
+                if (currentIndex >= 0)
+                    position = currentIndex;
+            }
+            _queue.Restore(restoredQueue, position, state.ShuffleSeed);
+        }
+        else
+        {
+            _queue.Build(_activeSongs, Shuffled,
+                Shuffled && state.ShuffleSeed != 0 ? state.ShuffleSeed : null);
+            var restoredPosition = !string.IsNullOrWhiteSpace(state.CurrentSongPath)
+                ? _queue.Songs.ToList().FindIndex(song => string.Equals(
+                    song.Path, state.CurrentSongPath, StringComparison.OrdinalIgnoreCase))
+                : state.ActiveSourcePosition;
+            _queue.JumpTo(restoredPosition);
+        }
+
+        _playbackStateReady = true;
+        LoadCurrent(autoPlay: false, resumePositionSeconds: state.PositionSeconds);
+        return true;
+    }
+
+    private static List<Song> ResolveSongs(
+        IEnumerable<string>? paths, IReadOnlyDictionary<string, Song> songsByPath)
+    {
+        var songs = new List<Song>();
+        if (paths is null)
+            return songs;
+
+        foreach (var path in paths)
+        {
+            if (songsByPath.TryGetValue(path, out var song))
+                songs.Add(song);
+        }
+        return songs;
     }
 
     private void PopulateSources(string directory)
@@ -271,10 +359,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IsBrowsingSources = false;
         SearchText = "";
         PopulateLibraryRows(_activeSongs);
+        SavePlaybackState(force: true);
     }
 
     [RelayCommand]
-    private void BackToSources() => IsBrowsingSources = true;
+    private void BackToSources()
+    {
+        IsBrowsingSources = true;
+        SavePlaybackState(force: true);
+    }
 
     private void PopulateLibraryRows(IEnumerable<Song> songs)
     {
@@ -321,6 +414,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var index = _queue.Position + QueueRows.IndexOf(row);
         _queue.RemoveAt(index);
         RefreshQueueRows();
+        SavePlaybackState(force: true);
     }
 
     [RelayCommand]
@@ -343,6 +437,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IsPlaying = _player.TogglePause();
         if (IsPlaying)
             _sincePositionReport.Restart();
+        SavePlaybackState(force: true);
     }
 
     private void StartPlayback(string path)
@@ -381,8 +476,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _player.Play(path);
         _playerHasCurrentTrack = true;
         IsPlaying = true;
-        _reportedPosition = 0;
+        if (_resumePositionSeconds > 0)
+        {
+            _player.Seek(_resumePositionSeconds);
+            _reportedPosition = _resumePositionSeconds;
+            ProgressSeconds = _resumePositionSeconds;
+            ElapsedText = FormatTime(_resumePositionSeconds);
+            _resumePositionSeconds = 0;
+        }
+        else
+        {
+            _reportedPosition = 0;
+        }
         _sincePositionReport.Restart();
+        SavePlaybackState(force: true);
     }
 
     [RelayCommand]
@@ -398,6 +505,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (_player.TimePosition > 3)
         {
             _player.Seek(0);
+            ProgressSeconds = 0;
+            _reportedPosition = 0;
+            SavePlaybackState(force: true);
         }
         else
         {
@@ -418,6 +528,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _queue.RestoreOrderKeepingCurrent(_activeSongs);
             RefreshQueueRows();
             StartNormalizationWarmup();
+            SavePlaybackState(force: true);
         }
     }
 
@@ -605,12 +716,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         _settings.Shuffle = value;
         SettingsService.Save(_settings);
+        SavePlaybackState(force: true);
     }
 
     partial void OnLoopModeChanged(LoopMode value)
     {
         _settings.LoopMode = value;
         SettingsService.Save(_settings);
+        SavePlaybackState(force: true);
     }
 
     [RelayCommand]
@@ -631,6 +744,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _queue.ReshuffleKeepingCurrent(_activeSongs);
         RefreshQueueRows();
         StartNormalizationWarmup();
+        SavePlaybackState(force: true);
     }
 
     partial void OnVolumeChanged(double value)
@@ -663,9 +777,14 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public void EndSeek(double seconds)
     {
         _isSeeking = false;
-        _player.Seek(seconds);
+        if (_playerHasCurrentTrack)
+            _player.Seek(seconds);
+        else
+            _resumePositionSeconds = seconds;
+        ProgressSeconds = seconds;
         _reportedPosition = seconds;
         _sincePositionReport.Restart();
+        SavePlaybackState(force: true);
     }
 
     /// <summary>
@@ -674,6 +793,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// </summary>
     public void TickProgress()
     {
+        SavePlaybackState();
         if (_isSeeking || !IsPlaying || !_sincePositionReport.IsRunning)
             return;
 
@@ -682,7 +802,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         ElapsedText = FormatTime(estimated);
     }
 
-    private void LoadCurrent(bool autoPlay = true)
+    private void LoadCurrent(bool autoPlay = true, double resumePositionSeconds = 0)
     {
         var song = _queue.Current;
         if (song is null)
@@ -693,12 +813,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CurrentArtist = song.Artist;
         DurationSeconds = Math.Max(1, song.Duration.TotalSeconds);
         TotalText = FormatTime(song.Duration.TotalSeconds);
-        ProgressSeconds = 0;
-        ElapsedText = "0:00";
+        _resumePositionSeconds = Math.Clamp(resumePositionSeconds, 0, DurationSeconds);
+        ProgressSeconds = _resumePositionSeconds;
+        ElapsedText = FormatTime(_resumePositionSeconds);
         CurrentArtBitmap = null;
         _inferredArtPalette = null;
         _directArtPalette = null;
-        _reportedPosition = 0;
+        _reportedPosition = _resumePositionSeconds;
         _sincePositionReport.Reset();
 
         if (autoPlay)
@@ -728,6 +849,55 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         RefreshQueueRows();
         RefreshCurrentHighlight();
+        SavePlaybackState(force: true);
+    }
+
+    private void SavePlaybackState(bool force = false)
+    {
+        if (!_playbackStateReady || _library.Count == 0 || _disposed)
+            return;
+
+        var now = DateTime.UtcNow;
+        if (!force && now - _lastPlaybackStateSaveUtc < TimeSpan.FromSeconds(10))
+            return;
+
+        var currentPath = _queue.Current?.Path;
+        var activeSourcePosition = currentPath is null
+            ? 0
+            : _activeSongs.FindIndex(song => string.Equals(
+                song.Path, currentPath, StringComparison.OrdinalIgnoreCase));
+        var state = new SavedPlaybackState
+        {
+            LibraryPath = LibraryPath,
+            SourceName = CurrentSourceName,
+            IsBrowsingSources = IsBrowsingSources,
+            // The full library is derived by scanning. Playlist paths are retained so an imported
+            // or deleted playlist can still be restored as the active source.
+            ActiveSongPaths = string.Equals(
+                CurrentSourceName, "All Songs", StringComparison.OrdinalIgnoreCase)
+                ? []
+                : _activeSongs.Select(song => song.Path).ToList(),
+            ActiveSourcePosition = Math.Max(activeSourcePosition, 0),
+            QueuePaths = _queue.Songs.Select(song => song.Path).ToList(),
+            QueuePosition = _queue.Position,
+            CurrentSongPath = currentPath,
+            ShuffleSeed = _queue.ShuffleSeed,
+            Shuffled = Shuffled,
+            LoopMode = LoopMode,
+            PositionSeconds = Math.Clamp(ProgressSeconds, 0, DurationSeconds),
+            WasPlaying = IsPlaying,
+            SavedAtUtc = now,
+        };
+
+        try
+        {
+            _playbackStateStore.Save(state);
+            _lastPlaybackStateSaveUtc = now;
+        }
+        catch
+        {
+            // State persistence should never interrupt playback (read-only drives, full disk, etc.).
+        }
     }
 
     private void RefreshQueueRows()
@@ -800,6 +970,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        SavePlaybackState(force: true);
+        _disposed = true;
         CancelNormalizationAnalysis();
         CancelNormalizationWarmup();
         _loudnessNormalizer.Dispose();

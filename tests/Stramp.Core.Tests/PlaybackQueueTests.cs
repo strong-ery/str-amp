@@ -41,6 +41,34 @@ public class PlaybackQueueTests
     }
 
     [Fact]
+    public void Build_ShuffledWithSameSeed_ProducesSameOrder()
+    {
+        var first = new PlaybackQueue();
+        var second = new PlaybackQueue();
+        var library = ThreeSongs();
+
+        first.Build(library, shuffled: true, shuffleSeed: 8675309);
+        second.Build(library, shuffled: true, shuffleSeed: 8675309);
+
+        Assert.Equal(first.Songs, second.Songs);
+        Assert.Equal(8675309, first.ShuffleSeed);
+    }
+
+    [Fact]
+    public void Restore_PreservesExactQueuePositionAndSeed()
+    {
+        var queue = new PlaybackQueue();
+        var persistedOrder = ThreeSongs().AsEnumerable().Reverse().ToList();
+
+        queue.Restore(persistedOrder, position: 1, shuffleSeed: 42);
+
+        Assert.Equal(persistedOrder, queue.Songs);
+        Assert.Equal(1, queue.Position);
+        Assert.Equal(persistedOrder[1], queue.Current);
+        Assert.Equal(42, queue.ShuffleSeed);
+    }
+
+    [Fact]
     public void PlayFromLibrary_PutsChosenSongFirst()
     {
         var queue = new PlaybackQueue();

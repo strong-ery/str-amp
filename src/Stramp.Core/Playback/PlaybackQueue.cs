@@ -7,32 +7,45 @@ namespace Stramp.Core.Playback;
 /// reshuffles the rest, and running off the end of the queue triggers a full rebuild.</summary>
 public sealed class PlaybackQueue
 {
-    private readonly Random _rng = new();
     private List<Song> _songs = [];
 
     public IReadOnlyList<Song> Songs => _songs;
     public int Position { get; private set; }
+    public int ShuffleSeed { get; private set; }
 
     public Song? Current => Position >= 0 && Position < _songs.Count ? _songs[Position] : null;
     public bool HasNext => Position < _songs.Count - 1;
 
     /// <summary>Rebuilds the whole queue from the library, shuffling if requested.</summary>
-    public void Build(IEnumerable<Song> library, bool shuffled)
+    public void Build(IEnumerable<Song> library, bool shuffled, int? shuffleSeed = null)
     {
         _songs = library.ToList();
         if (shuffled)
-            ShuffleInPlace(_songs);
+            ShuffleInPlace(_songs, shuffleSeed);
+        else
+            ShuffleSeed = 0;
         Position = 0;
     }
 
     /// <summary>Starts a fresh queue with `song` first, followed by the rest of the library.</summary>
-    public void PlayFromLibrary(Song song, IEnumerable<Song> library, bool shuffled)
+    public void PlayFromLibrary(
+        Song song, IEnumerable<Song> library, bool shuffled, int? shuffleSeed = null)
     {
         var rest = library.Where(s => s.Path != song.Path).ToList();
         if (shuffled)
-            ShuffleInPlace(rest);
+            ShuffleInPlace(rest, shuffleSeed);
+        else
+            ShuffleSeed = 0;
         _songs = [song, .. rest];
         Position = 0;
+    }
+
+    /// <summary>Restores an exact persisted queue, including its current entry and shuffle seed.</summary>
+    public void Restore(IEnumerable<Song> songs, int position, int shuffleSeed)
+    {
+        _songs = songs.ToList();
+        Position = _songs.Count == 0 ? 0 : Math.Clamp(position, 0, _songs.Count - 1);
+        ShuffleSeed = shuffleSeed;
     }
 
     /// <summary>Keeps the current track in place and reshuffles the rest of the library behind it.</summary>
@@ -49,6 +62,7 @@ public sealed class PlaybackQueue
     {
         var current = Current;
         _songs = library.ToList();
+        ShuffleSeed = 0;
 
         if (current is null)
         {
@@ -94,11 +108,13 @@ public sealed class PlaybackQueue
             Position = Math.Min(Position, _songs.Count - 1);
     }
 
-    private void ShuffleInPlace(List<Song> list)
+    private void ShuffleInPlace(List<Song> list, int? shuffleSeed = null)
     {
+        ShuffleSeed = shuffleSeed ?? Random.Shared.Next(1, int.MaxValue);
+        var rng = new Random(ShuffleSeed);
         for (var i = list.Count - 1; i > 0; i--)
         {
-            var j = _rng.Next(i + 1);
+            var j = rng.Next(i + 1);
             (list[i], list[j]) = (list[j], list[i]);
         }
     }

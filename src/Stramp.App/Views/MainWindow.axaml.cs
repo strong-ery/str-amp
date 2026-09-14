@@ -104,6 +104,7 @@ public partial class MainWindow : Window
             _thumbnailToolbar?.Dispose();
             _windowIcon?.Dispose();
             _mediaKeys.Dispose();
+            ViewModel?.Dispose();
         };
         PropertyChanged += OnWindowPropertyChanged;
         DataContextChanged += OnDataContextChanged;
