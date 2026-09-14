@@ -18,6 +18,7 @@ public sealed class MediaKeyController : IDisposable
     private readonly Func<double> _getVolume;
     private readonly Action<double> _setVolume;
     private WindowsMediaKeys? _windowsMediaKeys;
+    private bool _spaceIsDown;
 
     public MediaKeyController(
         Window window,
@@ -36,6 +37,9 @@ public sealed class MediaKeyController : IDisposable
 
         _window.AddHandler(InputElement.KeyDownEvent, OnKeyDown,
             RoutingStrategies.Tunnel, handledEventsToo: true);
+        _window.AddHandler(InputElement.KeyUpEvent, OnKeyUp,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        _window.Deactivated += OnWindowDeactivated;
     }
 
     public void AttachWindowsMediaKeys(IntPtr hwnd, bool isPlaying)
@@ -69,6 +73,13 @@ public sealed class MediaKeyController : IDisposable
         switch (e.Key)
         {
             case Key.Space:
+                if (_spaceIsDown)
+                {
+                    e.Handled = true;
+                    return;
+                }
+
+                _spaceIsDown = true;
                 _playPause();
                 break;
             case Key.Left:
@@ -90,6 +101,18 @@ public sealed class MediaKeyController : IDisposable
         e.Handled = true;
     }
 
+    private void OnKeyUp(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Space)
+            return;
+
+        _spaceIsDown = false;
+        e.Handled = true;
+    }
+
+    private void OnWindowDeactivated(object? sender, EventArgs e) =>
+        _spaceIsDown = false;
+
     private static void Dispatch(Action action)
     {
         if (Dispatcher.UIThread.CheckAccess())
@@ -101,6 +124,8 @@ public sealed class MediaKeyController : IDisposable
     public void Dispose()
     {
         _window.RemoveHandler(InputElement.KeyDownEvent, OnKeyDown);
+        _window.RemoveHandler(InputElement.KeyUpEvent, OnKeyUp);
+        _window.Deactivated -= OnWindowDeactivated;
         _windowsMediaKeys?.Dispose();
         _windowsMediaKeys = null;
     }
