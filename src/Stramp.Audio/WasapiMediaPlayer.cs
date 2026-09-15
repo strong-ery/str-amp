@@ -584,15 +584,22 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     /// passes through the requested level at every band centre, so a slider moves its own part of
     /// the spectrum and leaves the rest where it was.
     ///
-    /// Boosts are real boosts: nothing is pre-attenuated to make room, so raising one band does not
-    /// quieten the others. Gain and centre-frequency changes crossfade rather than snap.
+    /// Boosts are real boosts relative to one another: raising one band does not quieten the rest
+    /// of the spectrum. Gain and centre-frequency changes crossfade rather than snap.
     ///
-    /// Boosting can push the signal past full scale, and this stage does not hold it back. With the
-    /// enhancements on, what follows does: FxSound's library ends in a limiter of its own that pins
-    /// the output at -0.30 dBFS. With them off there is nothing after this, so a large boost can
-    /// reach the endpoint above full scale and be clipped there. That is the same bargain any mixer
-    /// makes with a gain control, and the alternative -- quietening the track to make room for a
-    /// boost -- is the behaviour this equalizer was rewritten to get rid of.
+    /// The bank does take back its own peak, though. Modern masters arrive at full scale, so any
+    /// boost on top has nowhere to go: measured with a +2 dB band on a normal track, this stage was
+    /// handing on a signal at +2.56 dBFS. What that costs depends on what follows and both answers
+    /// were bad -- with the enhancements off it reached the endpoint and was clipped there, and with
+    /// them on it drove FxSound's limiter into continuous heavy reduction, which modulates the gain
+    /// of everything else and is audible as distortion.
+    ///
+    /// So the bank is attenuated by the peak of its own combined response, computed across the
+    /// spectrum rather than assumed from the largest slider, since overlapping bells add. A flat
+    /// bank attenuates by nothing. This is not the old preamp that quietened the track whenever any
+    /// band was raised: that one scaled by the largest boost whether or not the response actually
+    /// reached it, so a boost bought nothing but a quieter mix. Here the shape the user drew is
+    /// preserved exactly and only the part that would have gone past full scale is given up.
     /// </summary>
     private sealed class EqualizerSampleProvider : ISampleProvider
     {
@@ -604,6 +611,12 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         /// <summary>Length of the crossfade that retunes a band after a slider moves.</summary>
         private const float RetuneSeconds = 0.02f;
+
+        /// <summary>
+        /// How close the smoothed headroom has to be to its target before it is treated as settled.
+        /// Well below a hundredth of a decibel, so the step at the end of a ramp is inaudible.
+        /// </summary>
+        private const float HeadroomEpsilon = 1e-4f;
 
         /// <summary>
         /// Bands centred above this fraction of the sample rate are left flat: a peaking biquad
@@ -623,6 +636,13 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         /// <summary>Refinement passes used to linearise the band-interaction solve.</summary>
         private const int SolverPasses = 3;
+
+        /// <summary>
+        /// Points the combined response is sampled at when measuring its peak. Logarithmic over the
+        /// whole band, so roughly thirty per octave -- far finer than the bells, whose peaks are
+        /// broad enough that nothing sharp hides between two points.
+        /// </summary>
+        private const int HeadroomGridPoints = 320;
 
         /// <summary>
         /// Ridge term on the interaction solve. Neighbouring bells are nearly collinear, so an
@@ -649,6 +669,16 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         // Touched only by the audio thread once construction is done.
         private BandPlan _activePlan;
+
+        /// <summary>
+        /// Headroom actually in force, which chases the active plan's rather than jumping to it.
+        /// A slider that changes the bank's peak changes this too, and stepping a gain mid-stream
+        /// is a click; it rides the same short ramp the band crossfade uses.
+        /// </summary>
+        private float _headroom = 1;
+
+        /// <summary>Per-sample coefficient of that ramp.</summary>
+        private float _headroomRate;
         private CrossfadingBiQuadFilter[][]? _filters;
         private int _tailSamples;
 
@@ -659,6 +689,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             ArgumentNullException.ThrowIfNull(frequencies);
             _source = source;
             _crossfadeSamples = Math.Max(1, (int)(RetuneSeconds * WaveFormat.SampleRate));
+            _headroomRate = 1f / _crossfadeSamples;
             _activePlan = CreatePlan(frequencies, new double[frequencies.Count], enabled: false);
         }
 
@@ -670,8 +701,16 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 return read;
 
             var channels = WaveFormat.Channels;
+            var target = _activePlan.Headroom;
             for (var frame = 0; frame + channels <= read; frame += channels)
             {
+                // Chase the plan's headroom rather than stepping to it. Once it has arrived the
+                // arithmetic is skipped, so a settled bank costs one multiply per sample.
+                if (MathF.Abs(_headroom - target) > HeadroomEpsilon)
+                    _headroom += (target - _headroom) * _headroomRate;
+                else
+                    _headroom = target;
+
                 for (var channel = 0; channel < channels; channel++)
                 {
                     var sample = buffer[frame + channel];
@@ -686,7 +725,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                         sample = 0;
                     }
 
-                    buffer[frame + channel] = sample;
+                    buffer[frame + channel] = sample * _headroom;
                 }
             }
 
@@ -733,7 +772,8 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 ? SolveBandGains(frequencies, qFactors, target)
                 : target;
 
-            return new BandPlan(frequencies, qFactors, filterGains, HasAnyGain(filterGains));
+            return new BandPlan(frequencies, qFactors, filterGains, HasAnyGain(filterGains),
+                                Headroom(frequencies, qFactors, filterGains));
         }
 
         /// <summary>
@@ -938,6 +978,44 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             return solved;
         }
 
+        /// <summary>
+        /// Gain to apply after the bank so its output never rises above its input: the inverse of
+        /// the highest point of the combined response, or unity when the bank never boosts.
+        ///
+        /// The peak is looked for across the spectrum rather than taken from the largest band gain,
+        /// because neighbouring bells add -- two +2 dB bands a third of an octave apart make more
+        /// than +2 dB between them. The grid is logarithmic, which is where the bands are, and runs
+        /// to the same limit above which bands are left flat.
+        /// </summary>
+        private float Headroom(float[] frequencies, float[] qFactors, double[] filterGains)
+        {
+            if (!HasAnyGain(filterGains))
+                return 1;
+
+            var nyquistLimit = WaveFormat.SampleRate * MaxCentreFrequencyRatio;
+            var lowest = Math.Min(MinCentreFrequency, nyquistLimit / 2);
+            var steps = HeadroomGridPoints;
+            var ratio = Math.Pow(nyquistLimit / lowest, 1.0 / (steps - 1));
+
+            var peakDb = 0.0;
+            var frequency = (double)lowest;
+            for (var step = 0; step < steps; step++, frequency *= ratio)
+            {
+                var sum = 0.0;
+                for (var band = 0; band < frequencies.Length; band++)
+                {
+                    if (Math.Abs(filterGains[band]) < GainEpsilon)
+                        continue;
+                    sum += PeakingResponseDb(frequency, frequencies[band], qFactors[band], filterGains[band]);
+                }
+
+                if (sum > peakDb)
+                    peakDb = sum;
+            }
+
+            return peakDb > 0 ? (float)Math.Pow(10, -peakDb / 20) : 1;
+        }
+
         /// <summary>Response, in dB, that one band's peaking filter has at a given frequency.</summary>
         private double PeakingResponseDb(double frequency, float centre, float q, double gainDb)
         {
@@ -1043,6 +1121,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             float[] Frequencies,
             float[] QFactors,
             double[] FilterGains,
-            bool HasAnyGain);
+            bool HasAnyGain,
+            float Headroom);
     }
 }
