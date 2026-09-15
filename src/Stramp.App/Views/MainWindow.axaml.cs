@@ -61,6 +61,10 @@ public partial class MainWindow : Window
     private double _lyricsEdgePadding;
     private int _lyricsManualScrollFrames;
 
+    private bool _isDraggingSplitter;
+    private DispatcherTimer? _columnAnimationTimer;
+    private DispatcherTimer? _lyricsAnimationTimer;
+
     private ThumbnailToolbar? _thumbnailToolbar;
     private WindowsWindowIcon? _windowIcon;
     private readonly MediaKeyController _mediaKeys;
@@ -112,19 +116,29 @@ public partial class MainWindow : Window
                     vm.Volume = volume;
             });
 
+        LeftSplitter.DragStarted += (_, _) => _isDraggingSplitter = true;
         LeftSplitter.DragDelta += OnLeftSplitterDragDelta;
-        LeftSplitter.DragCompleted += OnLeftSplitterDragCompleted;
+        LeftSplitter.DragCompleted += (sender, e) =>
+        {
+            _isDraggingSplitter = false;
+            OnLeftSplitterDragCompleted(sender, e);
+        };
+        RightSplitter.DragStarted += (_, _) => _isDraggingSplitter = true;
         RightSplitter.DragDelta += OnRightSplitterDragDelta;
-        RightSplitter.DragCompleted += OnRightSplitterDragCompleted;
+        RightSplitter.DragCompleted += (sender, e) =>
+        {
+            _isDraggingSplitter = false;
+            OnRightSplitterDragCompleted(sender, e);
+        };
 
         Opened += (_, _) =>
         {
             _frameTimer.Start();
             SetUpThumbnailToolbar();
-            UpdateColumnWidths();
-            UpdateLyricsSplit();
+            UpdateColumnWidths(animate: false);
+            UpdateLyricsSplit(animate: false);
         };
-        SizeChanged += (_, _) => UpdateColumnWidths();
+        SizeChanged += (_, _) => UpdateColumnWidths(animate: false);
         Closed += (_, _) =>
         {
             _frameTimer.Stop();
@@ -219,8 +233,8 @@ public partial class MainWindow : Window
         if (_observedTheme is not null)
             _observedTheme.PropertyChanged += OnThemePropertyChanged;
 
-        UpdateColumnWidths();
-        UpdateLyricsSplit();
+        UpdateColumnWidths(animate: false);
+        UpdateLyricsSplit(animate: false);
         UpdateStageArtworkAndVisualizer();
     }
 
@@ -244,11 +258,11 @@ public partial class MainWindow : Window
                  nameof(MainWindowViewModel.LeftPanelWidth) or
                  nameof(MainWindowViewModel.RightPanelWidth))
         {
-            UpdateColumnWidths();
+            UpdateColumnWidths(animate: true);
         }
         else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsOpen))
         {
-            UpdateLyricsSplit();
+            UpdateLyricsSplit(animate: true);
         }
         else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsSynced))
         {
@@ -268,14 +282,113 @@ public partial class MainWindow : Window
     /// Gives the lyrics column half the card, which is what pushes the cover and visualizer into
     /// the left half. Closed, the column collapses to nothing and the stage fills the card again.
     /// </summary>
-    private void UpdateLyricsSplit()
+    private void UpdateLyricsSplit(bool animate = true)
     {
         if (ViewModel is not { } vm || NowPlayingSplit.ColumnDefinitions.Count < 2)
             return;
 
-        NowPlayingSplit.ColumnDefinitions[1].Width = vm.IsLyricsOpen
-            ? new GridLength(1, GridUnitType.Star)
-            : new GridLength(0);
+        var lyricsCol = NowPlayingSplit.ColumnDefinitions[1];
+        bool shouldBeOpen = vm.IsLyricsOpen;
+        bool disableAnimations = vm.Theme.DisableAnimations || !animate;
+
+        if (disableAnimations)
+        {
+            StopLyricsAnimation();
+            lyricsCol.Width = shouldBeOpen ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            return;
+        }
+
+        double totalWidth = NowPlayingSplit.Bounds.Width;
+        if (totalWidth <= 0)
+            totalWidth = NowPlayingCard.Bounds.Width;
+        if (totalWidth <= 0)
+            totalWidth = 600;
+
+        double targetPixels = shouldBeOpen ? totalWidth * 0.5 : 0;
+        double startPixels;
+
+        if (lyricsCol.Width.IsStar)
+        {
+            startPixels = lyricsCol.Width.Value * (totalWidth * 0.5);
+        }
+        else if (lyricsCol.Width.IsAbsolute)
+        {
+            startPixels = lyricsCol.Width.Value;
+        }
+        else
+        {
+            startPixels = 0;
+        }
+
+        if (Math.Abs(startPixels - targetPixels) < 1)
+        {
+            StopLyricsAnimation();
+            lyricsCol.Width = shouldBeOpen ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            return;
+        }
+
+        StopLyricsAnimation();
+
+        var startTime = DateTime.UtcNow;
+        const double durationMs = 250.0;
+
+        _lyricsAnimationTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+
+        _lyricsAnimationTimer.Tick += (s, e) =>
+        {
+            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+            double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
+            double easedT = t * t * (3 - 2 * t);
+
+            double currPixels = startPixels + (targetPixels - startPixels) * easedT;
+
+            if (currPixels > 1)
+            {
+                lyricsCol.Width = new GridLength(currPixels, GridUnitType.Pixel);
+            }
+            else
+            {
+                lyricsCol.Width = new GridLength(0);
+            }
+
+            if (t >= 1.0)
+            {
+                StopLyricsAnimation();
+                lyricsCol.Width = shouldBeOpen ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+            }
+        };
+
+        _lyricsAnimationTimer.Start();
+    }
+
+    private bool IsPanelAnimating => _columnAnimationTimer != null || _lyricsAnimationTimer != null;
+
+    private void StopLyricsAnimation()
+    {
+        if (_lyricsAnimationTimer is not null)
+        {
+            _lyricsAnimationTimer.Stop();
+            _lyricsAnimationTimer = null;
+            RefreshLyricsLayoutAfterAnimation();
+        }
+    }
+
+    private void RefreshLyricsLayoutAfterAnimation()
+    {
+        if (LyricsScroller is null || LyricsItems is null)
+            return;
+
+        var width = LyricsScroller.Bounds.Width;
+        if (width > 0)
+        {
+            LyricsItems.FontSize = Math.Clamp(
+                width * LyricsFontScale, MinLyricsFontSize, MaxLyricsFontSize);
+        }
+        UpdateLyricsPadding();
+        Dispatcher.UIThread.Post(ScrollActiveLyricIntoView, DispatcherPriority.Background);
     }
 
     /// <summary>A new track clears the collection, so the panel starts reading from the top again.</summary>
@@ -295,6 +408,9 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnLyricsViewportSizeChanged(object? sender, SizeChangedEventArgs e)
     {
+        if (IsPanelAnimating)
+            return;
+
         LyricsItems.FontSize = Math.Clamp(
             e.NewSize.Width * LyricsFontScale, MinLyricsFontSize, MaxLyricsFontSize);
         UpdateLyricsPadding();
@@ -327,7 +443,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void ScrollActiveLyricIntoView()
     {
-        if (_lyricsManualScrollFrames > 0)
+        if (_lyricsManualScrollFrames > 0 || IsPanelAnimating)
             return;
 
         if (ViewModel is not { IsLyricsSynced: true } vm || vm.ActiveLyricLine is not { } active)
@@ -351,6 +467,9 @@ public partial class MainWindow : Window
     /// <summary>Moves the panel a fraction of the way to its target, once per animation frame.</summary>
     private void StepLyricsScroll()
     {
+        if (IsPanelAnimating)
+            return;
+
         // Scrolling by hand takes over; the panel only takes itself back once the user has stopped.
         if (_lyricsManualScrollFrames > 0 && --_lyricsManualScrollFrames == 0)
             ScrollActiveLyricIntoView();
@@ -390,7 +509,7 @@ public partial class MainWindow : Window
     private ColumnDefinition? RightColumn =>
         MainContentGrid?.ColumnDefinitions.Count > 4 ? MainContentGrid.ColumnDefinitions[4] : null;
 
-    private void UpdateColumnWidths()
+    private void UpdateColumnWidths(bool animate = true)
     {
         if (ViewModel is not { } vm || LeftColumn is not { } leftCol || RightColumn is not { } rightCol)
             return;
@@ -416,9 +535,66 @@ public partial class MainWindow : Window
             rightTarget *= scale;
         }
 
-        if (vm.IsLibraryOpen && leftTarget > 10)
+        bool disableAnimations = vm.Theme.DisableAnimations || _isDraggingSplitter || !animate;
+
+        if (disableAnimations)
         {
-            leftCol.Width = new GridLength(leftTarget);
+            StopColumnAnimation();
+            ApplyLeftColumnWidth(leftTarget);
+            ApplyRightColumnWidth(rightTarget);
+            return;
+        }
+
+        double startLeft = leftCol.Width.IsAbsolute ? leftCol.Width.Value : 0;
+        double startRight = rightCol.Width.IsAbsolute ? rightCol.Width.Value : 0;
+
+        if (Math.Abs(startLeft - leftTarget) < 1 && Math.Abs(startRight - rightTarget) < 1)
+        {
+            StopColumnAnimation();
+            ApplyLeftColumnWidth(leftTarget);
+            ApplyRightColumnWidth(rightTarget);
+            return;
+        }
+
+        StopColumnAnimation();
+
+        var startTime = DateTime.UtcNow;
+        const double durationMs = 250.0;
+
+        _columnAnimationTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+
+        _columnAnimationTimer.Tick += (s, e) =>
+        {
+            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+            double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
+            double easedT = t * t * (3 - 2 * t);
+
+            double currLeft = startLeft + (leftTarget - startLeft) * easedT;
+            double currRight = startRight + (rightTarget - startRight) * easedT;
+
+            ApplyLeftColumnWidth(currLeft);
+            ApplyRightColumnWidth(currRight);
+
+            if (t >= 1.0)
+            {
+                StopColumnAnimation();
+                ApplyLeftColumnWidth(leftTarget);
+                ApplyRightColumnWidth(rightTarget);
+            }
+        };
+
+        _columnAnimationTimer.Start();
+    }
+
+    private void ApplyLeftColumnWidth(double width)
+    {
+        if (LeftColumn is not { } leftCol) return;
+        if (width > 5)
+        {
+            leftCol.Width = new GridLength(width);
             LeftSplitter.IsVisible = true;
         }
         else
@@ -426,16 +602,30 @@ public partial class MainWindow : Window
             leftCol.Width = new GridLength(0);
             LeftSplitter.IsVisible = false;
         }
+    }
 
-        if (vm.IsUpNextOpen && rightTarget > 10)
+    private void ApplyRightColumnWidth(double width)
+    {
+        if (RightColumn is not { } rightCol) return;
+        if (width > 5)
         {
-            rightCol.Width = new GridLength(rightTarget);
+            rightCol.Width = new GridLength(width);
             RightSplitter.IsVisible = true;
         }
         else
         {
             rightCol.Width = new GridLength(0);
             RightSplitter.IsVisible = false;
+        }
+    }
+
+    private void StopColumnAnimation()
+    {
+        if (_columnAnimationTimer is not null)
+        {
+            _columnAnimationTimer.Stop();
+            _columnAnimationTimer = null;
+            RefreshLyricsLayoutAfterAnimation();
         }
     }
 
