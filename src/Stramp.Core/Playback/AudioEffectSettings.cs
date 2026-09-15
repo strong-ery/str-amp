@@ -5,11 +5,10 @@ namespace Stramp.Core.Playback;
 /// 10 is the full effect — the same 0-10 scale FXSound puts on its sliders, so a number here means
 /// what the same number means over there.
 ///
-/// The names and the scale come from FXSound, whose preset files carry these five values alongside
-/// the EQ curve, so its presets land somewhere sensible here. The processing behind them does not:
-/// FXSound's is proprietary and unpublished, so each of these is an independent implementation of
-/// the effect its name describes, not a reproduction of theirs. Expect the same kind of change,
-/// not the same sound.
+/// The names, the scale and the processing all come from FxSound: str-amp hands these five values
+/// to its DSP library, so a number here does what the same number does over there. They were once
+/// str-amp's own implementations of the five effects, which measured close and still did not sound
+/// the same; the library removed the guesswork. See Stramp.Audio's DfxEffectProcessor.
 ///
 /// The preset files store the same scale spread over 0-125 rather than 0-10, which is why some of
 /// them carry values above 100: FXSound's "Transcription" stores 115 dynamic boost, and that is

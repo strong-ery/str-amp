@@ -34,3 +34,48 @@ Files containing derived work carry that attribution in their own header. The
 incorporation of this code is why str-amp is AGPL-3.0-or-later: the AGPL's
 copyleft extends to the whole of the combined work, and permits no additional
 restrictions on top (which is what ruled out the previous NonCommercial terms).
+
+
+BUNDLED BINARY: native/prebuilt/x64/DfxBridge.dll
+=================================================
+
+str-amp ships a prebuilt DfxBridge.dll so that a normal build needs no C++ toolchain.
+It contains FxSound's DSP library and the flat C entry points in native/dfxbridge, and
+is covered by the AGPL like the rest of this project.
+
+The AGPL requires that the corresponding source be available to anyone who receives the
+binary. It is:
+
+  * The bridge source is native/dfxbridge/ in this repository.
+  * FxSound's source is https://github.com/fxsound2/fxsound-app
+    The shipped binary was built from commit aed079771554b47766a750e7f181f75b7808108a.
+
+The FxSound source is used with one change, which the AGPL requires be published along with
+the binary. It is native/dfxbridge/fxsound-registry-namespace.patch, and it renames the
+registry key the library keeps its live settings under, from "DFX" to "StrAmp".
+
+That matters because the library reads those settings on startup and writes them back as it
+runs. Left unchanged, str-amp would share one set of live settings with an installed FxSound
+on the same machine, reading that install's state and overwriting it. Measured before the
+change, str-amp picked up an FxSound install's all-effects-off state and a preset that should
+have added 4.4 dB added 0.5 dB instead. After it, the FxSound tree is untouched byte for byte.
+The patch also removes a MessageBox the library raises if it fails to start, which would block
+on a thread with no message loop to dismiss it.
+
+To rebuild it (Visual Studio 2022, x64):
+
+  git clone https://github.com/fxsound2/fxsound-app
+  cd fxsound-app
+  git checkout aed079771554b47766a750e7f181f75b7808108a
+  git apply <str-amp>\native\dfxbridge\fxsound-registry-namespace.patch
+  msbuild dsp\DfxDsp.vcxproj -p:Configuration=Release -p:Platform=x64
+
+  cd <str-amp>\native\dfxbridge
+  msbuild DfxBridge.vcxproj -p:Configuration=Release -p:Platform=x64 ^
+          -p:FxSoundRoot=<path to fxsound-app>
+
+  copy build\x64\DfxBridge.dll ..\prebuilt\x64\
+
+DfxDsp.vcxproj builds a static library, and DfxBridge links it together with the utility
+modules from audiopassthru that it depends on, so the result is one self-contained DLL
+with no runtime dependency on an FxSound installation.

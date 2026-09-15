@@ -1,0 +1,39 @@
+diff --git a/dsp/DfxDspPrivate.cpp b/dsp/DfxDspPrivate.cpp
+index e132da0..37fbfcf 100644
+--- a/dsp/DfxDspPrivate.cpp
++++ b/dsp/DfxDspPrivate.cpp
+@@ -35,7 +35,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ #include "spectrum.h"
+ #include "SurroundSyn.h"
+ 
+-#define DFXG_REGISTRY_DFX_PRODUCT_NAME_WIDE		L"DFX"
++/*
++ * str-amp: was L"DFX". The registry product name is the top of the tree this library
++ * keeps its live settings in, HKCU\SOFTWARE\<name>\<major>\<vendor>. Left as "DFX"
++ * that is the very tree an installed FxSound is using, so str-amp would read that
++ * install's settings at startup and write its own back over them. Renaming gives
++ * str-amp its own tree and leaves a side-by-side FxSound install untouched.
++ */
++#define DFXG_REGISTRY_DFX_PRODUCT_NAME_WIDE		L"StrAmp"
+ #define DFXG_DISPLAYED_DFX_PRODUCT_NAME_WIDE    L"FxSound"
+ #define DFXP_VENDOR_CODE_UNIVERSAL			  23
+ 
+@@ -66,7 +73,7 @@ DfxDspPrivate::DfxDspPrivate()
+ 
+ 	// Initialize the processing mode
+ 	if (dfxpInit(&dfxp_handle_,
+-		L"DFX", 23,
++		L"StrAmp", 23,   /* str-amp: was L"DFX"; see the note above. */
+ 		14, 1, IS_FALSE,
+ 		IS_FALSE, 0,
+ 		IS_FALSE,
+@@ -74,7 +81,8 @@ DfxDspPrivate::DfxDspPrivate()
+ 		IS_FALSE, slout1_) != OKAY)
+ 	{
+ 		//return(NOT_OKAY);
+-		MessageBox(NULL, L"TTEST", L"TEST", MB_OK);
++		/* str-amp: was MessageBox(NULL, L"TTEST", L"TEST", MB_OK) -- a modal
++		   dialog on a thread with no message loop to dismiss it. */
+ 	}
+ 
+ 	// Make sure the vocal reduction is turned off 

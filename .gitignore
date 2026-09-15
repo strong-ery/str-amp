@@ -7,3 +7,6 @@ dist/
 *bin/
 *obj/
 .idea/
+# Intermediate output from building native/dfxbridge. The shipped binary is committed
+# separately under native/prebuilt.
+native/dfxbridge/build/

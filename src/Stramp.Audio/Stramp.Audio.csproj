@@ -12,6 +12,19 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The audio buffer is handed to DfxBridge as a pointer, so it has to be pinned. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
+
+  <!--
+    FxSound's DSP, prebuilt so an ordinary build needs no C++ toolchain. It is x64-only, which
+    matches what str-amp ships. COPYRIGHT records where it comes from and how to rebuild it.
+  -->
+  <ItemGroup>
+    <None Include="../../native/prebuilt/x64/DfxBridge.dll">
+      <Link>DfxBridge.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
 </Project>

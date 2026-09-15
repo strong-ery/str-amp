@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Builds DfxBridge.dll: FxSound's DfxDsp static library plus the flat C entry points in
+  dfxbridge.cpp, linked into one self-contained binary so str-amp ships a single file.
+
+  Point it at a checkout of https://github.com/fxsound2/fxsound-app whose dsp/DfxDsp.vcxproj
+  has already been built for Release|x64:
+
+    msbuild DfxBridge.vcxproj -p:Configuration=Release -p:Platform=x64 ^
+            -p:FxSoundRoot=C:\path\to\fxsound-app
+
+  See COPYRIGHT in the repository root.
+-->
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{2F1C7B90-4E3A-44D6-9A21-6B0E5C8D7A11}</ProjectGuid>
+    <RootNamespace>DfxBridge</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+
+  <!-- Where the FxSound checkout lives; override with -p:FxSoundRoot=... -->
+  <PropertyGroup>
+    <FxSoundRoot Condition="'$(FxSoundRoot)'==''">$(MSBuildThisFileDirectory)..\..\..\fxsound-app</FxSoundRoot>
+    <FxSoundInclude>$(FxSoundRoot)\dsp\include</FxSoundInclude>
+    <FxSoundPassthruInclude>$(FxSoundRoot)\audiopassthru\include</FxSoundPassthruInclude>
+    <FxSoundPassthruSrc>$(FxSoundRoot)\audiopassthru\src</FxSoundPassthruSrc>
+    <FxSoundLib>$(FxSoundRoot)\lib\Release-x64\DfxDsp.lib</FxSoundLib>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+
+  <PropertyGroup>
+    <OutDir>$(MSBuildThisFileDirectory)build\$(Platform)\</OutDir>
+    <IntDir>$(MSBuildThisFileDirectory)build\obj\$(Platform)\</IntDir>
+    <TargetName>DfxBridge</TargetName>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <Optimization>MaxSpeed</Optimization>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <!-- Must match DfxDsp.lib, which is built MultiThreaded, or the CRTs collide. -->
+      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalIncludeDirectories>$(FxSoundInclude);$(FxSoundPassthruInclude);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ExceptionHandling>Sync</ExceptionHandling>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <AdditionalDependencies>$(FxSoundLib);advapi32.lib;user32.lib;ole32.lib;shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <ClCompile Include="dfxbridge.cpp" />
+
+    <!--
+      DfxDsp.lib leaves a handful of utility symbols unresolved: FxSound's own application
+      satisfies them from audiopassthru. Its utility modules are compiled in here; the device
+      enumeration and WASAPI parts of that project are not, since str-amp does its own output.
+    -->
+    <ClCompile Include="$(FxSoundPassthruSrc)\MTH\*.cpp" />
+    <ClCompile Include="$(FxSoundPassthruSrc)\FILE\*.cpp" />
+    <ClCompile Include="$(FxSoundPassthruSrc)\MRY\*.cpp" />
+    <ClCompile Include="$(FxSoundPassthruSrc)\pstr\*.cpp" />
+    <ClCompile Include="$(FxSoundPassthruSrc)\reg\*.cpp" />
+    <ClCompile Include="$(FxSoundPassthruSrc)\SLOUT\*.cpp" />
+    <ClCompile Include="$(FxSoundPassthruSrc)\ptime\*.cpp" />
+    <ClCompile Include="$(FxSoundPassthruSrc)\operatingSystem\*.cpp" />
+  </ItemGroup>
+
+  <Target Name="CheckFxSound" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('$(FxSoundLib)')"
+           Text="DfxDsp.lib not found at $(FxSoundLib). Build fxsound-app's dsp/DfxDsp.vcxproj for Release|x64 first, or pass -p:FxSoundRoot=..." />
+  </Target>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+</Project>

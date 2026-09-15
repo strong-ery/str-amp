@@ -28,7 +28,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     private MediaFoundationReader? _reader;
     private GainSampleProvider? _normalizer;
     private EqualizerSampleProvider? _equalizer;
-    private AudioEffectChain? _effects;
+    private DfxEffectProcessor? _effects;
     private MonoDownmixSampleProvider? _mono;
     private float[] _equalizerFrequencies = [.. DefaultBandFrequencies];
     private double[] _equalizerGains = new double[DefaultBandFrequencies.Length];
@@ -223,10 +223,10 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         var normalizer = new GainSampleProvider(reader.ToSampleProvider(), _normalizationGainDb);
         var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
         equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
-        var effects = new AudioEffectChain(equalizer, _effectSettings);
+        var effects = new DfxEffectProcessor(equalizer, _effectSettings);
 
-        // Last in the chain, after the limiter: mono is about what leaves for the speakers, so
-        // it collapses the finished signal rather than something the later stages then widen.
+        // Last in the chain: mono is about what leaves for the speakers, so it collapses the
+        // finished signal rather than something the later stages then widen.
         var mono = new MonoDownmixSampleProvider(effects, _monoOutput);
 
         var device = ResolveOutputDevice(_outputDeviceId);
@@ -429,6 +429,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         var output = _output;
         var reader = _reader;
         var device = _outputDevice;
+        var effects = _effects;
         _output = null;
         _reader = null;
         _normalizer = null;
@@ -443,6 +444,10 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             output.Dispose();
         }
         reader?.Dispose();
+
+        // After the output has stopped, so the render thread is done with it. Holds a native
+        // handle, which nothing else will free.
+        effects?.Dispose();
 
         // Released only after the stream that was rendering to it. Whether the player took
         // ownership of the endpoint is unspecified, so tolerate it having been disposed already.
@@ -580,9 +585,14 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     /// the spectrum and leaves the rest where it was.
     ///
     /// Boosts are real boosts: nothing is pre-attenuated to make room, so raising one band does not
-    /// quieten the others. Gain and centre-frequency changes crossfade rather than snap. Boosting
-    /// can push the signal past full scale; holding it back is the job of the peak limiter at the
-    /// end of the chain, not of this stage.
+    /// quieten the others. Gain and centre-frequency changes crossfade rather than snap.
+    ///
+    /// Boosting can push the signal past full scale, and this stage does not hold it back. With the
+    /// enhancements on, what follows does: FxSound's library ends in a limiter of its own that pins
+    /// the output at -0.30 dBFS. With them off there is nothing after this, so a large boost can
+    /// reach the endpoint above full scale and be clipped there. That is the same bargain any mixer
+    /// makes with a gain control, and the alternative -- quietening the track to make room for a
+    /// boost -- is the behaviour this equalizer was rewritten to get rid of.
     /// </summary>
     private sealed class EqualizerSampleProvider : ISampleProvider
     {
