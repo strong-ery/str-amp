@@ -45,8 +45,21 @@ internal sealed class DynamicBoostEffect
     /// <summary>Ceiling the lookahead limiter holds the output to; 0.966051 is about -0.3 dBFS.</summary>
     private const float MaxOutput = 0.966051f;
 
-    /// <summary>Long-term level the boost aims the track at. MAXIMIZE_TARGET_LEVEL_SETTING.</summary>
-    private const float TargetLevel = 0.32f;
+    /// <summary>
+    /// Long-term level the boost aims the track at.
+    ///
+    /// Not FxSound's 0.32. That constant is explicitly a placeholder — their comment reads "in DFX
+    /// this is currently set in the function dfxp_CommunicateFixedQnts_Opt(), so this is an
+    /// initialization below that is overwritten by DFX", and that function is not in the
+    /// open-sourced project. The placeholder is about -9.9 dBFS, which is *below* where a modern
+    /// master already sits, so every governed boost collapsed onto the 1.06 floor and the stage
+    /// measured +0.1 dB on real tracks. Their own comment anticipates this: "really hot songs have
+    /// a level estimate that exceeds that".
+    ///
+    /// Raised so the stage does something on contemporary material. This is the one number here
+    /// not taken from FxSound, and it is the first thing to change if the loudness does not match.
+    /// </summary>
+    private const float TargetLevel = 0.5f;
 
     /// <summary>Cutoff of the level estimator, in Hz. Deliberately far below audio.</summary>
     private const double LevelFilterCutoffHz = 0.1;

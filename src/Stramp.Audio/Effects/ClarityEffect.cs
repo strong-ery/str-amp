@@ -32,9 +32,8 @@ namespace Stramp.Audio.Effects;
 /// however hard it is driven — so "drive" can be pushed a long way without the result running away.
 /// FxSound's own comment notes the cubic Taylor term alone approximates it well below unity input.
 ///
-/// Turning the control up does not simply add more of one thing. Drive rises, the odd path rises,
-/// and the even path falls to nothing (see the ranges below), so the character moves from warm and
-/// even-dominated at low settings to bright and odd-dominated at high ones.
+/// The shaper runs at a fixed operating point and the control sets how much of its output is mixed
+/// back in, which is what the original's closing wet/dry stage amounts to.
 ///
 /// Note this generates harmonics without an upper bound, so content near Nyquist will alias — the
 /// str-amp implementation this replaced avoided that by capping the shaper at a cubic and band
@@ -50,15 +49,21 @@ internal sealed class ClarityEffect
     /// </summary>
     private const double HighPassHz = 2350;
 
-    // Parameter ranges, from c_aural.h. Drive and the odd path run up with the control; the even
-    // path runs *down*, from 0.75 at nothing to silent at full.
-    private const double DriveMin = 0;
-    private const double DriveMax = 2 * Math.PI / 4.0 * 1.8 * 2.0 * 0.75;   // 4.2412
-    private const double WetBoost = 2.0 * 0.75;
-    private const double EvenMin = 0.5 * WetBoost;                          // 0.75
-    private const double EvenMax = 0.0;
-    private const double OddMin = 0;
-    private const double OddMax = 1.0 * WetBoost;                           // 1.5
+    // The shaper's own settings, all three at the values FxSound ships. The control does not move
+    // them; it sets how much of what they produce is mixed in — see SetAmount.
+    //
+    // c_aural.h does give ranges for these, but they belong to the DSP/FX plug-in, where drive,
+    // odd and even were three separate knobs on screen. In FxSound there is one knob, the shaper
+    // output passes through a wet/dry stage (kerWetDry), and these are its fixed operating point.
+
+    /// <summary>Drive into the shaper. FxSound's aural_drive.</summary>
+    private const float Drive = 1.76993f;
+
+    /// <summary>Mix of the odd (sine) path. FxSound's aural_odd.</summary>
+    private const float OddMix = 1.5f;
+
+    /// <summary>Mix of the even (rectified) path. Silent in FxSound's configuration.</summary>
+    private const float EvenMix = 0.0f;
 
     /// <summary>Guards the shaper against a runaway input; sin() is bounded, the even path is not.</summary>
     private const float EvenCeiling = 4;
@@ -68,9 +73,7 @@ internal sealed class ClarityEffect
     private readonly float _a1;
     private readonly float _a0;
 
-    private readonly SmoothedParameter _drive;
-    private readonly SmoothedParameter _even;
-    private readonly SmoothedParameter _odd;
+    private readonly SmoothedParameter _mix;
 
     // Highpass history, per channel.
     private readonly float[] _outMinus1;
@@ -94,28 +97,25 @@ internal sealed class ClarityEffect
         _a1 = (float)(2 * (1 - k * k) * norm);
         _a0 = (float)(-(1 - Math.Sqrt(2) * k + k * k) * norm);
 
-        _drive = new SmoothedParameter(sampleRate);
-        _even = new SmoothedParameter(sampleRate, (float)EvenMin);
-        _odd = new SmoothedParameter(sampleRate);
+        _mix = new SmoothedParameter(sampleRate);
     }
 
     /// <summary>True once the shaper is fully out of circuit, so the stage can be skipped.</summary>
-    public bool IsIdle => _drive.IsSettled && _drive.Current == 0;
+    public bool IsIdle => _mix.IsSettled && _mix.Current == 0;
 
     /// <summary>
-    /// Sets the amount, 0 to 10. FxSound's DSP takes a 0-to-1 knob value which its quantizer maps
-    /// linearly onto each parameter's range (QNT_RESPONSE_LINEAR, "used for most knob to real
-    /// mappings"). The mapping is linear here for that reason; it is the one link in the chain
-    /// taken from the response type's documented default rather than from a call site, because
-    /// dfxpSetKnobValue's implementation is not part of the open-sourced DSP project.
+    /// Sets the amount, 0 to 10: how much of the generated harmonics are mixed in.
+    ///
+    /// The original ends with kerWetDry, which is <c>out = out·wet + dry·in</c>, and the shaper
+    /// has already added the dry signal by then — so with dry as the complement of wet the whole
+    /// stage reduces to <c>in + wet·harmonics</c>. That is what the control sets. The reverb does
+    /// the same thing with the same macro, which is the reason for reading it this way.
+    ///
+    /// Scaling the drive instead was the first attempt, and it measured +5.6 dB above 6 kHz at a
+    /// setting of 4 — because sin(x) is very nearly x at these levels, so "more drive" mostly
+    /// meant a large high-frequency boost rather than more harmonics.
     /// </summary>
-    public void SetAmount(double amount)
-    {
-        var knob = Math.Clamp(amount / 10, 0, 1);
-        _drive.SetTarget((float)(DriveMin + knob * (DriveMax - DriveMin)));
-        _even.SetTarget((float)(EvenMin + knob * (EvenMax - EvenMin)));
-        _odd.SetTarget((float)(OddMin + knob * (OddMax - OddMin)));
-    }
+    public void SetAmount(double amount) => _mix.SetTarget((float)Math.Clamp(amount / 10, 0, 1));
 
     public void Reset()
     {
@@ -129,9 +129,7 @@ internal sealed class ClarityEffect
     {
         for (var frame = 0; frame + channels <= count; frame += channels)
         {
-            var drive = _drive.Next();
-            var evenMix = _even.Next();
-            var oddMix = _odd.Next();
+            var mix = _mix.Next();
 
             for (var channel = 0; channel < channels && channel < _channels; channel++)
             {
@@ -149,12 +147,12 @@ internal sealed class ClarityEffect
                 _inMinus2[channel] = _inMinus1[channel];
                 _inMinus1[channel] = input;
 
-                filtered *= drive;
+                filtered *= Drive;
 
                 var odd = MathF.Sin(filtered);
                 var even = filtered > 0 ? MathF.Min(filtered, EvenCeiling) : 0;
 
-                buffer[index] = input + evenMix * even + oddMix * odd;
+                buffer[index] = input + mix * (EvenMix * even + OddMix * odd);
             }
         }
     }
