@@ -381,6 +381,18 @@ public partial class MainWindow : Window
 
     // ── Library / queue ──────────────────────────────────────────────────────
 
+    private void OnSongContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        if (e.Container.DataContext is SongRow row)
+            ViewModel?.LoadRowArt(row);
+    }
+
+    private void OnSongContainerClearing(object? sender, ContainerClearingEventArgs e)
+    {
+        if (e.Container.DataContext is SongRow row)
+            ViewModel?.ReleaseRowArt(row);
+    }
+
     private async void OnOpenLibraryClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions

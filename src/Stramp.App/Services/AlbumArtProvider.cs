@@ -6,45 +6,123 @@ using CoreArtCache = Stramp.Core.Library.ArtCache;
 namespace Stramp.App.Services;
 
 /// <summary>
-/// UI-facing wrapper around Stramp.Core's ArtCache: reads/caches raw embedded-art bytes there,
-/// and additionally caches decoded Avalonia Bitmaps here so repeated UI refreshes (e.g. re-showing
-/// a queue row) don't re-decode the image every time.
+/// Supplies full artwork for the now-playing view and small decoded thumbnails for virtualized
+/// list rows. Both caches are bounded and duplicate requests share the same decode operation.
 /// </summary>
-public sealed class AlbumArtProvider
+public sealed class AlbumArtProvider : IDisposable
 {
-    private readonly CoreArtCache _byteCache = new();
-    private readonly ConcurrentDictionary<string, Bitmap?> _bitmapCache = new();
+    private const int ThumbnailDecodeWidth = 96;
+    private const int ThumbnailCacheSize = 192;
+    private const int FullArtCacheSize = 3;
+    private const int ConcurrentDecodes = 4;
 
-    /// <summary>Fetches art for `path` on a background thread and invokes `callback` on the UI thread.</summary>
-    public void GetArtAsync(string path, Action<Bitmap?> callback)
+    private readonly CoreArtCache _byteCache = new();
+    private readonly BitmapLruCache _thumbnailCache = new(ThumbnailCacheSize, disposeOnEviction: true);
+    private readonly BitmapLruCache _fullArtCache = new(FullArtCacheSize);
+    private readonly ConcurrentDictionary<string, Lazy<Task<Bitmap?>>> _thumbnailInFlight =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, Lazy<Task<Bitmap?>>> _fullArtInFlight =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _decodeSlots = new(ConcurrentDecodes);
+    private bool _disposed;
+
+    /// <summary>Fetches original-resolution art for the large now-playing cover.</summary>
+    public void GetArtAsync(string path, Action<Bitmap?> callback) =>
+        DeliverAsync(path, callback, thumbnail: false);
+
+    /// <summary>Fetches a high-DPI 96px thumbnail for a visible library or queue row.</summary>
+    public void GetThumbnailAsync(string path, Action<Bitmap?> callback)
     {
-        if (_bitmapCache.TryGetValue(path, out var cached))
+        _thumbnailCache.Pin(path);
+        DeliverAsync(path, callback, thumbnail: true);
+    }
+
+    /// <summary>Releases a visible row's ownership so an old thumbnail can be evicted safely.</summary>
+    public void ReleaseThumbnail(string path) => _thumbnailCache.Unpin(path);
+
+    private async void DeliverAsync(string path, Action<Bitmap?> callback, bool thumbnail)
+    {
+        if (_disposed)
+            return;
+
+        var cache = thumbnail ? _thumbnailCache : _fullArtCache;
+        if (cache.TryGet(path, out var cached))
         {
             callback(cached);
             return;
         }
 
-        Task.Run(() =>
+        var inFlight = thumbnail ? _thumbnailInFlight : _fullArtInFlight;
+        var request = inFlight.GetOrAdd(path, requestedPath =>
+            new Lazy<Task<Bitmap?>>(
+                () => LoadAndCacheAsync(requestedPath, cache, thumbnail),
+                LazyThreadSafetyMode.ExecutionAndPublication));
+        Bitmap? bitmap;
+        try
         {
-            if (!_byteCache.TryGet(path, out var bytes))
-            {
-                bytes = CoreArtCache.ReadEmbeddedArt(path);
-                _byteCache.Put(path, bytes);
-            }
+            bitmap = await request.Value;
+        }
+        finally
+        {
+            if (inFlight.TryGetValue(path, out var current) && ReferenceEquals(current, request))
+                inFlight.TryRemove(path, out _);
+        }
+        if (_disposed)
+            return;
 
-            var bitmap = DecodeSafely(bytes);
-            _bitmapCache[path] = bitmap;
-            Dispatcher.UIThread.Post(() => callback(bitmap));
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!_disposed)
+                callback(bitmap);
         });
+    }
+
+    private async Task<Bitmap?> LoadAndCacheAsync(
+        string path,
+        BitmapLruCache cache,
+        bool thumbnail)
+    {
+        var enteredDecodeSlot = false;
+        try
+        {
+            await _decodeSlots.WaitAsync();
+            enteredDecodeSlot = true;
+            if (_disposed)
+                return null;
+
+            return await Task.Run(() =>
+            {
+                if (!_byteCache.TryGet(path, out var bytes))
+                {
+                    bytes = CoreArtCache.ReadEmbeddedArt(path);
+                    _byteCache.Put(path, bytes);
+                }
+
+                var bitmap = DecodeSafely(bytes, thumbnail);
+                cache.Put(path, bitmap);
+                return bitmap;
+            });
+        }
+        catch
+        {
+            cache.Put(path, null);
+            return null;
+        }
+        finally
+        {
+            if (enteredDecodeSlot)
+                _decodeSlots.Release();
+        }
     }
 
     public void Invalidate(string path)
     {
         _byteCache.Invalidate(path);
-        _bitmapCache.TryRemove(path, out _);
+        _thumbnailCache.Remove(path);
+        _fullArtCache.Remove(path);
     }
 
-    private static Bitmap? DecodeSafely(byte[]? bytes)
+    private static Bitmap? DecodeSafely(byte[]? bytes, bool thumbnail)
     {
         if (bytes is null || bytes.Length == 0)
             return null;
@@ -52,11 +130,175 @@ public sealed class AlbumArtProvider
         try
         {
             using var stream = new MemoryStream(bytes);
-            return new Bitmap(stream);
+            return thumbnail
+                ? Bitmap.DecodeToWidth(stream, ThumbnailDecodeWidth, BitmapInterpolationMode.HighQuality)
+                : new Bitmap(stream);
         }
         catch
         {
             return null;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _thumbnailCache.Dispose();
+        _fullArtCache.Dispose();
+    }
+
+    private sealed class BitmapLruCache(int capacity, bool disposeOnEviction = false) : IDisposable
+    {
+        private readonly object _gate = new();
+        private readonly Dictionary<string, CacheEntry> _entries =
+            new(StringComparer.OrdinalIgnoreCase);
+        private readonly LinkedList<string> _order = new();
+        private bool _disposed;
+
+        public void Pin(string path)
+        {
+            lock (_gate)
+            {
+                if (_disposed)
+                    return;
+
+                if (_entries.TryGetValue(path, out var existing))
+                {
+                    existing.PinCount++;
+                    _order.Remove(existing.Node);
+                    _order.AddLast(existing.Node);
+                    return;
+                }
+
+                var node = _order.AddLast(path);
+                _entries[path] = new CacheEntry(bitmap: null, node)
+                {
+                    PinCount = 1,
+                    IsLoaded = false,
+                };
+            }
+        }
+
+        public void Unpin(string path)
+        {
+            lock (_gate)
+            {
+                if (_disposed || !_entries.TryGetValue(path, out var entry))
+                    return;
+                entry.PinCount = Math.Max(0, entry.PinCount - 1);
+                Trim();
+            }
+        }
+
+        public bool TryGet(string path, out Bitmap? bitmap)
+        {
+            lock (_gate)
+            {
+                if (_disposed)
+                {
+                    bitmap = null;
+                    return false;
+                }
+
+                if (!_entries.TryGetValue(path, out var entry))
+                {
+                    bitmap = null;
+                    return false;
+                }
+
+                if (!entry.IsLoaded)
+                {
+                    bitmap = null;
+                    return false;
+                }
+
+                _order.Remove(entry.Node);
+                _order.AddLast(entry.Node);
+                bitmap = entry.Bitmap;
+                return true;
+            }
+        }
+
+        public void Put(string path, Bitmap? bitmap)
+        {
+            lock (_gate)
+            {
+                if (_disposed)
+                {
+                    bitmap?.Dispose();
+                    return;
+                }
+
+                if (_entries.TryGetValue(path, out var existing))
+                {
+                    existing.Bitmap = bitmap;
+                    existing.IsLoaded = true;
+                    _order.Remove(existing.Node);
+                    _order.AddLast(existing.Node);
+                    Trim();
+                    return;
+                }
+
+                var node = _order.AddLast(path);
+                _entries[path] = new CacheEntry(bitmap, node) { IsLoaded = true };
+                Trim();
+            }
+        }
+
+        private void Trim()
+        {
+            while (_entries.Count > capacity)
+            {
+                var candidate = _order.First;
+                while (candidate is not null &&
+                       (!_entries[candidate.Value].IsLoaded || _entries[candidate.Value].PinCount > 0))
+                    candidate = candidate.Next;
+
+                if (candidate is null)
+                    return; // More visible/pending entries than the cap; trim as rows clear.
+
+                var entry = _entries[candidate.Value];
+                _order.Remove(candidate);
+                _entries.Remove(candidate.Value);
+                if (disposeOnEviction)
+                    entry.Bitmap?.Dispose();
+            }
+        }
+
+        public void Remove(string path)
+        {
+            lock (_gate)
+            {
+                if (_disposed)
+                    return;
+                if (!_entries.Remove(path, out var entry))
+                    return;
+                _order.Remove(entry.Node);
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_gate)
+            {
+                if (_disposed)
+                    return;
+                _disposed = true;
+                foreach (var bitmap in _entries.Values.Select(entry => entry.Bitmap).OfType<Bitmap>())
+                    bitmap.Dispose();
+                _entries.Clear();
+                _order.Clear();
+            }
+        }
+
+        private sealed class CacheEntry(Bitmap? bitmap, LinkedListNode<string> node)
+        {
+            public Bitmap? Bitmap { get; set; } = bitmap;
+            public LinkedListNode<string> Node { get; } = node;
+            public int PinCount { get; set; }
+            public bool IsLoaded { get; set; }
         }
     }
 }

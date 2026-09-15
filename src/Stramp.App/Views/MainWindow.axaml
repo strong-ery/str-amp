@@ -136,6 +136,8 @@
                             <!-- Songs of the selected source -->
                             <ListBox x:Name="LibraryList" Grid.Row="0" Classes="flat-list"
                                      ItemsSource="{Binding LibraryRows}"
+                                     ContainerPrepared="OnSongContainerPrepared"
+                                     ContainerClearing="OnSongContainerClearing"
                                      IsVisible="{Binding !IsBrowsingSources}" Tapped="OnLibraryTapped">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:SongRow">
@@ -262,7 +264,16 @@
                                 <PathIcon Data="{x:Static app:Icons.SkipPrevious}" Width="20" Height="20" />
                             </Button>
                             <Button Classes="play-pause" Command="{Binding PlayPauseCommand}">
-                                <PathIcon Data="{Binding IsPlaying, Converter={StaticResource PlayPauseIcon}}" Width="24" Height="24" />
+                                <Grid Width="24" Height="24">
+                                    <PathIcon Data="{x:Static app:Icons.Play}" Width="24" Height="24"
+                                              IsVisible="{Binding !IsPlaying}">
+                                        <PathIcon.RenderTransform>
+                                            <TranslateTransform X="1.5" />
+                                        </PathIcon.RenderTransform>
+                                    </PathIcon>
+                                    <PathIcon Data="{x:Static app:Icons.Pause}" Width="24" Height="24"
+                                              IsVisible="{Binding IsPlaying}" />
+                                </Grid>
                             </Button>
                             <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
                                 <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
@@ -293,7 +304,16 @@
                                 <PathIcon Data="{x:Static app:Icons.SkipPrevious}" Width="20" Height="20" />
                             </Button>
                             <Button Classes="play-pause" Command="{Binding PlayPauseCommand}">
-                                <PathIcon Data="{Binding IsPlaying, Converter={StaticResource PlayPauseIcon}}" Width="24" Height="24" />
+                                <Grid Width="24" Height="24">
+                                    <PathIcon Data="{x:Static app:Icons.Play}" Width="24" Height="24"
+                                              IsVisible="{Binding !IsPlaying}">
+                                        <PathIcon.RenderTransform>
+                                            <TranslateTransform X="1.5" />
+                                        </PathIcon.RenderTransform>
+                                    </PathIcon>
+                                    <PathIcon Data="{x:Static app:Icons.Pause}" Width="24" Height="24"
+                                              IsVisible="{Binding IsPlaying}" />
+                                </Grid>
                             </Button>
                             <Button Classes="transport" Command="{Binding NextCommand}" ToolTip.Tip="Next">
                                 <PathIcon Data="{x:Static app:Icons.SkipNext}" Width="20" Height="20" />
@@ -345,7 +365,10 @@
                                 </Button>
                             </StackPanel>
                         </Grid>
-                        <ListBox x:Name="QueueList" Classes="flat-list" ItemsSource="{Binding QueueRows}" Tapped="OnQueueTapped">
+                        <ListBox x:Name="QueueList" Classes="flat-list" ItemsSource="{Binding QueueRows}"
+                                 ContainerPrepared="OnSongContainerPrepared"
+                                 ContainerClearing="OnSongContainerClearing"
+                                 Tapped="OnQueueTapped">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SongRow">
                                     <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}" ToolTip.Tip="Right-click to remove from queue">

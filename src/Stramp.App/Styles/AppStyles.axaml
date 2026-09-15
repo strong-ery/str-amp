@@ -39,7 +39,7 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.play-pause PathIcon">
-    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Foreground" Value="{DynamicResource AppPlayPauseIconBrush}" />
   </Style>
   <Style Selector="Button.play-pause:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />

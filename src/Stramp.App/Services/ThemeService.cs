@@ -34,6 +34,8 @@ public static class ThemeService
 
         app.Resources["AppAccentBrush"] = new SolidColorBrush(primary);
         app.Resources["AppAccentBrushLight"] = new SolidColorBrush(Lighten(primary, 0.18));
+        app.Resources["AppPlayPauseIconBrush"] = new SolidColorBrush(
+            RelativeLuminance(primary) >= 0.50 ? Colors.Black : Colors.White);
         app.Resources["AppSecondaryAccentBrush"] = new SolidColorBrush(secondary);
         app.Resources["AppBackgroundBrush"] = new SolidColorBrush(background);
         app.Resources["AppSubtleBackgroundBrush"] = new SolidColorBrush(WithAlpha(primary, 0x20));
@@ -96,4 +98,19 @@ public static class ThemeService
         (byte)(c.B * (1 - amount)));
 
     private static Color WithAlpha(Color c, byte alpha) => Color.FromArgb(alpha, c.R, c.G, c.B);
+
+    private static double RelativeLuminance(Color color)
+    {
+        static double Linearize(byte channel)
+        {
+            var value = channel / 255.0;
+            return value <= 0.04045
+                ? value / 12.92
+                : Math.Pow((value + 0.055) / 1.055, 2.4);
+        }
+
+        return 0.2126 * Linearize(color.R) +
+               0.7152 * Linearize(color.G) +
+               0.0722 * Linearize(color.B);
+    }
 }

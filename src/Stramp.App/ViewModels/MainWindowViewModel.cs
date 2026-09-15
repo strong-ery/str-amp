@@ -379,9 +379,32 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             var row = new SongRow(song);
             LibraryRows.Add(row);
-            _artProvider.GetArtAsync(row.Song.Path, bitmap => row.ArtBitmap = bitmap);
         }
         RefreshCurrentHighlight();
+    }
+
+    /// <summary>Called when Avalonia materializes a visible virtualized song row.</summary>
+    public void LoadRowArt(SongRow row)
+    {
+        if (row.IsArtRequested)
+            return;
+
+        row.IsArtRequested = true;
+        _artProvider.GetThumbnailAsync(row.Song.Path, bitmap =>
+        {
+            if (row.IsArtRequested)
+                row.ArtBitmap = bitmap;
+        });
+    }
+
+    /// <summary>Releases an off-screen row while retaining a small shared thumbnail cache.</summary>
+    public void ReleaseRowArt(SongRow row)
+    {
+        if (!row.IsArtRequested)
+            return;
+        row.IsArtRequested = false;
+        row.ArtBitmap = null;
+        _artProvider.ReleaseThumbnail(row.Song.Path);
     }
 
     partial void OnSearchTextChanged(string value)
@@ -932,7 +955,6 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             var row = new SongRow(songs[i]) { IsCurrent = i == _queue.Position };
             QueueRows.Add(row);
-            _artProvider.GetArtAsync(row.Song.Path, bitmap => row.ArtBitmap = bitmap);
         }
     }
 
@@ -1000,6 +1022,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _disposed = true;
         CancelNormalizationAnalysis();
         CancelNormalizationWarmup();
+        _artProvider.Dispose();
         _loudnessNormalizer.Dispose();
         _discordPresence.Dispose();
         _player.Dispose();
