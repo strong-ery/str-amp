@@ -33,8 +33,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _normalizationCts;
     private CancellationTokenSource? _normalizationWarmupCts;
     private CancellationTokenSource? _lyricsCts;
+    private CancellationTokenSource? _libraryScanCts;
     private string? _pendingPlaybackPath;
     private List<Song> _library = [];
+    private List<Playlist> _discoveredPlaylists = [];
     private readonly List<string> _libraryPaths = [];
     private SavedPlaybackState? _savedPlaybackState;
     private double _resumePositionSeconds;
@@ -62,7 +64,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private ArtPalette? _inferredArtPalette;
     private ArtPalette? _directArtPalette;
 
-    public ObservableCollection<SongRow> LibraryRows { get; } = [];
+    public BulkObservableCollection<SongRow> LibraryRows { get; } = [];
     public ObservableCollection<SongRow> QueueRows { get; } = [];
     public ObservableCollection<LibrarySourceRow> LibrarySources { get; } = [];
     public ObservableCollection<LibraryLocationRow> LibraryLocations { get; } = [];
@@ -159,6 +161,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     public partial string StatusText { get; set; } = "";
+
+    [ObservableProperty]
+    public partial bool IsLibraryScanning { get; set; }
 
     [ObservableProperty]
     public partial Bitmap? CurrentArtBitmap { get; set; }
@@ -274,7 +279,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _player.PlaybackEnded += OnPlaybackEnded;
 
         if (_libraryPaths.Any(Directory.Exists))
-            ReloadLibrary(restorePlaybackState: true, preservePlayback: false);
+            _ = ReloadLibraryAsync(restorePlaybackState: true, preservePlayback: false);
         else if (_libraryPaths.Count == 0)
             StatusText = "Add a folder to start building your library.";
     }
@@ -304,7 +309,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LibraryPath = _libraryPaths[0];
         PersistLibraryLocations();
         RefreshLibraryLocations();
-        ReloadLibrary(restorePlaybackState: false, preservePlayback: true);
+        _ = ReloadLibraryAsync(restorePlaybackState: false, preservePlayback: true);
     }
 
     [RelayCommand]
@@ -318,23 +323,72 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LibraryPath = _libraryPaths.FirstOrDefault() ?? "";
         PersistLibraryLocations();
         RefreshLibraryLocations();
-        ReloadLibrary(restorePlaybackState: false, preservePlayback: true);
+        _ = ReloadLibraryAsync(restorePlaybackState: false, preservePlayback: true);
     }
 
-    private void ReloadLibrary(bool restorePlaybackState, bool preservePlayback)
+    private async Task ReloadLibraryAsync(bool restorePlaybackState, bool preservePlayback)
     {
+        _libraryScanCts?.Cancel();
+        var scan = new CancellationTokenSource();
+        _libraryScanCts = scan;
+        IsLibraryScanning = true;
+        CancelNormalizationWarmup();
+
+        var sourcePaths = _libraryPaths.ToArray();
+        List<Song> scannedSongs;
+        List<Playlist> scannedPlaylists;
+        try
+        {
+            (scannedSongs, scannedPlaylists) = await Task.Run(() =>
+            {
+                var songs = LibraryScanner.Scan(sourcePaths, scan.Token);
+                var playlists = new List<Playlist>();
+                foreach (var path in sourcePaths.Where(Directory.Exists))
+                {
+                    scan.Token.ThrowIfCancellationRequested();
+                    playlists.AddRange(PlaylistScanner.Scan(path, songs));
+                }
+                return (songs, playlists);
+            }, scan.Token);
+            scan.Token.ThrowIfCancellationRequested();
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        catch
+        {
+            if (ReferenceEquals(_libraryScanCts, scan) && !_disposed)
+                StatusText = "Couldn't update the library. One of its folders may be unavailable.";
+            return;
+        }
+        finally
+        {
+            if (ReferenceEquals(_libraryScanCts, scan))
+            {
+                _libraryScanCts = null;
+                IsLibraryScanning = false;
+            }
+            scan.Dispose();
+        }
+
+        if (_disposed)
+            return;
+
+        // Capture playback after the potentially long scan so advancing tracks while it runs is
+        // never undone when the new library is installed.
         var previousQueue = preservePlayback ? _queue.Songs.ToList() : [];
         var previousCurrent = preservePlayback ? _queue.Current : null;
         var previousQueuePosition = _queue.Position;
 
-        _library = LibraryScanner.Scan(_libraryPaths);
-        CancelNormalizationWarmup();
+        _library = scannedSongs;
+        _discoveredPlaylists = scannedPlaylists;
         PopulateSources();
 
         if (_library.Count == 0)
         {
             _activeSongs = [];
-            LibraryRows.Clear();
+            LibraryRows.ReplaceAll([]);
             _queue.Restore([], 0, 0);
             RefreshQueueRows();
             _playbackStateReady = false;
@@ -518,15 +572,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
         }
 
-        foreach (var directory in _libraryPaths.Where(Directory.Exists))
+        foreach (var playlist in _discoveredPlaylists)
         {
-            foreach (var playlist in PlaylistScanner.Scan(directory, _library))
-            {
-                // Prefer the first/imported copy when names collide across sources.
-                if (!importedNames.Add(playlist.Name))
-                    continue;
-                LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
-            }
+            // Prefer the first/imported copy when names collide across sources.
+            if (!importedNames.Add(playlist.Name))
+                continue;
+            LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
         }
     }
 
@@ -588,12 +639,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void PopulateLibraryRows(IEnumerable<Song> songs)
     {
-        LibraryRows.Clear();
-        foreach (var song in songs)
-        {
-            var row = new SongRow(song);
-            LibraryRows.Add(row);
-        }
+        LibraryRows.ReplaceAll(songs.Select(song => new SongRow(song)));
         RefreshCurrentHighlight();
     }
 
@@ -1508,6 +1554,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         SavePlaybackState(force: true);
         _disposed = true;
+        _libraryScanCts?.Cancel();
         CancelNormalizationAnalysis();
         CancelNormalizationWarmup();
         CancelLyricsLookup();

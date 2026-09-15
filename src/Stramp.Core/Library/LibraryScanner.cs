@@ -9,16 +9,21 @@ public static class LibraryScanner
         [".mp3", ".flac", ".ogg", ".opus", ".m4a", ".wav"];
 
     public static List<Song> Scan(string musicDir)
-        => Scan([musicDir]);
+        => Scan([musicDir], CancellationToken.None);
 
     /// <summary>Combines several roots into one library and ignores duplicate files.</summary>
     public static List<Song> Scan(IEnumerable<string> musicDirs)
+        => Scan(musicDirs, CancellationToken.None);
+
+    /// <summary>Combines roots while allowing a superseded background scan to stop promptly.</summary>
+    public static List<Song> Scan(IEnumerable<string> musicDirs, CancellationToken cancellationToken)
     {
         var songs = new List<Song>();
         var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var musicDir in musicDirs)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(musicDir) || !Directory.Exists(musicDir))
                 continue;
 
@@ -32,6 +37,7 @@ public static class LibraryScanner
                                  ReturnSpecialDirectories = false,
                              }))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (!Extensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
                         continue;
 
