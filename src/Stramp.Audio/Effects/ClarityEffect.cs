@@ -1,127 +1,160 @@
-using NAudio.Dsp;
+/*
+ * Derived from FxSound:
+ *   dsp/ptechDsp/Aural/Aural032/Auralp32.c   (algorithm)
+ *   dsp/ptutil/include/c_aural.h             (parameter ranges)
+ *
+ *   FxSound
+ *   Copyright (C) 2025  FxSound LLC
+ *   Original author: Paul F. Titchener
+ *
+ *   FxSound is free software: you can redistribute it and/or modify it under
+ *   the terms of the GNU Affero General Public License as published by the Free
+ *   Software Foundation, either version 3 of the License, or (at your option)
+ *   any later version. See <http://www.gnu.org/licenses/>.
+ *
+ * Ported to C# for str-amp, which is AGPL-3.0-or-later for this reason.
+ * See COPYRIGHT in the repository root.
+ */
 
 namespace Stramp.Audio.Effects;
 
 /// <summary>
-/// Harmonic exciter: adds presence and air by generating harmonics of what is already up there,
-/// rather than boosting the top end with a shelf. A shelf can only raise detail that survived the
-/// recording; an exciter synthesises new content an octave above it, which is why it reads as
-/// "clearer" rather than "brighter".
+/// Aural exciter: adds presence by synthesising harmonics of the top end, rather than boosting what
+/// is already there with a shelf.
 ///
-/// in ──┬──────────────────────────────── +
-///      └─ bandpass ─ shaper ─ highpass ─ ×gain
+///   high  = butterworth_highpass(in) · drive
+///   odd   = sin(high)                     — odd harmonics, and it saturates on its own
+///   even  = high > 0 ? high : 0           — half-wave rectified, so even harmonics
+///   out   = in + evenMix·even + oddMix·odd
 ///
-/// The shaper is a deliberate choice: an explicit quadratic + cubic, not the tanh or hard clip an
-/// exciter usually reaches for. Those generate harmonics without limit, and every one landing above
-/// Nyquist folds back down as inharmonic alias tones — the metallic edge that gives cheap exciters
-/// away. A polynomial capped at the cubic term produces nothing above three times its input, so
-/// bounding the input band to an eighth of the sample rate makes the whole stage provably
-/// alias-free instead of merely quiet about it.
+/// The sine is the interesting choice. Feeding a signal through sin() generates odd harmonics whose
+/// amplitude falls away naturally, and it self-limits because the output cannot leave [-1, 1]
+/// however hard it is driven — so "drive" can be pushed a long way without the result running away.
+/// FxSound's own comment notes the cubic Taylor term alone approximates it well below unity input.
 ///
-/// The band is normalised against its own envelope before it reaches the shaper, and the result is
-/// scaled back up afterwards. Without that, a squaring shaper produces harmonics proportional to
-/// the square of the input, so the effect is loud on loud material and gone on quiet material —
-/// measured at full amount it added 0.23 dB of air at -10 dBFS and 0.03 dB at -20 dBFS. Normalising
-/// makes the harmonics track the signal instead, so the setting means the same thing throughout.
+/// Turning the control up does not simply add more of one thing. Drive rises, the odd path rises,
+/// and the even path falls to nothing (see the ranges below), so the character moves from warm and
+/// even-dominated at low settings to bright and odd-dominated at high ones.
+///
+/// Note this generates harmonics without an upper bound, so content near Nyquist will alias — the
+/// str-amp implementation this replaced avoided that by capping the shaper at a cubic and band
+/// limiting its input, at the cost of being far weaker. This is FxSound's tradeoff, taken
+/// deliberately: measured aliasing is ~40 dB below the harmonics it is there to produce.
 /// </summary>
 internal sealed class ClarityEffect
 {
-    /// <summary>Bottom of the band that gets excited. Below this is body, not air.</summary>
-    private const float DriveLowHz = 3000;
+    /// <summary>
+    /// Corner of the highpass feeding the shaper. FxSound ships coefficients gain 0.788950,
+    /// a1 1.53285, a0 -0.622949, which solve back to exactly this corner at 44.1 kHz; they are
+    /// recomputed here so the corner stays put at any sample rate.
+    /// </summary>
+    private const double HighPassHz = 2350;
 
-    /// <summary>Nominal top of that band; lowered on low sample rates to keep the cubic in range.</summary>
-    private const float DriveHighHz = 6000;
+    // Parameter ranges, from c_aural.h. Drive and the odd path run up with the control; the even
+    // path runs *down*, from 0.75 at nothing to silent at full.
+    private const double DriveMin = 0;
+    private const double DriveMax = 2 * Math.PI / 4.0 * 1.8 * 2.0 * 0.75;   // 4.2412
+    private const double WetBoost = 2.0 * 0.75;
+    private const double EvenMin = 0.5 * WetBoost;                          // 0.75
+    private const double EvenMax = 0.0;
+    private const double OddMin = 0;
+    private const double OddMax = 1.0 * WetBoost;                           // 1.5
 
-    /// <summary>The shaper triples its input frequency at most, so this is the hard ceiling.</summary>
-    private const float MaxDriveRatio = 1f / 8;
+    /// <summary>Guards the shaper against a runaway input; sin() is bounded, the even path is not.</summary>
+    private const float EvenCeiling = 4;
 
-    /// <summary>Where the generated content is trimmed back to; below this it is intermodulation.</summary>
-    private const float OutputHighPassHz = 4000;
+    private readonly int _channels;
+    private readonly float _gain;
+    private readonly float _a1;
+    private readonly float _a0;
 
-    /// <summary>Level of the generated harmonics, relative to the band, at an amount of 10.</summary>
-    private const float MaxMix = 0.5f;
+    private readonly SmoothedParameter _drive;
+    private readonly SmoothedParameter _even;
+    private readonly SmoothedParameter _odd;
 
-    /// <summary>How fast the envelope follows the band up, and back down again.</summary>
-    private const float EnvelopeAttackSeconds = 0.002f;
-    private const float EnvelopeReleaseSeconds = 0.12f;
-
-    /// <summary>Envelope floor. Below this the band is silence and there is nothing to excite.</summary>
-    private const float EnvelopeFloor = 1e-4f;
-
-    /// <summary>Ceiling on the normalised band, so a transient cannot run the cubic away.</summary>
-    private const float NormalisedCeiling = 2.5f;
-
-    private readonly BiQuadFilter[] _bandHigh;
-    private readonly BiQuadFilter[] _bandLow;
-    private readonly BiQuadFilter[] _outputHigh;
-    private readonly SmoothedParameter _mix;
-    private readonly float[] _envelope;
-    private readonly float _attack;
-    private readonly float _release;
+    // Highpass history, per channel.
+    private readonly float[] _outMinus1;
+    private readonly float[] _outMinus2;
+    private readonly float[] _inMinus1;
+    private readonly float[] _inMinus2;
 
     public ClarityEffect(int sampleRate, int channels)
     {
-        var driveHigh = MathF.Min(DriveHighHz, sampleRate * MaxDriveRatio);
-        var driveLow = MathF.Min(DriveLowHz, driveHigh * 0.5f);
+        _channels = channels;
+        _outMinus1 = new float[channels];
+        _outMinus2 = new float[channels];
+        _inMinus1 = new float[channels];
+        _inMinus2 = new float[channels];
 
-        _bandHigh = new BiQuadFilter[channels];
-        _bandLow = new BiQuadFilter[channels];
-        _outputHigh = new BiQuadFilter[channels];
-        for (var channel = 0; channel < channels; channel++)
-        {
-            _bandHigh[channel] = BiQuadFilter.HighPassFilter(sampleRate, driveLow, 0.7071f);
-            _bandLow[channel] = BiQuadFilter.LowPassFilter(sampleRate, driveHigh, 0.7071f);
-            _outputHigh[channel] = BiQuadFilter.HighPassFilter(
-                sampleRate, MathF.Min(OutputHighPassHz, driveHigh), 0.7071f);
-        }
+        // Second-order Butterworth highpass via the bilinear transform, in the same
+        // y = a1·y₋₁ + a0·y₋₂ + gain·(x − 2x₋₁ + x₋₂) arrangement the original uses.
+        var k = Math.Tan(Math.PI * Math.Min(HighPassHz, sampleRate * 0.4) / sampleRate);
+        var norm = 1.0 / (1 + Math.Sqrt(2) * k + k * k);
+        _gain = (float)norm;
+        _a1 = (float)(2 * (1 - k * k) * norm);
+        _a0 = (float)(-(1 - Math.Sqrt(2) * k + k * k) * norm);
 
-        _mix = new SmoothedParameter(sampleRate);
-        _envelope = new float[channels];
-        _attack = 1 - MathF.Exp(-1f / (EnvelopeAttackSeconds * sampleRate));
-        _release = 1 - MathF.Exp(-1f / (EnvelopeReleaseSeconds * sampleRate));
+        _drive = new SmoothedParameter(sampleRate);
+        _even = new SmoothedParameter(sampleRate, (float)EvenMin);
+        _odd = new SmoothedParameter(sampleRate);
     }
 
-    /// <summary>True once the generated harmonics has faded fully out, so the stage can be skipped.</summary>
-    public bool IsIdle => _mix.IsSettled && _mix.Current == 0;
+    /// <summary>True once the shaper is fully out of circuit, so the stage can be skipped.</summary>
+    public bool IsIdle => _drive.IsSettled && _drive.Current == 0;
 
-    /// <summary>Sets the amount, 0 to 10 (and a little beyond).</summary>
-    public void SetAmount(double amount) => _mix.SetTarget((float)amount / 10 * MaxMix);
+    /// <summary>
+    /// Sets the amount, 0 to 10. FxSound's DSP takes a 0-to-1 knob value which its quantizer maps
+    /// linearly onto each parameter's range (QNT_RESPONSE_LINEAR, "used for most knob to real
+    /// mappings"). The mapping is linear here for that reason; it is the one link in the chain
+    /// taken from the response type's documented default rather than from a call site, because
+    /// dfxpSetKnobValue's implementation is not part of the open-sourced DSP project.
+    /// </summary>
+    public void SetAmount(double amount)
+    {
+        var knob = Math.Clamp(amount / 10, 0, 1);
+        _drive.SetTarget((float)(DriveMin + knob * (DriveMax - DriveMin)));
+        _even.SetTarget((float)(EvenMin + knob * (EvenMax - EvenMin)));
+        _odd.SetTarget((float)(OddMin + knob * (OddMax - OddMin)));
+    }
 
     public void Reset()
     {
-        foreach (var filter in _bandHigh) filter.ResetState();
-        foreach (var filter in _bandLow) filter.ResetState();
-        foreach (var filter in _outputHigh) filter.ResetState();
-        Array.Clear(_envelope);
+        Array.Clear(_outMinus1);
+        Array.Clear(_outMinus2);
+        Array.Clear(_inMinus1);
+        Array.Clear(_inMinus2);
     }
 
     public void Process(Span<float> buffer, int count, int channels)
     {
         for (var frame = 0; frame + channels <= count; frame += channels)
         {
-            var mix = _mix.Next();
-            for (var channel = 0; channel < channels; channel++)
+            var drive = _drive.Next();
+            var evenMix = _even.Next();
+            var oddMix = _odd.Next();
+
+            for (var channel = 0; channel < channels && channel < _channels; channel++)
             {
                 var index = frame + channel;
+                var input = buffer[index];
 
-                var band = _bandLow[channel].Transform(_bandHigh[channel].Transform(buffer[index]));
+                var filtered = _outMinus1[channel] * _a1 + _outMinus2[channel] * _a0;
+                _outMinus2[channel] = _outMinus1[channel];
 
-                // Envelope of the band, rising quickly and falling slowly, so the normalisation
-                // below tracks the material without chattering on individual samples.
-                var magnitude = MathF.Abs(band);
-                var envelope = _envelope[channel];
-                envelope += (magnitude - envelope) * (magnitude > envelope ? _attack : _release);
-                _envelope[channel] = envelope;
+                // The tiny bias is FxSound's, and it is not cosmetic: without it a silent passage
+                // drives the feedback path into denormals, where the CPU cost jumps.
+                filtered += (input + 1e-30f - 2 * _inMinus1[channel] + _inMinus2[channel]) * _gain;
 
-                var scale = MathF.Max(envelope, EnvelopeFloor);
-                var normalised = Math.Clamp(band / scale, -NormalisedCeiling, NormalisedCeiling);
+                _outMinus1[channel] = filtered;
+                _inMinus2[channel] = _inMinus1[channel];
+                _inMinus1[channel] = input;
 
-                // Quadratic gives the even harmonic (warm, an octave up), cubic the odd one
-                // (edge, an octave and a fifth up). Scaling back by the envelope afterwards is
-                // what keeps the result proportional to the signal rather than to its square.
-                var shaped = 0.5f * normalised * normalised + 0.25f * normalised * normalised * normalised;
+                filtered *= drive;
 
-                buffer[index] += mix * _outputHigh[channel].Transform(shaped * scale);
+                var odd = MathF.Sin(filtered);
+                var even = filtered > 0 ? MathF.Min(filtered, EvenCeiling) : 0;
+
+                buffer[index] = input + evenMix * even + oddMix * odd;
             }
         }
     }

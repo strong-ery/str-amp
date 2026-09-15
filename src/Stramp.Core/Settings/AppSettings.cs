@@ -63,7 +63,10 @@ public sealed class AppSettings
     /// </summary>
     public List<double> EqualizerFrequencies { get; set; } = [];
 
-    /// <summary>Amounts for the five post-equalizer effects, 0-100 each. Zero means off.</summary>
+    /// <summary>Whether the five enhancement effects run at all, independently of the equalizer.</summary>
+    public bool EffectsEnabled { get; set; } = true;
+
+    /// <summary>Amounts for the five post-equalizer effects, on FXSound's 0-10 scale.</summary>
     public double ClarityAmount { get; set; }
     public double AmbienceAmount { get; set; }
     public double SurroundAmount { get; set; }

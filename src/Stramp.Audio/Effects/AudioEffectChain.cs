@@ -24,7 +24,7 @@ internal sealed class AudioEffectChain : ISampleProvider
     private readonly AmbienceEffect _ambience;
     private readonly SurroundEffect? _surround;
     private readonly DynamicBoostEffect _dynamicBoost;
-    private readonly PeakLimiter _limiter;
+    private readonly MultibandLimiter _limiter;
 
     private readonly object _gate = new();
     private AudioEffectSettings? _pending;
@@ -46,8 +46,8 @@ internal sealed class AudioEffectChain : ISampleProvider
         _clarity = new ClarityEffect(sampleRate, channels);
         _ambience = new AmbienceEffect(sampleRate, channels);
         _surround = SurroundEffect.SupportsLayout(channels) ? new SurroundEffect(sampleRate) : null;
-        _dynamicBoost = new DynamicBoostEffect(sampleRate);
-        _limiter = new PeakLimiter(sampleRate);
+        _dynamicBoost = new DynamicBoostEffect(sampleRate, channels);
+        _limiter = new MultibandLimiter(sampleRate, channels);
 
         Apply(settings.Clamped());
     }
@@ -111,8 +111,9 @@ internal sealed class AudioEffectChain : ISampleProvider
         if (!_dynamicBoost.IsIdle)
             _dynamicBoost.Process(buffer, read, channels);
 
-        // Always runs: the stages above are not the only thing that can push the signal over, and
-        // an untouched chain still needs the guarantee that nothing leaves above full scale.
+        // Always runs: the stages above are not the only thing that can push the signal over (the
+        // equalizer upstream boosts too), and an untouched chain still needs the guarantee that
+        // nothing leaves above full scale.
         if (_limiter.Process(buffer, read, channels))
             ResetState();
 

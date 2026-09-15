@@ -566,7 +566,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     private void ApplyEffects() =>
-        _player.ApplyEffects(new AudioEffectSettings
+        _player.ApplyEffects(!_settings.EffectsEnabled ? AudioEffectSettings.None : new AudioEffectSettings
         {
             Clarity = _settings.ClarityAmount,
             Ambience = _settings.AmbienceAmount,
