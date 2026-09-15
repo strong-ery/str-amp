@@ -1237,20 +1237,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     // ── Lyrics ───────────────────────────────────────────────────────────
 
-    /// <summary>Asks LRCLIB again for the current track, ignoring what it answered last time.</summary>
-    [RelayCommand]
-    private void RefreshLyrics()
-    {
-        if (_queue.Current is { } song && !IsLyricsLoading)
-            LoadLyrics(song, forceRefresh: true);
-    }
-
     /// <summary>
     /// Resolves the track's lyrics off the UI thread: a sibling .lrc first, then LRCLIB. Like the
     /// artwork, a result that arrives after the user has moved on is dropped rather than shown
     /// against the wrong song.
     /// </summary>
-    private async void LoadLyrics(Song song, bool forceRefresh = false)
+    private async void LoadLyrics(Song song)
     {
         CancelLyricsLookup();
         var lookup = new CancellationTokenSource();
@@ -1263,7 +1255,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LyricsResult result;
         try
         {
-            result = await _lyricsProvider.GetAsync(song, searchesOnline, forceRefresh, lookup.Token);
+            result = await _lyricsProvider.GetAsync(song, searchesOnline, forceRefresh: false, lookup.Token);
         }
         catch (OperationCanceledException)
         {

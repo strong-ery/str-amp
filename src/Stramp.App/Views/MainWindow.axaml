@@ -231,8 +231,8 @@
                                 <!-- Lyrics half -->
                                 <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="6,14,16,14"
                                       IsVisible="{Binding IsLyricsOpen}">
-                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                                        <StackPanel VerticalAlignment="Center">
                                             <TextBlock Text="LYRICS" Classes="section-header" Margin="0" />
                                             <!-- Says whether these came off disk or lrclib.net, and
                                                  whether they will follow along or just sit there. -->
@@ -240,14 +240,6 @@
                                                        TextTrimming="CharacterEllipsis"
                                                        IsVisible="{Binding HasLyrics}" />
                                         </StackPanel>
-                                        <Button Grid.Column="1" Classes="transport" Width="24" Height="24" Padding="3"
-                                                VerticalAlignment="Top"
-                                                Command="{Binding RefreshLyricsCommand}"
-                                                IsEnabled="{Binding !IsLyricsLoading}"
-                                                IsVisible="{Binding Theme.LrcLibLookup}"
-                                                ToolTip.Tip="Search LRCLIB again for this track">
-                                            <PathIcon Data="{x:Static app:Icons.Refresh}" Width="13" Height="13" />
-                                        </Button>
                                     </Grid>
 
                                     <TextBlock Grid.Row="1" Text="{Binding LyricsStatusText}"
