@@ -18,4 +18,7 @@ public partial class SongRow(Song song) : ObservableObject
     /// <summary>Thumbnail for queue and library rows. Null until loaded.</summary>
     [ObservableProperty]
     public partial Bitmap? ArtBitmap { get; set; }
+
+    /// <summary>Whether a virtualized list container currently needs this thumbnail.</summary>
+    internal bool IsArtRequested { get; set; }
 }

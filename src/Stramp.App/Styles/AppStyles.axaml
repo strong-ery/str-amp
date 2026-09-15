@@ -39,7 +39,7 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
   </Style>
   <Style Selector="Button.play-pause PathIcon">
-    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Foreground" Value="{DynamicResource AppPlayPauseIconBrush}" />
   </Style>
   <Style Selector="Button.play-pause:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
@@ -171,6 +171,7 @@
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
   </Style>
+
   <!-- The editable centre frequency under each EQ slider: sized to fit "16000" in a 44px column. -->
   <Style Selector="TextBox.band-frequency">
     <Setter Property="FontSize" Value="10" />

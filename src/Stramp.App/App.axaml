@@ -22,6 +22,7 @@
 
             <SolidColorBrush x:Key="AppAccentBrush" Color="#7C5CFF" />
             <SolidColorBrush x:Key="AppAccentBrushLight" Color="#9580FF" />
+            <SolidColorBrush x:Key="AppPlayPauseIconBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="AppSecondaryAccentBrush" Color="#FF5C93" />
             <SolidColorBrush x:Key="AppBackgroundBrush" Color="#0E0E12" />
             <SolidColorBrush x:Key="AppSubtleBackgroundBrush" Color="#207C5CFF" />

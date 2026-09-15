@@ -66,6 +66,12 @@ public sealed class MediaKeyController : IDisposable
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Text editors own their keyboard input. In particular, a space in the library search
+        // box must become part of the query rather than toggling playback; arrows must retain
+        // their normal caret/navigation behavior there too.
+        if (IsTextEntryFocused())
+            return;
+
         // Modified arrows retain their normal control/text-editing meaning.
         if (e.KeyModifiers != KeyModifiers.None)
             return;
@@ -106,9 +112,18 @@ public sealed class MediaKeyController : IDisposable
         if (e.Key != Key.Space)
             return;
 
+        if (IsTextEntryFocused())
+        {
+            _spaceIsDown = false;
+            return;
+        }
+
         _spaceIsDown = false;
         e.Handled = true;
     }
+
+    private bool IsTextEntryFocused() =>
+        _window.FocusManager?.GetFocusedElement() is TextBox;
 
     private void OnWindowDeactivated(object? sender, EventArgs e) =>
         _spaceIsDown = false;
