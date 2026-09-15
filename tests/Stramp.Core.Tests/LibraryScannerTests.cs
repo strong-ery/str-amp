@@ -44,4 +44,28 @@ public class LibraryScannerTests
             dir.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public void Scan_MultipleAndNestedRoots_CombinesWithoutDuplicates()
+    {
+        var first = Directory.CreateTempSubdirectory();
+        var second = Directory.CreateTempSubdirectory();
+        try
+        {
+            var nested = Directory.CreateDirectory(Path.Combine(first.FullName, "nested"));
+            File.WriteAllBytes(Path.Combine(nested.FullName, "One - Song.mp3"), []);
+            File.WriteAllBytes(Path.Combine(second.FullName, "Two - Track.flac"), []);
+
+            var songs = LibraryScanner.Scan([first.FullName, nested.FullName, second.FullName]);
+
+            Assert.Equal(2, songs.Count);
+            Assert.Contains(songs, song => song.Artist == "One");
+            Assert.Contains(songs, song => song.Artist == "Two");
+        }
+        finally
+        {
+            first.Delete(recursive: true);
+            second.Delete(recursive: true);
+        }
+    }
 }

@@ -35,6 +35,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private CancellationTokenSource? _lyricsCts;
     private string? _pendingPlaybackPath;
     private List<Song> _library = [];
+    private readonly List<string> _libraryPaths = [];
     private SavedPlaybackState? _savedPlaybackState;
     private double _resumePositionSeconds;
     private DateTime _lastPlaybackStateSaveUtc = DateTime.MinValue;
@@ -64,6 +65,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public ObservableCollection<SongRow> LibraryRows { get; } = [];
     public ObservableCollection<SongRow> QueueRows { get; } = [];
     public ObservableCollection<LibrarySourceRow> LibrarySources { get; } = [];
+    public ObservableCollection<LibraryLocationRow> LibraryLocations { get; } = [];
 
     /// <summary>True while the library panel shows the source menu rather than a song list.</summary>
     [ObservableProperty]
@@ -247,39 +249,138 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         ApplyDiscordPresenceSetting();
         RefreshOutputDevices();
 
-        LibraryPath = settings.LibraryPath
-            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Music");
+        var isLegacyLibrarySetting = settings.LibraryPaths is null;
+        var configuredPaths = settings.LibraryPaths ?? [];
+        if (isLegacyLibrarySetting && !string.IsNullOrWhiteSpace(settings.LibraryPath))
+            configuredPaths = [settings.LibraryPath];
+        if (isLegacyLibrarySetting && configuredPaths.Count == 0)
+            configuredPaths =
+                [Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Music")];
+
+        foreach (var path in configuredPaths)
+        {
+            var normalized = NormalizeDirectory(path);
+            if (normalized is not null && !_libraryPaths.Contains(
+                    normalized, StringComparer.OrdinalIgnoreCase))
+                _libraryPaths.Add(normalized);
+        }
+
+        LibraryPath = _libraryPaths.FirstOrDefault() ?? "";
+        _settings.LibraryPaths = [.. _libraryPaths];
+        _settings.LibraryPath = _libraryPaths.FirstOrDefault();
+        RefreshLibraryLocations();
 
         _player.TimePositionChanged += OnTimePositionChanged;
         _player.PlaybackEnded += OnPlaybackEnded;
 
-        if (Directory.Exists(LibraryPath))
-            LoadLibrary(LibraryPath);
+        if (_libraryPaths.Any(Directory.Exists))
+            ReloadLibrary(restorePlaybackState: true, preservePlayback: false);
+        else if (_libraryPaths.Count == 0)
+            StatusText = "Add a folder to start building your library.";
     }
 
+    /// <summary>Legacy single-folder entry point. Adds the folder to the combined library.</summary>
     public void LoadLibrary(string directory)
     {
-        LibraryPath = directory;
-        _library = LibraryScanner.Scan(directory);
-        CancelNormalizationWarmup();
-        _settings.LibraryPath = directory;
-        SettingsService.Save(_settings);
+        AddLibraryLocation(directory);
+    }
 
-        PopulateSources(directory);
+    public void AddLibraryLocation(string directory)
+    {
+        var normalized = NormalizeDirectory(directory);
+        if (normalized is null || !Directory.Exists(normalized))
+        {
+            StatusText = "That library folder is not available.";
+            return;
+        }
+
+        if (_libraryPaths.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+        {
+            StatusText = "That folder is already in your library sources.";
+            return;
+        }
+
+        _libraryPaths.Add(normalized);
+        LibraryPath = _libraryPaths[0];
+        PersistLibraryLocations();
+        RefreshLibraryLocations();
+        ReloadLibrary(restorePlaybackState: false, preservePlayback: true);
+    }
+
+    [RelayCommand]
+    private void RemoveLibraryLocation(LibraryLocationRow location)
+    {
+        var removed = _libraryPaths.RemoveAll(path => string.Equals(
+            path, location.Path, StringComparison.OrdinalIgnoreCase));
+        if (removed == 0)
+            return;
+
+        LibraryPath = _libraryPaths.FirstOrDefault() ?? "";
+        PersistLibraryLocations();
+        RefreshLibraryLocations();
+        ReloadLibrary(restorePlaybackState: false, preservePlayback: true);
+    }
+
+    private void ReloadLibrary(bool restorePlaybackState, bool preservePlayback)
+    {
+        var previousQueue = preservePlayback ? _queue.Songs.ToList() : [];
+        var previousCurrent = preservePlayback ? _queue.Current : null;
+        var previousQueuePosition = _queue.Position;
+
+        _library = LibraryScanner.Scan(_libraryPaths);
+        CancelNormalizationWarmup();
+        PopulateSources();
 
         if (_library.Count == 0)
         {
-            StatusText = "No supported audio files found in this folder.";
+            _activeSongs = [];
+            LibraryRows.Clear();
+            _queue.Restore([], 0, 0);
+            RefreshQueueRows();
+            _playbackStateReady = false;
+            StatusText = _libraryPaths.Count == 0
+                ? "Add a folder to start building your library."
+                : "No supported audio files found in your library folders.";
             return;
         }
 
         StatusText = "";
-        if (!TryRestorePlaybackState(directory))
+        if (restorePlaybackState && TryRestorePlaybackState())
         {
-            _activeSongs = _library;
+            StartNormalizationWarmup();
+            return;
+        }
+
+        var selectedSource = LibrarySources.FirstOrDefault(source => string.Equals(
+            source.Name, CurrentSourceName, StringComparison.OrdinalIgnoreCase));
+        _activeSongs = selectedSource is not null ? [.. selectedSource.Songs] : _library;
+        if (selectedSource is null)
+        {
             CurrentSourceName = "All Songs";
+        }
+        PopulateLibraryRows(_activeSongs);
+
+        if (preservePlayback && previousQueue.Count > 0)
+        {
+            var songsByPath = _library.ToDictionary(song => song.Path, StringComparer.OrdinalIgnoreCase);
+            var restoredQueue = ResolveSongs(previousQueue.Select(song => song.Path), songsByPath);
+            var seen = restoredQueue.Select(song => song.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            restoredQueue.AddRange(_activeSongs.Where(song => seen.Add(song.Path)));
+
+            if (previousCurrent is not null && !seen.Contains(previousCurrent.Path))
+                restoredQueue.Insert(Math.Clamp(previousQueuePosition, 0, restoredQueue.Count), previousCurrent);
+
+            var currentIndex = previousCurrent is null ? -1 : restoredQueue.FindIndex(song =>
+                string.Equals(song.Path, previousCurrent.Path, StringComparison.OrdinalIgnoreCase));
+            _queue.Restore(restoredQueue,
+                currentIndex >= 0 ? currentIndex : previousQueuePosition, _queue.ShuffleSeed);
+            RefreshQueueRows();
+            _playbackStateReady = true;
+            SavePlaybackState(force: true);
+        }
+        else
+        {
             IsBrowsingSources = true;
-            PopulateLibraryRows(_activeSongs);
             _queue.Build(_activeSongs, Shuffled);
             _playbackStateReady = true;
             LoadCurrent(autoPlay: false);
@@ -287,14 +388,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         StartNormalizationWarmup();
     }
 
-    private bool TryRestorePlaybackState(string directory)
+    private bool TryRestorePlaybackState()
     {
         var state = _savedPlaybackState;
         _savedPlaybackState = null;
-        if (state is null || !string.Equals(
-                Path.GetFullPath(state.LibraryPath ?? ""),
-                Path.GetFullPath(directory),
-                StringComparison.OrdinalIgnoreCase))
+        if (state is null || !PlaybackStateMatchesLibrary(state))
             return false;
 
         var songsByPath = _library.ToDictionary(song => song.Path, StringComparer.OrdinalIgnoreCase);
@@ -360,7 +458,55 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         return songs;
     }
 
-    private void PopulateSources(string directory)
+    private bool PlaybackStateMatchesLibrary(SavedPlaybackState state)
+    {
+        var savedPaths = state.LibraryPaths ?? [];
+        if (savedPaths.Count == 0 && !string.IsNullOrWhiteSpace(state.LibraryPath))
+            savedPaths = [state.LibraryPath];
+
+        var normalizedSaved = savedPaths
+            .Select(NormalizeDirectory)
+            .Where(path => path is not null)
+            .Select(path => path!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return normalizedSaved.SetEquals(_libraryPaths);
+    }
+
+    private void PersistLibraryLocations()
+    {
+        _settings.LibraryPaths = [.. _libraryPaths];
+        _settings.LibraryPath = _libraryPaths.FirstOrDefault();
+        SettingsService.Save(_settings);
+    }
+
+    private void RefreshLibraryLocations()
+    {
+        LibraryLocations.Clear();
+        foreach (var path in _libraryPaths)
+            LibraryLocations.Add(new LibraryLocationRow(path));
+    }
+
+    private static string? NormalizeDirectory(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+
+        try
+        {
+            var fullPath = Path.GetFullPath(path.Trim());
+            var root = Path.GetPathRoot(fullPath);
+            return string.Equals(fullPath, root, StringComparison.OrdinalIgnoreCase)
+                ? fullPath
+                : fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException
+                                          or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private void PopulateSources()
     {
         LibrarySources.Clear();
         LibrarySources.Add(new LibrarySourceRow("All Songs", _library));
@@ -372,15 +518,15 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
         }
 
-        if (!Directory.Exists(directory))
-            return;
-
-        foreach (var playlist in PlaylistScanner.Scan(directory, _library))
+        foreach (var directory in _libraryPaths.Where(Directory.Exists))
         {
-            // Prefer the imported copy when the same name still exists as a file under the library.
-            if (importedNames.Contains(playlist.Name))
-                continue;
-            LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
+            foreach (var playlist in PlaylistScanner.Scan(directory, _library))
+            {
+                // Prefer the first/imported copy when names collide across sources.
+                if (!importedNames.Add(playlist.Name))
+                    continue;
+                LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
+            }
         }
     }
 
@@ -411,7 +557,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         });
         SettingsService.Save(_settings);
 
-        PopulateSources(LibraryPath);
+        PopulateSources();
 
         var imported = LibrarySources.FirstOrDefault(s =>
             string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
@@ -1265,6 +1411,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 song.Path, currentPath, StringComparison.OrdinalIgnoreCase));
         var state = new SavedPlaybackState
         {
+            LibraryPaths = [.. _libraryPaths],
             LibraryPath = LibraryPath,
             SourceName = CurrentSourceName,
             IsBrowsingSources = IsBrowsingSources,

@@ -11,6 +11,10 @@ public enum AlbumArtColorMode
 
 public sealed class AppSettings
 {
+    /// <summary>Folders combined into the music library.</summary>
+    public List<string>? LibraryPaths { get; set; }
+
+    /// <summary>Legacy single-folder setting, retained so older configs migrate cleanly.</summary>
     public string? LibraryPath { get; set; }
     public double Volume { get; set; } = 100;
 

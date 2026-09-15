@@ -14,13 +14,19 @@ public static class PlaylistScanner
         var byPath = IndexByPath(library);
         var playlists = new List<Playlist>();
 
-        IEnumerable<string> files;
+        List<string> files;
         try
         {
             files = Directory
-                .EnumerateFiles(musicDir, "*.*", SearchOption.AllDirectories)
+                .EnumerateFiles(musicDir, "*.*", new EnumerationOptions
+                {
+                    RecurseSubdirectories = true,
+                    IgnoreInaccessible = true,
+                    ReturnSpecialDirectories = false,
+                })
                 .Where(f => f.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase)
-                         || f.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase));
+                         || f.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase))
+                .ToList();
         }
         catch
         {

@@ -251,6 +251,39 @@
     <Setter Property="Padding" Value="10,12" />
   </Style>
 
+  <Style Selector="Border.library-locations">
+    <Setter Property="Background" Value="{DynamicResource AppPlaceholderBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="4" />
+  </Style>
+
+  <Style Selector="Border.library-location-row">
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="8,7" />
+  </Style>
+  <Style Selector="Border.library-location-row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+
+  <Style Selector="Border.library-location-icon">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.add-library-location">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Padding" Value="10,6" />
+  </Style>
+
   <Style Selector="Button.preset">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />

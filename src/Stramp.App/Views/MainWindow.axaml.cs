@@ -570,13 +570,13 @@ public partial class MainWindow : Window
     {
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose your music library folder",
+            Title = "Add a music library folder",
             AllowMultiple = false,
         });
 
         var folder = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
         if (folder is not null)
-            ViewModel?.LoadLibrary(folder);
+            ViewModel?.AddLibraryLocation(folder);
     }
 
     private async void OnImportPlaylistClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)

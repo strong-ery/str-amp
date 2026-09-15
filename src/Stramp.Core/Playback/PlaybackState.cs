@@ -4,6 +4,7 @@ namespace Stramp.Core.Playback;
 public sealed class SavedPlaybackState
 {
     public int Version { get; set; } = 1;
+    public List<string> LibraryPaths { get; set; } = [];
     public string? LibraryPath { get; set; }
     public string SourceName { get; set; } = "All Songs";
     public bool IsBrowsingSources { get; set; }

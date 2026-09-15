@@ -9,15 +9,45 @@ public static class LibraryScanner
         [".mp3", ".flac", ".ogg", ".opus", ".m4a", ".wav"];
 
     public static List<Song> Scan(string musicDir)
+        => Scan([musicDir]);
+
+    /// <summary>Combines several roots into one library and ignores duplicate files.</summary>
+    public static List<Song> Scan(IEnumerable<string> musicDirs)
     {
         var songs = new List<Song>();
+        var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in Directory.EnumerateFiles(musicDir, "*", SearchOption.AllDirectories))
+        foreach (var musicDir in musicDirs)
         {
-            if (!Extensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(musicDir) || !Directory.Exists(musicDir))
                 continue;
 
-            songs.Add(ReadSong(file));
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(
+                             musicDir, "*", new EnumerationOptions
+                             {
+                                 RecurseSubdirectories = true,
+                                 IgnoreInaccessible = true,
+                                 ReturnSpecialDirectories = false,
+                             }))
+                {
+                    if (!Extensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+                        continue;
+
+                    var fullPath = Path.GetFullPath(file);
+                    if (seenFiles.Add(fullPath))
+                        songs.Add(ReadSong(fullPath));
+                }
+            }
+            catch (IOException)
+            {
+                // A removable/network source can disappear while it is being scanned.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Skip an inaccessible source without losing the other configured roots.
+            }
         }
 
         songs.Sort((a, b) =>

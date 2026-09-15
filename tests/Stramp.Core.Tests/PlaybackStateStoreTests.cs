@@ -14,6 +14,7 @@ public class PlaybackStateStoreTests
             var store = new PlaybackStateStore(path);
             store.Save(new SavedPlaybackState
             {
+                LibraryPaths = [@"C:\Music", @"D:\More Music"],
                 LibraryPath = @"C:\Music",
                 SourceName = "Favorites",
                 ActiveSongPaths = [@"C:\Music\a.flac", @"C:\Music\b.flac"],
@@ -34,6 +35,7 @@ public class PlaybackStateStoreTests
             Assert.Equal(1, restored.QueuePosition);
             Assert.Equal(1234, restored.ShuffleSeed);
             Assert.Equal(91.25, restored.PositionSeconds);
+            Assert.Equal([@"C:\Music", @"D:\More Music"], restored.LibraryPaths);
             Assert.Equal([@"C:\Music\b.flac", @"C:\Music\a.flac"], restored.QueuePaths);
         }
         finally
