@@ -209,6 +209,9 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     public partial bool AnimateAlbumArt { get; set; }
 
     [ObservableProperty]
+    public partial bool CircularAlbumArt { get; set; }
+
+    [ObservableProperty]
     public partial double BottomVisualizerOpacity { get; set; }
 
     [ObservableProperty]
@@ -281,6 +284,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         ShowRingVisualizer = settings.ShowRingVisualizer;
         ShowBottomVisualizer = settings.ShowBottomVisualizer;
         AnimateAlbumArt = settings.AnimateAlbumArt;
+        CircularAlbumArt = settings.CircularAlbumArt;
         BottomVisualizerOpacity = settings.BottomVisualizerOpacity;
         ShowWaveformProgress = settings.ShowWaveformProgress;
         EqualizerEnabled = settings.EqualizerEnabled;
@@ -321,6 +325,12 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     partial void OnAnimateAlbumArtChanged(bool value)
     {
         _settings.AnimateAlbumArt = value;
+        SettingsService.Save(_settings);
+    }
+
+    partial void OnCircularAlbumArtChanged(bool value)
+    {
+        _settings.CircularAlbumArt = value;
         SettingsService.Save(_settings);
     }
 

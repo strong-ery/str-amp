@@ -202,10 +202,10 @@
                                         ShowRing="{Binding Theme.ShowRingVisualizer}"
                                         ShowSkyline="{Binding Theme.ShowBottomVisualizer}"
                                         SkylineOpacity="{Binding Theme.BottomVisualizerOpacity}"
-                                        InnerRadius="128" />
+                                        InnerRadius="142" />
 
-                                    <Border x:Name="ArtFrame" Classes="art-frame" Width="200" Height="200"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <Border x:Name="ArtFrame" Classes="art-frame" Classes.circular="{Binding Theme.CircularAlbumArt}"
+                                            Width="200" Height="200" HorizontalAlignment="Center" VerticalAlignment="Center">
                                         <Grid>
                                             <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="56" Height="56" Opacity="0.35"
                                                       HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -618,6 +618,8 @@
                                 </StackPanel>
                                 <ToggleSwitch IsChecked="{Binding Theme.AnimateAlbumArt}"
                                               OnContent="Album art animation" OffContent="Album art animation" />
+                                <ToggleSwitch IsChecked="{Binding Theme.CircularAlbumArt}"
+                                              OnContent="Circular album cover" OffContent="Circular album cover" />
                                 <ToggleSwitch IsChecked="{Binding Theme.ShowWaveformProgress}"
                                               OnContent="Waveform progress bar" OffContent="Waveform progress bar" />
                             </StackPanel>

@@ -65,6 +65,8 @@ public partial class MainWindow : Window
     private WindowsWindowIcon? _windowIcon;
     private readonly MediaKeyController _mediaKeys;
     private MainWindowViewModel? _observedViewModel;
+    private ThemeSettingsViewModel? _observedTheme;
+    private double _lastStageShortSide;
 
     public MainWindow()
     {
@@ -200,6 +202,11 @@ public partial class MainWindow : Window
             _observedViewModel.LyricLines.CollectionChanged -= OnLyricLinesChanged;
         }
 
+        if (_observedTheme is not null)
+        {
+            _observedTheme.PropertyChanged -= OnThemePropertyChanged;
+        }
+
         _observedViewModel = ViewModel;
         if (_observedViewModel is null)
             return;
@@ -207,8 +214,22 @@ public partial class MainWindow : Window
         _observedViewModel.PropertyChanged += OnViewModelPropertyChanged;
         _observedViewModel.VisualizerFeed.WaveformReady += OnWaveformReady;
         _observedViewModel.LyricLines.CollectionChanged += OnLyricLinesChanged;
+
+        _observedTheme = _observedViewModel.Theme;
+        if (_observedTheme is not null)
+            _observedTheme.PropertyChanged += OnThemePropertyChanged;
+
         UpdateColumnWidths();
         UpdateLyricsSplit();
+        UpdateStageArtworkAndVisualizer();
+    }
+
+    private void OnThemePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(ThemeSettingsViewModel.CircularAlbumArt))
+        {
+            UpdateStageArtworkAndVisualizer();
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -535,14 +556,32 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnStageSizeChanged(object? sender, SizeChangedEventArgs e)
     {
-        var shortSide = Math.Min(e.NewSize.Width, e.NewSize.Height);
-        var artSize = Math.Clamp(shortSide * 0.26, 64, 260);
+        _lastStageShortSide = Math.Min(e.NewSize.Width, e.NewSize.Height);
+        UpdateStageArtworkAndVisualizer();
+    }
 
-        ArtFrame.Width = artSize;
-        ArtFrame.Height = artSize;
+    private void UpdateStageArtworkAndVisualizer()
+    {
+        if (_lastStageShortSide <= 0)
+            return;
 
-        // Half the art's diagonal plus a gap, so bars never overlap the cover as it scales.
-        Visualizer.InnerRadius = artSize * 0.5 * 1.30 + 12;
+        var baseArtSize = Math.Clamp(_lastStageShortSide * 0.26, 64, 260);
+        var targetRingRadius = baseArtSize * 0.5 * 1.30 + 12;
+        var isCircular = ViewModel?.Theme.CircularAlbumArt ?? true;
+
+        Visualizer.InnerRadius = targetRingRadius;
+
+        if (isCircular)
+        {
+            var circleDiameter = Math.Max(32, (targetRingRadius - 18) * 2);
+            ArtFrame.Width = circleDiameter;
+            ArtFrame.Height = circleDiameter;
+        }
+        else
+        {
+            ArtFrame.Width = baseArtSize;
+            ArtFrame.Height = baseArtSize;
+        }
     }
 
     private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
