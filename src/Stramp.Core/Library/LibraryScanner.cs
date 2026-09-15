@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Stramp.Core.Models;
 
 namespace Stramp.Core.Library;
@@ -5,6 +6,7 @@ namespace Stramp.Core.Library;
 /// <summary>Recursively finds audio files under a directory and reads their tags.</summary>
 public static class LibraryScanner
 {
+    private const int MetadataWorkers = 6;
     private static readonly string[] Extensions =
         [".mp3", ".flac", ".ogg", ".opus", ".m4a", ".wav"];
 
@@ -16,9 +18,13 @@ public static class LibraryScanner
         => Scan(musicDirs, CancellationToken.None);
 
     /// <summary>Combines roots while allowing a superseded background scan to stop promptly.</summary>
-    public static List<Song> Scan(IEnumerable<string> musicDirs, CancellationToken cancellationToken)
+    public static List<Song> Scan(
+        IEnumerable<string> musicDirs,
+        CancellationToken cancellationToken,
+        LibraryMetadataCache? metadataCache = null)
     {
-        var songs = new List<Song>();
+        var songs = new ConcurrentBag<Song>();
+        var uncachedFiles = new List<FileInfo>();
         var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var musicDir in musicDirs)
@@ -29,8 +35,8 @@ public static class LibraryScanner
 
             try
             {
-                foreach (var file in Directory.EnumerateFiles(
-                             musicDir, "*", new EnumerationOptions
+                foreach (var file in new DirectoryInfo(musicDir).EnumerateFiles(
+                             "*", new EnumerationOptions
                              {
                                  RecurseSubdirectories = true,
                                  IgnoreInaccessible = true,
@@ -38,12 +44,16 @@ public static class LibraryScanner
                              }))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (!Extensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+                    if (!Extensions.Contains(file.Extension, StringComparer.OrdinalIgnoreCase))
                         continue;
 
-                    var fullPath = Path.GetFullPath(file);
-                    if (seenFiles.Add(fullPath))
-                        songs.Add(ReadSong(fullPath));
+                    if (!seenFiles.Add(file.FullName))
+                        continue;
+
+                    if (metadataCache is not null && metadataCache.TryGet(file, out var cached))
+                        songs.Add(cached);
+                    else
+                        uncachedFiles.Add(file);
                 }
             }
             catch (IOException)
@@ -56,7 +66,27 @@ public static class LibraryScanner
             }
         }
 
-        songs.Sort((a, b) =>
+        try
+        {
+            Parallel.ForEach(uncachedFiles, new ParallelOptions
+            {
+                MaxDegreeOfParallelism = MetadataWorkers,
+                CancellationToken = cancellationToken,
+            }, file =>
+            {
+                var song = ReadSong(file.FullName);
+                songs.Add(song);
+                metadataCache?.Put(file, song);
+            });
+        }
+        finally
+        {
+            // Preserve completed work even when a newer source change cancels this scan.
+            metadataCache?.Save();
+        }
+
+        var sortedSongs = songs.ToList();
+        sortedSongs.Sort((a, b) =>
         {
             var byArtist = string.Compare(a.Artist, b.Artist, StringComparison.OrdinalIgnoreCase);
             return byArtist != 0
@@ -64,7 +94,7 @@ public static class LibraryScanner
                 : string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase);
         });
 
-        return songs;
+        return sortedSongs;
     }
 
     /// <summary>Reads tags for a single file, falling back to the "Artist - Title" filename convention.</summary>

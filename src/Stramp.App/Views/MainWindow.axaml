@@ -609,6 +609,13 @@
                                 </StackPanel>
                                 <TextBlock Classes="field-hint" TextWrapping="Wrap"
                                            Text="Music and playlists from every folder are combined into one library. Nested or duplicate files are only added once." />
+                                <StackPanel Spacing="4" Margin="0,4,0,0">
+                                    <ToggleSwitch IsChecked="{Binding Theme.CacheLibraryMetadata}"
+                                                  OnContent="Cache metadata for optimized reads on slower drives"
+                                                  OffContent="Cache metadata for optimized reads on slower drives" />
+                                    <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                               Text="Stores titles, artists, albums, and durations in Local AppData. Unchanged tracks no longer need to be opened again during a library scan." />
+                                </StackPanel>
                             </StackPanel>
 
                             <TextBlock Text="VISUALS" Classes="section-header" Margin="0,8,0,0" />

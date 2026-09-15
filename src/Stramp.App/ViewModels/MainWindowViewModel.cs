@@ -27,6 +27,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly AppSettings _settings;
     private readonly PlaybackStateStore _playbackStateStore;
     private readonly AlbumArtProvider _artProvider = new();
+    private readonly LibraryMetadataCache _libraryMetadataCache = new();
     private readonly LoudnessNormalizationService _loudnessNormalizer = new();
     private readonly DiscordPresenceService _discordPresence = new();
     private readonly LyricsProvider _lyricsProvider = new();
@@ -246,7 +247,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(
             settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting,
-            ApplyMonoOutputSetting, ApplyLrcLibSetting);
+            ApplyMonoOutputSetting, ApplyLrcLibSetting, ApplyLibraryMetadataCacheSetting);
         Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
         ApplyEqualizer();
         ApplyEffects();
@@ -341,7 +342,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             (scannedSongs, scannedPlaylists) = await Task.Run(() =>
             {
-                var songs = LibraryScanner.Scan(sourcePaths, scan.Token);
+                var songs = LibraryScanner.Scan(sourcePaths, scan.Token,
+                    _settings.CacheLibraryMetadata ? _libraryMetadataCache : null);
                 var playlists = new List<Playlist>();
                 foreach (var path in sourcePaths.Where(Directory.Exists))
                 {
@@ -837,6 +839,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_queue.Current is { } song)
             LoadLyrics(song);
+    }
+
+    private void ApplyLibraryMetadataCacheSetting()
+    {
+        if (_settings.CacheLibraryMetadata && _libraryPaths.Count > 0)
+            _ = ReloadLibraryAsync(restorePlaybackState: false, preservePlayback: true);
     }
 
     /// <summary>Jumps playback to a clicked lyric. Unsynced lines carry no time and are ignored.</summary>

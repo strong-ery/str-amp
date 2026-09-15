@@ -16,6 +16,9 @@ public sealed class AppSettings
 
     /// <summary>Legacy single-folder setting, retained so older configs migrate cleanly.</summary>
     public string? LibraryPath { get; set; }
+
+    /// <summary>Reuses tags for unchanged files so remote and other high-latency libraries load quickly.</summary>
+    public bool CacheLibraryMetadata { get; set; } = true;
     public double Volume { get; set; } = 100;
 
     /// <summary>Endpoint the user pinned playback to. Null follows the system default device.</summary>
