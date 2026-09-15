@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -28,6 +29,22 @@ public partial class MainWindow : Window
     private const double KickShiftPixels = 7;
     private const double PulseDecayPerTick = 0.86;
 
+    // Lyrics auto-scroll. The panel eases toward the active line a fraction of the remaining
+    // distance each frame, which glides into place and absorbs a run of quick line changes.
+    private const double LyricsScrollEase = 0.16;
+    private const double LyricsSettleDistance = 0.5;
+
+    /// <summary>Frames the auto-scroll keeps out of the way after a scroll by hand (~4s at 60fps).</summary>
+    private const int LyricsManualScrollFrames = 240;
+
+    /// <summary>Share of the panel left blank top and bottom, so the end lines can still centre.</summary>
+    private const double LyricsEdgePaddingFraction = 0.42;
+
+    /// <summary>Type size as a share of the panel's width, clamped to stay readable either way.</summary>
+    private const double LyricsFontScale = 0.085;
+    private const double MinLyricsFontSize = 16;
+    private const double MaxLyricsFontSize = 30;
+
     private readonly DispatcherTimer _frameTimer;
     private readonly BeatDetector _kickDetector = new(sensitivity: 1.9, refractoryFrames: 7);
     private readonly BeatDetector _hihatDetector = new(sensitivity: 2.2, refractoryFrames: 3);
@@ -39,6 +56,10 @@ public partial class MainWindow : Window
     private double _driftPhase;
     private float _kickPulse;
     private float _hihatPulse;
+
+    private double? _lyricsScrollTarget;
+    private double _lyricsEdgePadding;
+    private int _lyricsManualScrollFrames;
 
     private ThumbnailToolbar? _thumbnailToolbar;
     private WindowsWindowIcon? _windowIcon;
@@ -71,6 +92,9 @@ public partial class MainWindow : Window
         ProgressSlider.AddHandler(PointerCaptureLostEvent, OnProgressCaptureLost,
             RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
 
+        LyricsScroller.AddHandler(PointerWheelChangedEvent, OnLyricsWheelChanged,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+
         WaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
         WaveformBar.ScrubCompleted += fraction => ViewModel?.CompleteScrub(fraction);
 
@@ -96,6 +120,7 @@ public partial class MainWindow : Window
             _frameTimer.Start();
             SetUpThumbnailToolbar();
             UpdateColumnWidths();
+            UpdateLyricsSplit();
         };
         SizeChanged += (_, _) => UpdateColumnWidths();
         Closed += (_, _) =>
@@ -170,7 +195,10 @@ public partial class MainWindow : Window
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_observedViewModel is not null)
+        {
             _observedViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            _observedViewModel.LyricLines.CollectionChanged -= OnLyricLinesChanged;
+        }
 
         _observedViewModel = ViewModel;
         if (_observedViewModel is null)
@@ -178,7 +206,9 @@ public partial class MainWindow : Window
 
         _observedViewModel.PropertyChanged += OnViewModelPropertyChanged;
         _observedViewModel.VisualizerFeed.WaveformReady += OnWaveformReady;
+        _observedViewModel.LyricLines.CollectionChanged += OnLyricLinesChanged;
         UpdateColumnWidths();
+        UpdateLyricsSplit();
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -195,6 +225,142 @@ public partial class MainWindow : Window
         {
             UpdateColumnWidths();
         }
+        else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsOpen))
+        {
+            UpdateLyricsSplit();
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsSynced))
+        {
+            Dispatcher.UIThread.Post(UpdateLyricsPadding, DispatcherPriority.Background);
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.ActiveLyricLine))
+        {
+            // Posted rather than called: the container for a line that just scrolled into the
+            // list may not have been measured yet, and its bounds are what we scroll by.
+            Dispatcher.UIThread.Post(ScrollActiveLyricIntoView, DispatcherPriority.Background);
+        }
+    }
+
+    // ── Lyrics ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Gives the lyrics column half the card, which is what pushes the cover and visualizer into
+    /// the left half. Closed, the column collapses to nothing and the stage fills the card again.
+    /// </summary>
+    private void UpdateLyricsSplit()
+    {
+        if (ViewModel is not { } vm || NowPlayingSplit.ColumnDefinitions.Count < 2)
+            return;
+
+        NowPlayingSplit.ColumnDefinitions[1].Width = vm.IsLyricsOpen
+            ? new GridLength(1, GridUnitType.Star)
+            : new GridLength(0);
+    }
+
+    /// <summary>A new track clears the collection, so the panel starts reading from the top again.</summary>
+    private void OnLyricLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action != NotifyCollectionChangedAction.Reset)
+            return;
+
+        LyricsScroller.Offset = default;
+        _lyricsScrollTarget = null;
+        _lyricsManualScrollFrames = 0;
+    }
+
+    /// <summary>
+    /// Type size follows the panel, because the lyrics only ever get half the card and big text in
+    /// a narrow column would wrap every couple of words.
+    /// </summary>
+    private void OnLyricsViewportSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        LyricsItems.FontSize = Math.Clamp(
+            e.NewSize.Width * LyricsFontScale, MinLyricsFontSize, MaxLyricsFontSize);
+        UpdateLyricsPadding();
+    }
+
+    /// <summary>
+    /// Blank space above the first line and below the last, so they can reach the middle of the
+    /// panel like every other line. Only a synced list scrolls itself, so only it gets the padding;
+    /// an unsynced sheet would just open on a screenful of nothing.
+    /// </summary>
+    private void UpdateLyricsPadding()
+    {
+        var padding = ViewModel?.IsLyricsSynced == true
+            ? LyricsScroller.Bounds.Height * LyricsEdgePaddingFraction
+            : 0;
+
+        if (Math.Abs(padding - _lyricsEdgePadding) > 0.5)
+        {
+            _lyricsEdgePadding = padding;
+            LyricsItems.Margin = new Thickness(0, padding, 0, padding);
+        }
+
+        // Posted: the new padding changes the scrollable extent, which the target is clamped to.
+        Dispatcher.UIThread.Post(ScrollActiveLyricIntoView, DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Aims the panel at the active line. The move itself is eased over the following frames by
+    /// StepLyricsScroll rather than applied here, so the list glides instead of snapping.
+    /// </summary>
+    private void ScrollActiveLyricIntoView()
+    {
+        if (_lyricsManualScrollFrames > 0)
+            return;
+
+        if (ViewModel is not { IsLyricsSynced: true } vm || vm.ActiveLyricLine is not { } active)
+            return;
+
+        var index = vm.LyricLines.IndexOf(active);
+        if (index < 0 || LyricsItems.ContainerFromIndex(index) is not { } container)
+            return;
+
+        var viewport = LyricsScroller.Viewport.Height;
+        if (viewport <= 0)
+            return;
+
+        // Bounds are relative to the items panel, which the padding offsets and scrolling never
+        // moves — so this target stays correct even while an earlier glide is still running.
+        var lineCentre = _lyricsEdgePadding + container.Bounds.Top + container.Bounds.Height / 2;
+        var maxOffset = Math.Max(0, LyricsScroller.Extent.Height - viewport);
+        _lyricsScrollTarget = Math.Clamp(lineCentre - viewport / 2, 0, maxOffset);
+    }
+
+    /// <summary>Moves the panel a fraction of the way to its target, once per animation frame.</summary>
+    private void StepLyricsScroll()
+    {
+        // Scrolling by hand takes over; the panel only takes itself back once the user has stopped.
+        if (_lyricsManualScrollFrames > 0 && --_lyricsManualScrollFrames == 0)
+            ScrollActiveLyricIntoView();
+
+        if (_lyricsScrollTarget is not { } target)
+            return;
+
+        var current = LyricsScroller.Offset.Y;
+        var remaining = target - current;
+        if (Math.Abs(remaining) < LyricsSettleDistance)
+        {
+            LyricsScroller.Offset = LyricsScroller.Offset.WithY(target);
+            _lyricsScrollTarget = null;
+            return;
+        }
+
+        LyricsScroller.Offset = LyricsScroller.Offset.WithY(current + remaining * LyricsScrollEase);
+    }
+
+    /// <summary>A scroll by hand parks the auto-scroll, so the two never fight over the panel.</summary>
+    private void OnLyricsWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        _lyricsManualScrollFrames = LyricsManualScrollFrames;
+        _lyricsScrollTarget = null;
+    }
+
+    /// <summary>Clicking a timed line jumps playback to it; unsynced lines carry no time to jump to.</summary>
+    private void OnLyricTapped(object? sender, TappedEventArgs e)
+    {
+        if ((e.Source as StyledElement)?.DataContext is LyricLineRow line)
+            ViewModel?.SeekToLyricCommand.Execute(line);
     }
 
     private ColumnDefinition? LeftColumn =>
@@ -361,7 +527,14 @@ public partial class MainWindow : Window
     {
         if (ViewModel is { } vm)
             vm.IsCompactControlBar = e.NewSize.Width < 420;
+    }
 
+    /// <summary>
+    /// The cover and ring are sized against the stage rather than the whole card, so opening the
+    /// lyrics panel shrinks them to fit the left half instead of spilling under the text.
+    /// </summary>
+    private void OnStageSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
         var shortSide = Math.Min(e.NewSize.Width, e.NewSize.Height);
         var artSize = Math.Clamp(shortSide * 0.26, 64, 260);
 
@@ -473,6 +646,7 @@ public partial class MainWindow : Window
             return;
 
         vm.TickProgress();
+        StepLyricsScroll();
 
         var frame = vm.VisualizerFeed.GetFrame(vm.ProgressSeconds, SpectrumBins);
         if (frame is not null && vm.IsPlaying)

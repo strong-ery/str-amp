@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using Stramp.App.Services;
 using Stramp.Audio;
 using Stramp.Core.Library;
+using Stramp.Core.Lyrics;
 using Stramp.Core.Models;
 using Stramp.Core.Playback;
 using Stramp.Core.Settings;
@@ -28,8 +29,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly AlbumArtProvider _artProvider = new();
     private readonly LoudnessNormalizationService _loudnessNormalizer = new();
     private readonly DiscordPresenceService _discordPresence = new();
+    private readonly LyricsProvider _lyricsProvider = new();
     private CancellationTokenSource? _normalizationCts;
     private CancellationTokenSource? _normalizationWarmupCts;
+    private CancellationTokenSource? _lyricsCts;
     private string? _pendingPlaybackPath;
     private List<Song> _library = [];
     private SavedPlaybackState? _savedPlaybackState;
@@ -50,6 +53,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>False until the current queue entry has actually been handed to the player.</summary>
     private bool _playerHasCurrentTrack;
+
+    /// <summary>Index into LyricLines of the highlighted line, or -1 before the first one.</summary>
+    private int _activeLyricIndex = -1;
 
     /// <summary>Both current-cover modes are cached so switching the dropdown is instant.</summary>
     private ArtPalette? _inferredArtPalette;
@@ -161,6 +167,36 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     public partial bool IsUpNextOpen { get; set; } = true;
 
+    /// <summary>Splits the now-playing card: cover on the left half, the track's .lrc on the right.</summary>
+    [ObservableProperty]
+    public partial bool IsLyricsOpen { get; set; }
+
+    /// <summary>Lines of the current track's .lrc, in display order. Empty when there is no file.</summary>
+    public ObservableCollection<LyricLineRow> LyricLines { get; } = [];
+
+    [ObservableProperty]
+    public partial bool HasLyrics { get; set; }
+
+    /// <summary>True when the .lrc carried timestamps, so lines can be highlighted and clicked to seek.</summary>
+    [ObservableProperty]
+    public partial bool IsLyricsSynced { get; set; }
+
+    /// <summary>Shown in place of the lines when there are none.</summary>
+    [ObservableProperty]
+    public partial string LyricsStatusText { get; set; } = "Nothing playing";
+
+    /// <summary>The line playback is currently on, or null when unsynced or before the first line.</summary>
+    [ObservableProperty]
+    public partial LyricLineRow? ActiveLyricLine { get; set; }
+
+    /// <summary>Where the shown lyrics came from, for the caption under the panel header.</summary>
+    [ObservableProperty]
+    public partial string LyricsSourceText { get; set; } = "";
+
+    /// <summary>Suppresses the refresh button while a lookup is already running.</summary>
+    [ObservableProperty]
+    public partial bool IsLyricsLoading { get; set; }
+
     [ObservableProperty]
     public partial double LeftPanelWidth { get; set; } = 280;
 
@@ -198,11 +234,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _player.OutputDeviceId = settings.OutputDeviceId;
         IsLibraryOpen = settings.LibraryPanelOpen;
         IsUpNextOpen = settings.UpNextPanelOpen;
+        IsLyricsOpen = settings.LyricsPanelOpen;
         LeftPanelWidth = settings.LeftPanelWidth > 0 ? settings.LeftPanelWidth : 280;
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(
             settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting,
-            ApplyMonoOutputSetting);
+            ApplyMonoOutputSetting, ApplyLrcLibSetting);
         Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
         ApplyEqualizer();
         ApplyEffects();
@@ -600,6 +637,27 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void ToggleUpNextOpen() => IsUpNextOpen = !IsUpNextOpen;
 
     [RelayCommand]
+    private void ToggleLyricsOpen() => IsLyricsOpen = !IsLyricsOpen;
+
+    /// <summary>
+    /// Runs when the LRCLIB setting is toggled: turning it on searches for the track that is
+    /// already up, rather than leaving the panel empty until the next one starts.
+    /// </summary>
+    private void ApplyLrcLibSetting()
+    {
+        if (_queue.Current is { } song)
+            LoadLyrics(song);
+    }
+
+    /// <summary>Jumps playback to a clicked lyric. Unsynced lines carry no time and are ignored.</summary>
+    [RelayCommand]
+    private void SeekToLyric(LyricLineRow? line)
+    {
+        if (line?.TimeSeconds is { } seconds)
+            EndSeek(Math.Clamp(seconds, 0, DurationSeconds));
+    }
+
+    [RelayCommand]
     private void EqualizeSidePanels()
     {
         var avg = (LeftPanelWidth + RightPanelWidth) / 2.0;
@@ -792,6 +850,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         SettingsService.Save(_settings);
     }
 
+    partial void OnIsLyricsOpenChanged(bool value)
+    {
+        _settings.LyricsPanelOpen = value;
+        SettingsService.Save(_settings);
+    }
+
     partial void OnLeftPanelWidthChanged(double value)
     {
         _settings.LeftPanelWidth = value;
@@ -940,6 +1004,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_isSeeking)
             ElapsedText = FormatTime(value);
+
+        UpdateActiveLyric();
     }
 
     public void EndSeek(double seconds)
@@ -1003,6 +1069,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         VisualizerFeed.LoadTrack(song.Path);
+        LoadLyrics(song);
 
         var requestedPath = song.Path;
         _artProvider.GetArtAsync(song.Path, bitmap =>
@@ -1020,6 +1087,166 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         RefreshCurrentHighlight();
         UpdateDiscordPresence();
         SavePlaybackState(force: true);
+    }
+
+    // ── Lyrics ───────────────────────────────────────────────────────────
+
+    /// <summary>Asks LRCLIB again for the current track, ignoring what it answered last time.</summary>
+    [RelayCommand]
+    private void RefreshLyrics()
+    {
+        if (_queue.Current is { } song && !IsLyricsLoading)
+            LoadLyrics(song, forceRefresh: true);
+    }
+
+    /// <summary>
+    /// Resolves the track's lyrics off the UI thread: a sibling .lrc first, then LRCLIB. Like the
+    /// artwork, a result that arrives after the user has moved on is dropped rather than shown
+    /// against the wrong song.
+    /// </summary>
+    private async void LoadLyrics(Song song, bool forceRefresh = false)
+    {
+        CancelLyricsLookup();
+        var lookup = new CancellationTokenSource();
+        _lyricsCts = lookup;
+
+        var searchesOnline = Theme.LrcLibLookup;
+        ResetLyrics(searchesOnline ? "Searching lrclib.net…" : "Looking for lyrics…");
+        IsLyricsLoading = true;
+
+        LyricsResult result;
+        try
+        {
+            result = await _lyricsProvider.GetAsync(song, searchesOnline, forceRefresh, lookup.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer track's lookup has taken over; it owns the panel now.
+            return;
+        }
+        catch
+        {
+            result = LyricsResult.Empty;
+        }
+        finally
+        {
+            if (ReferenceEquals(_lyricsCts, lookup))
+            {
+                _lyricsCts = null;
+                lookup.Dispose();
+            }
+        }
+
+        if (_disposed || _queue.Current?.Path != song.Path)
+            return;
+
+        IsLyricsLoading = false;
+
+        if (!result.HasLines)
+        {
+            ResetLyrics(StatusFor(result.Origin, searchesOnline));
+            return;
+        }
+
+        foreach (var line in result.Document.Lines)
+            LyricLines.Add(new LyricLineRow(line));
+
+        IsLyricsSynced = result.Document.IsSynced;
+        HasLyrics = true;
+        LyricsStatusText = "";
+        LyricsSourceText = SourceFor(result.Origin, result.Document.IsSynced);
+        UpdateActiveLyric();
+    }
+
+    /// <summary>Distinguishes "LRCLIB has nothing" from "we never got to ask", which reads the same
+    /// to a user staring at an empty panel but means very different things about retrying.</summary>
+    private static string StatusFor(LyricsOrigin origin, bool searchedOnline) => origin switch
+    {
+        LyricsOrigin.Instrumental => "This track is instrumental — no lyrics to show.",
+        LyricsOrigin.Unavailable => "Couldn't reach lrclib.net. Check your connection, then retry.",
+        _ when searchedOnline => "No lyrics found here or on lrclib.net.",
+        _ => "No .lrc beside this track. Turn on LRCLIB lookup in Settings to search online.",
+    };
+
+    private static string SourceFor(LyricsOrigin origin, bool synced)
+    {
+        var kind = synced ? "synced" : "unsynced";
+        return origin switch
+        {
+            LyricsOrigin.LocalFile => $"Local .lrc · {kind}",
+            LyricsOrigin.LrcLib or LyricsOrigin.Cache => $"lrclib.net · {kind}",
+            _ => "",
+        };
+    }
+
+    private void ResetLyrics(string status)
+    {
+        LyricLines.Clear();
+        _activeLyricIndex = -1;
+        ActiveLyricLine = null;
+        HasLyrics = false;
+        IsLyricsSynced = false;
+        LyricsStatusText = status;
+        LyricsSourceText = "";
+    }
+
+    private void CancelLyricsLookup()
+    {
+        var running = _lyricsCts;
+        _lyricsCts = null;
+        if (running is null)
+            return;
+
+        running.Cancel();
+        running.Dispose();
+        IsLyricsLoading = false;
+    }
+
+    /// <summary>
+    /// Moves the highlight to whichever line the playback position has reached. Called on every
+    /// position change, so the common "still on the same line" case costs a binary search.
+    /// </summary>
+    private void UpdateActiveLyric()
+    {
+        if (!IsLyricsSynced || LyricLines.Count == 0)
+            return;
+
+        var index = FindLyricIndex(ProgressSeconds);
+        if (index == _activeLyricIndex)
+            return;
+
+        _activeLyricIndex = index;
+        for (var i = 0; i < LyricLines.Count; i++)
+        {
+            LyricLines[i].IsActive = i == index;
+            LyricLines[i].IsPast = i < index;
+        }
+
+        ActiveLyricLine = index >= 0 ? LyricLines[index] : null;
+    }
+
+    /// <summary>Index of the last line whose timestamp has passed, or -1 before the first line.</summary>
+    private int FindLyricIndex(double seconds)
+    {
+        var low = 0;
+        var high = LyricLines.Count - 1;
+        var found = -1;
+
+        while (low <= high)
+        {
+            var mid = (low + high) / 2;
+            if (LyricLines[mid].TimeSeconds <= seconds)
+            {
+                found = mid;
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid - 1;
+            }
+        }
+
+        return found;
     }
 
     private void SavePlaybackState(bool force = false)
@@ -1146,7 +1373,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _disposed = true;
         CancelNormalizationAnalysis();
         CancelNormalizationWarmup();
+        CancelLyricsLookup();
         _artProvider.Dispose();
+        _lyricsProvider.Dispose();
         _loudnessNormalizer.Dispose();
         _discordPresence.Dispose();
         _player.Dispose();

@@ -8,5 +8,8 @@ public sealed class Song
     public required string Artist { get; init; }
     public TimeSpan Duration { get; init; }
 
+    /// <summary>Album tag, or empty when the file has none. Sharpens online lyric matching.</summary>
+    public string Album { get; init; } = "";
+
     public override string ToString() => $"{Artist} - {Title}";
 }

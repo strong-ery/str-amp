@@ -188,7 +188,100 @@
                     <Border x:Name="NowPlayingCard" Grid.Row="0" Classes="now-playing-card" ClipToBounds="True"
                             SizeChanged="OnViewportSizeChanged">
                         <Grid>
-                            <!-- Small corner buttons to reopen collapsed panels -->
+                            <!-- Opening lyrics gives the right column a star width (see UpdateLyricsSplit),
+                                 which squeezes the stage into the left half without moving anything else. -->
+                            <Grid x:Name="NowPlayingSplit" ColumnDefinitions="*,0">
+                                <!-- Cover, ring and track name, centered on whatever width is left over. -->
+                                <Grid x:Name="NowPlayingStage" Grid.Column="0" ClipToBounds="True"
+                                      SizeChanged="OnStageSizeChanged">
+                                    <!-- Fills the stage and shares its center with the album art, so the ring
+                                         stays concentric with the artwork at any window size. -->
+                                    <controls:SpectrumVisualizerControl x:Name="Visualizer"
+                                        PrimaryBrush="{DynamicResource AppAccentBrush}"
+                                        SecondaryBrush="{DynamicResource AppSecondaryAccentBrush}"
+                                        ShowRing="{Binding Theme.ShowRingVisualizer}"
+                                        ShowSkyline="{Binding Theme.ShowBottomVisualizer}"
+                                        SkylineOpacity="{Binding Theme.BottomVisualizerOpacity}"
+                                        InnerRadius="128" />
+
+                                    <Border x:Name="ArtFrame" Classes="art-frame" Width="200" Height="200"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <Grid>
+                                            <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="56" Height="56" Opacity="0.35"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                      IsVisible="{Binding CurrentArtBitmap, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                            <Image Source="{Binding CurrentArtBitmap}" Stretch="UniformToFill"
+                                                   RenderOptions.BitmapInterpolationMode="HighQuality"
+                                                   IsVisible="{Binding CurrentArtBitmap, Converter={StaticResource NullToBool}}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- The margin plus MaxWidth is what the title wraps against, so it keeps
+                                         inside the stage once the lyrics panel has taken half the card. -->
+                                    <StackPanel Spacing="4" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                                MaxWidth="320" Margin="12,0,12,18">
+                                        <TextBlock Text="{Binding CurrentTitle}" FontSize="20" FontWeight="Bold"
+                                                   HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
+                                        <TextBlock Text="{Binding CurrentArtist}" FontSize="13" Opacity="0.7"
+                                                   HorizontalAlignment="Center" TextAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Lyrics half -->
+                                <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="6,14,16,14"
+                                      IsVisible="{Binding IsLyricsOpen}">
+                                    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,6">
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="LYRICS" Classes="section-header" Margin="0" />
+                                            <!-- Says whether these came off disk or lrclib.net, and
+                                                 whether they will follow along or just sit there. -->
+                                            <TextBlock Text="{Binding LyricsSourceText}" FontSize="10" Opacity="0.4"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       IsVisible="{Binding HasLyrics}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Classes="transport" Width="24" Height="24" Padding="3"
+                                                VerticalAlignment="Top"
+                                                Command="{Binding RefreshLyricsCommand}"
+                                                IsEnabled="{Binding !IsLyricsLoading}"
+                                                IsVisible="{Binding Theme.LrcLibLookup}"
+                                                ToolTip.Tip="Search LRCLIB again for this track">
+                                            <PathIcon Data="{x:Static app:Icons.Refresh}" Width="13" Height="13" />
+                                        </Button>
+                                    </Grid>
+
+                                    <TextBlock Grid.Row="1" Text="{Binding LyricsStatusText}"
+                                               IsVisible="{Binding !HasLyrics}"
+                                               FontSize="12" Opacity="0.45" MaxWidth="220"
+                                               TextWrapping="Wrap" TextAlignment="Center"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                    <!-- Unsynced files get the same list, minus the highlight and the seeking. -->
+                                    <ScrollViewer x:Name="LyricsScroller" Grid.Row="1"
+                                                  IsVisible="{Binding HasLyrics}"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  SizeChanged="OnLyricsViewportSizeChanged">
+                                        <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricLines}"
+                                                      Tapped="OnLyricTapped">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:LyricLineRow">
+                                                    <Border Classes="lyric-line"
+                                                            Classes.active="{Binding IsActive}"
+                                                            Classes.past="{Binding IsPast}"
+                                                            Classes.plain="{Binding !IsSeekable}">
+                                                        <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap"
+                                                                   FontSize="{Binding #LyricsItems.FontSize}" />
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Grid>
+                            </Grid>
+
+                            <!-- Small corner buttons to reopen collapsed panels. Outside the split so they
+                                 stay pinned to the card's corners rather than the stage's. -->
                             <Button Classes="transport" Width="28" Height="28" Padding="5" Margin="10"
                                     HorizontalAlignment="Left" VerticalAlignment="Top"
                                     Command="{Binding ToggleLibraryOpenCommand}"
@@ -203,37 +296,6 @@
                                     ToolTip.Tip="Open Up Next">
                                 <PathIcon Data="{x:Static app:Icons.PanelRight}" Width="14" Height="14" Opacity="0.7" />
                             </Button>
-
-                            <!-- Fills the card and shares its center with the album art, so the ring
-                                 stays concentric with the artwork at any window size. -->
-                            <controls:SpectrumVisualizerControl x:Name="Visualizer"
-                                PrimaryBrush="{DynamicResource AppAccentBrush}"
-                                SecondaryBrush="{DynamicResource AppSecondaryAccentBrush}"
-                                ShowRing="{Binding Theme.ShowRingVisualizer}"
-                                ShowSkyline="{Binding Theme.ShowBottomVisualizer}"
-                                SkylineOpacity="{Binding Theme.BottomVisualizerOpacity}"
-                                InnerRadius="128" />
-
-                            <Border x:Name="ArtFrame" Classes="art-frame" Width="200" Height="200"
-                                    HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <Grid>
-                                    <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="56" Height="56" Opacity="0.35"
-                                              HorizontalAlignment="Center" VerticalAlignment="Center"
-                                              IsVisible="{Binding CurrentArtBitmap, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
-                                    <Image Source="{Binding CurrentArtBitmap}" Stretch="UniformToFill"
-                                           RenderOptions.BitmapInterpolationMode="HighQuality"
-                                           IsVisible="{Binding CurrentArtBitmap, Converter={StaticResource NullToBool}}" />
-                                </Grid>
-                            </Border>
-
-                            <StackPanel Spacing="4" VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                                        Margin="0,0,0,18">
-                                <TextBlock Text="{Binding CurrentTitle}" FontSize="20" FontWeight="Bold"
-                                           HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
-                                           MaxWidth="320" />
-                                <TextBlock Text="{Binding CurrentArtist}" FontSize="13" Opacity="0.7"
-                                           HorizontalAlignment="Center" />
-                            </StackPanel>
                         </Grid>
                     </Border>
 
@@ -285,8 +347,13 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto,*" VerticalAlignment="Center">
-                            <Button Grid.Column="0" Classes="transport" Width="28" Height="28" Padding="5"
+                        <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto,Auto,*" VerticalAlignment="Center">
+                            <Button Grid.Column="0" Classes="transport" Classes.active="{Binding IsLyricsOpen}"
+                                    Width="28" Height="28" Padding="5" Margin="0,0,2,0"
+                                    Command="{Binding ToggleLyricsOpenCommand}" ToolTip.Tip="Lyrics">
+                                <PathIcon Data="{x:Static app:Icons.Lyrics}" Width="15" Height="15" Opacity="0.7" />
+                            </Button>
+                            <Button Grid.Column="1" Classes="transport" Width="28" Height="28" Padding="5"
                                     Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
                                     ToolTip.Tip="Playback device">
                                 <Button.Flyout>
@@ -305,12 +372,12 @@
                                 </Button.Flyout>
                                 <PathIcon Data="{x:Static app:Icons.OutputDevice}" Width="15" Height="15" Opacity="0.7" />
                             </Button>
-                            <Button Grid.Column="1" Classes="transport" Classes.active="{Binding IsMuted}"
+                            <Button Grid.Column="2" Classes="transport" Classes.active="{Binding IsMuted}"
                                     Width="28" Height="28" Padding="5" Margin="0,0,6,0"
                                     Command="{Binding ToggleMuteCommand}" ToolTip.Tip="{Binding VolumeToolTip}">
                                 <PathIcon Data="{Binding VolumeIcon}" Width="16" Height="16" Opacity="0.7" />
                             </Button>
-                            <Slider Grid.Column="2" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                            <Slider Grid.Column="3" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </Grid>
@@ -347,8 +414,13 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid ColumnDefinitions="Auto,Auto,*" Width="224" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Button Grid.Column="0" Classes="transport" Width="28" Height="28" Padding="5"
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*" Width="254" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Button Grid.Column="0" Classes="transport" Classes.active="{Binding IsLyricsOpen}"
+                                    Width="28" Height="28" Padding="5" Margin="0,0,2,0"
+                                    Command="{Binding ToggleLyricsOpenCommand}" ToolTip.Tip="Lyrics">
+                                <PathIcon Data="{x:Static app:Icons.Lyrics}" Width="15" Height="15" Opacity="0.7" />
+                            </Button>
+                            <Button Grid.Column="1" Classes="transport" Width="28" Height="28" Padding="5"
                                     Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
                                     ToolTip.Tip="Playback device">
                                 <Button.Flyout>
@@ -367,12 +439,12 @@
                                 </Button.Flyout>
                                 <PathIcon Data="{x:Static app:Icons.OutputDevice}" Width="15" Height="15" Opacity="0.7" />
                             </Button>
-                            <Button Grid.Column="1" Classes="transport" Classes.active="{Binding IsMuted}"
+                            <Button Grid.Column="2" Classes="transport" Classes.active="{Binding IsMuted}"
                                     Width="28" Height="28" Padding="5" Margin="0,0,6,0"
                                     Command="{Binding ToggleMuteCommand}" ToolTip.Tip="{Binding VolumeToolTip}">
                                 <PathIcon Data="{Binding VolumeIcon}" Width="16" Height="16" Opacity="0.7" />
                             </Button>
-                            <Slider Grid.Column="2" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                            <Slider Grid.Column="3" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </StackPanel>
@@ -618,6 +690,16 @@
                                                 ToolTip.Tip="Turn all five enhancement amounts down to zero" />
                                     </StackPanel>
                                 </Border>
+                            </StackPanel>
+
+                            <TextBlock Text="LYRICS" Classes="section-header" Margin="0,6,0,0" />
+
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding Theme.LrcLibLookup}"
+                                              OnContent="Look up lyrics on LRCLIB"
+                                              OffContent="Look up lyrics on LRCLIB" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="An .lrc file sitting next to the track is always used first. When there isn't one, the playing track's title, artist, album and length are sent to lrclib.net to search for synced lyrics. Results are cached, so each track is only ever looked up once." />
                             </StackPanel>
 
                             <TextBlock Text="DISCORD" Classes="section-header" Margin="0,6,0,0" />

@@ -76,6 +76,13 @@ internal sealed class DynamicBoostEffect
     /// <summary>Keeps the envelope from decaying into denormals. MAXI_ENVELOPE_BIAS.</summary>
     private const float EnvelopeBias = 1.0e-24f;
 
+    /// <summary>
+    /// Scaling FxSound applies to this effect in music mode 2, which is the mode every bundled
+    /// preset asks for (the mode is the last of the application-dependent integers in a .fac file,
+    /// and all thirteen carry a 2). From dfxpDefs.h.
+    /// </summary>
+    private const double MusicModeFactor = 1.8;
+
     /// <summary>Release time constant, from the original's beta of 0.997776 at 44.1 kHz.</summary>
     private const double ReleaseSeconds = 0.0102;
 
@@ -135,8 +142,8 @@ internal sealed class DynamicBoostEffect
     /// </summary>
     public void SetAmount(double amount)
     {
-        var knob = Math.Clamp(amount / 10, 0, 1);
-        _boost.SetTarget(knob <= 0 ? 1 : (float)Math.Pow(10, knob * MaxGainBoostDb / 20));
+        var knob = Math.Clamp(amount / 10 * MusicModeFactor, 0, 1);
+        _boost.SetTarget(amount <= 0 ? 1 : (float)Math.Pow(10, knob * MaxGainBoostDb / 20));
     }
 
     public void Reset()
