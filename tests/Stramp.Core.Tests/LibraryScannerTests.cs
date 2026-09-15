@@ -68,4 +68,14 @@ public class LibraryScannerTests
             second.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public void Scan_CancelledScan_StopsBeforeReadingFiles()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            LibraryScanner.Scan([Path.GetTempPath()], cancellation.Token));
+    }
 }
