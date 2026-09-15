@@ -84,14 +84,15 @@ public class AudioEffectSettingsTests
     [Fact]
     public void PresetEffects_LandOnTheExpectedSlots()
     {
-        // The .fac format stores six unnamed "Main" values. The mapping to these five effects was
-        // deduced from FXSound's shipped presets, so pin the deduction: the curve named for bass
-        // must ask for the most bass, and the speech curves for the most dynamic boost.
-        var bass = EqualizerPresets.All.First(p => p.Name == "Trap").EffectAmounts;
-        var rock = EqualizerPresets.All.First(p => p.Name == "Modern Rock").EffectAmounts;
+        // Slot order per DfxDspPreset.cpp: fidelity 0, surround 1, ambience 3, dynamic 4, bass 5.
+        // Slots 1 and 3 are easy to transpose -- an earlier reading of this had them swapped --
+        // so pin a preset where the two differ. "70's" stores 0 in slot 1 and 89 in slot 3.
+        var seventies = EqualizerPresets.All.First(p => p.Name == "70's").EffectAmounts;
 
-        Assert.True(bass.BassBoost > bass.DynamicBoost,
-            "the bass-forward curve should ask for more bass than dynamic boost");
+        Assert.Equal(0, seventies.Surround);
+        Assert.Equal(89 / AudioEffectSettings.PresetFileScale, seventies.Ambience, 6);
+
+        var rock = EqualizerPresets.All.First(p => p.Name == "Modern Rock").EffectAmounts;
         Assert.True(rock.DynamicBoost > rock.BassBoost,
             "the loudness-forward curve should ask for more dynamic boost than bass");
     }
@@ -99,8 +100,9 @@ public class AudioEffectSettingsTests
     [Fact]
     public void PresetEffects_UseFxSoundsZeroToTenScale()
     {
-        // The .fac files store 0-125 where the sliders run 0-10. "Music" stores 50/35/35/20/60,
-        // and FXSound displays that preset as 4 / 3 / 3 / 2 / 5 (rounded), which pins the divisor.
+        // The .fac files store 0-125 where the sliders run 0-10, and FXSound displays "Music" as
+        // 4 / 3 / 3 / 2 / 5, which pins the divisor. The slot order is not guessable from these —
+        // Music sets surround and ambience to the same number — and comes from DfxDspPreset.cpp.
         var music = EqualizerPresets.All.First(p => p.Name == "Music").EffectAmounts;
 
         Assert.Equal(4.0, music.Clarity, 6);

@@ -1,0 +1,36 @@
+str-amp
+Copyright (C) 2025 strong-ery
+Copyright (C) 2025 Aiden A
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+str-amp was licensed under CC BY-NC-SA 4.0 up to and including commit 2f9b32c.
+It was relicensed to AGPL-3.0-or-later with the agreement of both copyright
+holders, so that the audio processing described below could be incorporated.
+
+
+THIRD-PARTY CODE
+================
+
+Portions of the audio enhancement effects in src/Stramp.Audio/Effects are
+derived from FxSound:
+
+    FxSound  --  https://github.com/fxsound2/fxsound-app
+    Copyright (C) 2025 FxSound LLC
+    Copyright (C) Power Technology
+    Licensed under the GNU Affero General Public License v3.
+
+Files containing derived work carry that attribution in their own header. The
+incorporation of this code is why str-amp is AGPL-3.0-or-later: the AGPL's
+copyleft extends to the whole of the combined work, and permits no additional
+restrictions on top (which is what ruled out the previous NonCommercial terms).

@@ -216,6 +216,9 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     public partial bool EqualizerEnabled { get; set; }
 
     [ObservableProperty]
+    public partial bool EffectsEnabled { get; set; }
+
+    [ObservableProperty]
     public partial bool NormalizeAudio { get; set; }
 
     [ObservableProperty]
@@ -268,6 +271,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         BottomVisualizerOpacity = settings.BottomVisualizerOpacity;
         ShowWaveformProgress = settings.ShowWaveformProgress;
         EqualizerEnabled = settings.EqualizerEnabled;
+        EffectsEnabled = settings.EffectsEnabled;
         NormalizeAudio = settings.AudioNormalizationEnabled;
         NormalizationLevel = settings.AudioNormalizationLevel;
         Primary = new ColorChannelEditor(ParseOrDefault(settings.PrimaryAccentColor, DefaultPrimary), ApplyLive);
@@ -312,6 +316,13 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     {
         _settings.ShowWaveformProgress = value;
         SettingsService.Save(_settings);
+    }
+
+    partial void OnEffectsEnabledChanged(bool value)
+    {
+        _settings.EffectsEnabled = value;
+        SettingsService.Save(_settings);
+        _onEffectsChanged?.Invoke();
     }
 
     partial void OnEqualizerEnabledChanged(bool value)

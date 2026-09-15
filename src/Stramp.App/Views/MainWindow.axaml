@@ -525,6 +525,25 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <Button Content="Flatten" Command="{Binding Theme.ResetEqualizerCommand}"
+                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Set every gain back to 0 dB" />
+                                            <Button Content="Reset bands" Command="{Binding Theme.ResetEqualizerBandsCommand}"
+                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Put the centre frequencies back to their defaults" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <TextBlock Text="ENHANCEMENTS" Classes="section-header" Margin="0,6,0,0" />
+
+                            <StackPanel Spacing="10">
+                                <ToggleSwitch IsChecked="{Binding Theme.EffectsEnabled}"
+                                              OnContent="Enhancements enabled" OffContent="Enhancements enabled" />
+
+                                <Border Classes="eq-panel" IsEnabled="{Binding Theme.EffectsEnabled}"
+                                        Opacity="{Binding Theme.EffectsEnabled, Converter={StaticResource EnabledOpacity}}">
+                                    <StackPanel Spacing="6">
                                         <ItemsControl ItemsSource="{Binding Theme.AudioEffects}" Margin="0,4,0,0">
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:AudioEffectViewModel">
@@ -543,14 +562,9 @@
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
 
-                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                                            <Button Content="Flatten" Command="{Binding Theme.ResetEqualizerCommand}"
-                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Set every gain back to 0 dB" />
-                                            <Button Content="Reset bands" Command="{Binding Theme.ResetEqualizerBandsCommand}"
-                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Put the centre frequencies back to their defaults" />
-                                            <Button Content="No effects" Command="{Binding Theme.ResetEffectsCommand}"
-                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Turn all five enhancement effects off" />
-                                        </StackPanel>
+                                        <Button Content="No effects" Command="{Binding Theme.ResetEffectsCommand}"
+                                                HorizontalAlignment="Center" FontSize="12" Padding="10,4"
+                                                ToolTip.Tip="Turn all five enhancement amounts down to zero" />
                                     </StackPanel>
                                 </Border>
                             </StackPanel>
