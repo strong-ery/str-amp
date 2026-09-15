@@ -36,6 +36,7 @@ public static class LibraryScanner
     {
         string? title = null;
         string? artist = null;
+        var album = "";
         var duration = TimeSpan.Zero;
 
         try
@@ -45,6 +46,8 @@ public static class LibraryScanner
                 title = tagFile.Tag.Title;
             if (!string.IsNullOrWhiteSpace(tagFile.Tag.FirstPerformer))
                 artist = tagFile.Tag.FirstPerformer;
+            if (!string.IsNullOrWhiteSpace(tagFile.Tag.Album))
+                album = tagFile.Tag.Album;
             duration = tagFile.Properties?.Duration ?? TimeSpan.Zero;
         }
         catch
@@ -68,6 +71,9 @@ public static class LibraryScanner
             }
         }
 
-        return new Song { Path = path, Title = title, Artist = artist, Duration = duration };
+        return new Song
+        {
+            Path = path, Title = title, Artist = artist, Album = album, Duration = duration,
+        };
     }
 }

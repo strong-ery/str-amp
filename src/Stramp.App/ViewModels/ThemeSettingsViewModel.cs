@@ -163,6 +163,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     private readonly Action _onManualColorsChanged;
     private readonly Action _onNormalizationChanged;
     private readonly Action _onMonoAudioChanged;
+    private readonly Action _onLrcLibLookupChanged;
     private readonly Action _onDiscordSettingsChanged;
     private Action? _onEqualizerChanged;
     private Action? _onEffectsChanged;
@@ -247,6 +248,10 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     /// <summary>The five enhancement effects, in the order they run.</summary>
     public ObservableCollection<AudioEffectViewModel> AudioEffects { get; } = [];
 
+    /// <summary>Whether missing lyrics are looked up on lrclib.net.</summary>
+    [ObservableProperty]
+    public partial bool LrcLibLookup { get; set; }
+
     [ObservableProperty]
     public partial bool DiscordRichPresenceEnabled { get; set; }
 
@@ -258,13 +263,15 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         Action onManualColorsChanged,
         Action? onNormalizationChanged = null,
         Action? onDiscordSettingsChanged = null,
-        Action? onMonoAudioChanged = null)
+        Action? onMonoAudioChanged = null,
+        Action? onLrcLibLookupChanged = null)
     {
         _settings = settings;
         _onManualColorsChanged = onManualColorsChanged;
         _onNormalizationChanged = onNormalizationChanged ?? (() => { });
         _onDiscordSettingsChanged = onDiscordSettingsChanged ?? (() => { });
         _onMonoAudioChanged = onMonoAudioChanged ?? (() => { });
+        _onLrcLibLookupChanged = onLrcLibLookupChanged ?? (() => { });
 
         DiscordRichPresenceEnabled = settings.DiscordRichPresenceEnabled;
         DiscordClientId = settings.DiscordClientId ?? "";
@@ -281,6 +288,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         NormalizeAudio = settings.AudioNormalizationEnabled;
         NormalizationLevel = settings.AudioNormalizationLevel;
         MonoAudio = settings.MonoAudioEnabled;
+        LrcLibLookup = settings.LrcLibLookupEnabled;
         Primary = new ColorChannelEditor(ParseOrDefault(settings.PrimaryAccentColor, DefaultPrimary), ApplyLive);
         Secondary = new ColorChannelEditor(ParseOrDefault(settings.SecondaryAccentColor, DefaultSecondary), ApplyLive);
         Background = new ColorChannelEditor(ParseOrDefault(settings.BackgroundColor, DefaultBackground), ApplyLive);
@@ -358,6 +366,13 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _settings.MonoAudioEnabled = value;
         SettingsService.Save(_settings);
         _onMonoAudioChanged();
+    }
+
+    partial void OnLrcLibLookupChanged(bool value)
+    {
+        _settings.LrcLibLookupEnabled = value;
+        SettingsService.Save(_settings);
+        _onLrcLibLookupChanged();
     }
 
     partial void OnDiscordRichPresenceEnabledChanged(bool value)
