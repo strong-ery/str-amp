@@ -22,6 +22,15 @@ public sealed class AppSettings
     public double WindowHeight { get; set; } = 640;
     public bool LibraryPanelOpen { get; set; } = true;
     public bool UpNextPanelOpen { get; set; } = true;
+
+    /// <summary>Whether the now-playing card is split to show the current track's .lrc lyrics.</summary>
+    public bool LyricsPanelOpen { get; set; }
+
+    /// <summary>
+    /// Looks missing lyrics up on lrclib.net. Sends the playing track's artist, title, album and
+    /// length to that service; turning it off keeps lyrics to .lrc files already on disk.
+    /// </summary>
+    public bool LrcLibLookupEnabled { get; set; } = true;
     public double LeftPanelWidth { get; set; } = 280;
     public double RightPanelWidth { get; set; } = 280;
     public List<string> RemovedSongPaths { get; set; } = [];

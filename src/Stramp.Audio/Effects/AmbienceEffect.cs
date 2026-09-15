@@ -77,6 +77,13 @@ internal sealed class AmbienceEffect
     /// <summary>Output trim the original applies to both taps sums: 0.6 * 0.5.</summary>
     private const float OutputTrim = 0.6f * 0.5f;
 
+    /// <summary>
+    /// Scaling FxSound applies to this effect in music mode 2, which is the mode every bundled
+    /// preset asks for (the mode is the last of the application-dependent integers in a .fac file,
+    /// and all thirteen carry a 2). From dfxpDefs.h.
+    /// </summary>
+    private const float MusicModeFactor = 0.34f;
+
     /// <summary>Keeps a decaying tail out of denormal arithmetic. The original's DSP_DENORM_BIAS.</summary>
     private const float DenormalBias = 1.0e-20f;
 
@@ -138,12 +145,13 @@ internal sealed class AmbienceEffect
     /// Sets the amount, 0 to 10. The reverb itself runs at FxSound's fixed tuning; the control is
     /// the wet gain into the mix.
     ///
-    /// The wet gain's own scale is the inferred part: the original takes it from the host through
-    /// kerWetDry, and that mapping lives outside the open-sourced DSP project. Treating the knob as
-    /// the wet gain directly puts the bundled presets between 0 and 0.71, which against the fixed
-    /// 0.3 output trim below lands them as a room rather than a hall.
+    /// The knob is the wet gain into kerWetDry, the same arrangement the exciter uses, scaled by
+    /// the music-mode factor. Without that factor the reverb measured 20.7 dB below the dry signal
+    /// at a setting of 2.8 with a tail running past 700 ms — plainly audible as an echo on anything
+    /// with space in it, which is not what an "ambience" control at 3 of 10 should do.
     /// </summary>
-    public void SetAmount(double amount) => _wet.SetTarget((float)Math.Clamp(amount / 10, 0, 1));
+    public void SetAmount(double amount) =>
+        _wet.SetTarget((float)Math.Clamp(amount / 10, 0, 1) * MusicModeFactor);
 
     public void Reset()
     {
