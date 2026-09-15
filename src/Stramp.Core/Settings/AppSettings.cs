@@ -55,6 +55,7 @@ public sealed class AppSettings
     public bool ShowRingVisualizer { get; set; } = true;
     public bool ShowBottomVisualizer { get; set; } = true;
     public bool AnimateAlbumArt { get; set; } = true;
+    public bool DisableAnimations { get; set; }
     public bool CircularAlbumArt { get; set; } = true;
     public double BottomVisualizerOpacity { get; set; } = 0.85;
     public bool ShowWaveformProgress { get; set; } = true;

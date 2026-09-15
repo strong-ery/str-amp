@@ -1,5 +1,7 @@
+using System;
 using Avalonia;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Stramp.Core.Settings;
 
 namespace Stramp.App.Services;
@@ -11,22 +13,112 @@ namespace Stramp.App.Services;
 /// </summary>
 public static class ThemeService
 {
+    private static Color? _currentPrimary;
+    private static Color? _currentSecondary;
+    private static Color? _currentBackground;
+    private static DispatcherTimer? _animationTimer;
+
     /// <summary>Applies the manually-configured colors from settings.</summary>
     public static void Apply(AppSettings settings) => ApplyColors(
         ParseOrDefault(settings.PrimaryAccentColor, Color.Parse("#7C5CFF")),
         ParseOrDefault(settings.SecondaryAccentColor, Color.Parse("#FF5C93")),
-        ParseOrDefault(settings.BackgroundColor, Color.Parse("#0E0E12")));
+        ParseOrDefault(settings.BackgroundColor, Color.Parse("#0E0E12")),
+        animate: !settings.DisableAnimations);
 
     /// <summary>
     /// Applies colors pulled from album art. The user's manual picks in settings are left alone,
     /// so turning the "match album art" option back off restores exactly what they chose.
     /// </summary>
-    public static void ApplyFromArt(ArtPalette palette) => ApplyColors(
+    public static void ApplyFromArt(ArtPalette palette, bool animate = true) => ApplyColors(
         palette.Primary,
         palette.Secondary,
-        palette.Background);
+        palette.Background,
+        animate: animate);
 
-    private static void ApplyColors(Color primary, Color secondary, Color background)
+    private static void ApplyColors(Color primary, Color secondary, Color background, bool animate = true)
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            Dispatcher.UIThread.Post(() => ApplyColors(primary, secondary, background, animate));
+            return;
+        }
+
+        if (!_currentPrimary.HasValue || !_currentSecondary.HasValue || !_currentBackground.HasValue || !animate)
+        {
+            StopAnimation();
+            UpdateCurrentColors(primary, secondary, background);
+            ApplyColorsDirect(primary, secondary, background);
+            return;
+        }
+
+        var startPrimary = _currentPrimary.Value;
+        var startSecondary = _currentSecondary.Value;
+        var startBackground = _currentBackground.Value;
+
+        if (startPrimary == primary && startSecondary == secondary && startBackground == background)
+        {
+            return;
+        }
+
+        StopAnimation();
+
+        var startTime = DateTime.UtcNow;
+        const double durationMs = 350.0;
+
+        _animationTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(16)
+        };
+
+        _animationTimer.Tick += (s, e) =>
+        {
+            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+            double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
+
+            double easedT = t * t * (3 - 2 * t);
+
+            var currP = LerpColor(startPrimary, primary, easedT);
+            var currS = LerpColor(startSecondary, secondary, easedT);
+            var currB = LerpColor(startBackground, background, easedT);
+
+            UpdateCurrentColors(currP, currS, currB);
+            ApplyColorsDirect(currP, currS, currB);
+
+            if (t >= 1.0)
+            {
+                StopAnimation();
+            }
+        };
+
+        _animationTimer.Start();
+    }
+
+    private static void StopAnimation()
+    {
+        if (_animationTimer is not null)
+        {
+            _animationTimer.Stop();
+            _animationTimer = null;
+        }
+    }
+
+    private static void UpdateCurrentColors(Color primary, Color secondary, Color background)
+    {
+        _currentPrimary = primary;
+        _currentSecondary = secondary;
+        _currentBackground = background;
+    }
+
+    private static Color LerpColor(Color c1, Color c2, double t)
+    {
+        byte a = (byte)(c1.A + (c2.A - c1.A) * t);
+        byte r = (byte)(c1.R + (c2.R - c1.R) * t);
+        byte g = (byte)(c1.G + (c2.G - c1.G) * t);
+        byte b = (byte)(c1.B + (c2.B - c1.B) * t);
+        return Color.FromArgb(a, r, g, b);
+    }
+
+    private static void ApplyColorsDirect(Color primary, Color secondary, Color background)
     {
         var app = Application.Current;
         if (app is null)

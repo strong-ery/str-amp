@@ -209,6 +209,9 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     public partial bool AnimateAlbumArt { get; set; }
 
     [ObservableProperty]
+    public partial bool DisableAnimations { get; set; }
+
+    [ObservableProperty]
     public partial bool CircularAlbumArt { get; set; }
 
     [ObservableProperty]
@@ -284,6 +287,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         ShowRingVisualizer = settings.ShowRingVisualizer;
         ShowBottomVisualizer = settings.ShowBottomVisualizer;
         AnimateAlbumArt = settings.AnimateAlbumArt;
+        DisableAnimations = settings.DisableAnimations;
         CircularAlbumArt = settings.CircularAlbumArt;
         BottomVisualizerOpacity = settings.BottomVisualizerOpacity;
         ShowWaveformProgress = settings.ShowWaveformProgress;
@@ -325,6 +329,12 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     partial void OnAnimateAlbumArtChanged(bool value)
     {
         _settings.AnimateAlbumArt = value;
+        SettingsService.Save(_settings);
+    }
+
+    partial void OnDisableAnimationsChanged(bool value)
+    {
+        _settings.DisableAnimations = value;
         SettingsService.Save(_settings);
     }
 
@@ -641,6 +651,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         Background.SetColor(DefaultBackground);
         _suppressApply = false;
         ArtColorMode = AlbumArtColorMode.Inferred;
+        DisableAnimations = false;
         ApplyLive();
     }
 

@@ -977,7 +977,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         };
 
         if (palette is { } artPalette)
-            ThemeService.ApplyFromArt(artPalette);
+            ThemeService.ApplyFromArt(artPalette, animate: !_settings.DisableAnimations);
         else
             ThemeService.Apply(_settings);
     }
