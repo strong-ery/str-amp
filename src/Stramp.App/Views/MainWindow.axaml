@@ -4,6 +4,7 @@
         xmlns:conv="using:Stramp.App.Converters"
         xmlns:app="using:Stramp.App"
         xmlns:controls="using:Stramp.App.Controls"
+        xmlns:playback="using:Stramp.Core.Playback"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="980" d:DesignHeight="640"
@@ -491,6 +492,18 @@
                                 <Border Classes="eq-panel" IsEnabled="{Binding Theme.EqualizerEnabled}"
                                         Opacity="{Binding Theme.EqualizerEnabled, Converter={StaticResource EnabledOpacity}}">
                                     <StackPanel Spacing="6">
+                                        <ComboBox ItemsSource="{Binding Theme.EqualizerPresets}"
+                                                  SelectedItem="{Binding Theme.SelectedEqualizerPreset}"
+                                                  PlaceholderText="Choose a preset…"
+                                                  HorizontalAlignment="Stretch" FontSize="12"
+                                                  ToolTip.Tip="Loads a curve into the bands below">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="playback:EqualizerPreset">
+                                                    <TextBlock Text="{Binding Name}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+
                                         <ItemsControl ItemsSource="{Binding Theme.EqualizerBands}">
                                             <ItemsControl.ItemsPanel>
                                                 <ItemsPanelTemplate>
@@ -500,18 +513,44 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:EqualizerBandViewModel">
                                                     <StackPanel Spacing="4" Width="44">
+                                                        <TextBlock Text="{Binding GainLabel}" FontSize="10"
+                                                                   Opacity="0.85" HorizontalAlignment="Center" />
                                                         <Slider Orientation="Vertical" Height="110"
                                                                 Minimum="-20" Maximum="20"
                                                                 Value="{Binding Gain}"
                                                                 HorizontalAlignment="Center" />
-                                                        <TextBlock Text="{Binding Label}" FontSize="10" Opacity="0.6"
-                                                                   HorizontalAlignment="Center" />
+                                                        <TextBox Text="{Binding Frequency, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                                 Classes="band-frequency" ToolTip.Tip="Centre frequency in Hz" />
                                                     </StackPanel>
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
-                                        <Button Content="Flatten" Command="{Binding Theme.ResetEqualizerCommand}"
-                                                HorizontalAlignment="Center" FontSize="12" Padding="10,4" />
+                                        <ItemsControl ItemsSource="{Binding Theme.AudioEffects}" Margin="0,4,0,0">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:AudioEffectViewModel">
+                                                    <Grid ColumnDefinitions="96,*,34" Margin="0,0,0,2"
+                                                          ToolTip.Tip="{Binding Description}">
+                                                        <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11"
+                                                                   VerticalAlignment="Center" Opacity="0.8" />
+                                                        <Slider Grid.Column="1" Minimum="0" Maximum="10"
+                                                                TickFrequency="0.5" IsSnapToTickEnabled="False"
+                                                                Value="{Binding Amount}" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding AmountLabel}" FontSize="10"
+                                                                   VerticalAlignment="Center" HorizontalAlignment="Right"
+                                                                   Opacity="0.6" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                                            <Button Content="Flatten" Command="{Binding Theme.ResetEqualizerCommand}"
+                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Set every gain back to 0 dB" />
+                                            <Button Content="Reset bands" Command="{Binding Theme.ResetEqualizerBandsCommand}"
+                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Put the centre frequencies back to their defaults" />
+                                            <Button Content="No effects" Command="{Binding Theme.ResetEffectsCommand}"
+                                                    FontSize="12" Padding="10,4" ToolTip.Tip="Turn all five enhancement effects off" />
+                                        </StackPanel>
                                     </StackPanel>
                                 </Border>
                             </StackPanel>

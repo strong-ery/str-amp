@@ -175,8 +175,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(
             settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting);
-        Theme.InitializeEqualizer(player.EqualizerBands, ApplyEqualizer);
+        Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
         ApplyEqualizer();
+        ApplyEffects();
         ApplyDiscordPresenceSetting();
 
         LibraryPath = settings.LibraryPath
@@ -587,8 +588,21 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         Theme.SaveToDisk();
     }
 
+    private void ApplyEffects() =>
+        _player.ApplyEffects(new AudioEffectSettings
+        {
+            Clarity = _settings.ClarityAmount,
+            Ambience = _settings.AmbienceAmount,
+            Surround = _settings.SurroundAmount,
+            DynamicBoost = _settings.DynamicBoostAmount,
+            BassBoost = _settings.BassBoostAmount,
+        });
+
     private void ApplyEqualizer() =>
-        _player.ApplyEqualizer(_settings.EqualizerGains, _settings.EqualizerEnabled);
+        _player.ApplyEqualizer(
+            [.. _settings.EqualizerFrequencies.Select(hz => (float)hz)],
+            _settings.EqualizerGains,
+            _settings.EqualizerEnabled);
 
     private void ApplyDiscordPresenceSetting()
     {

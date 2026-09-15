@@ -171,6 +171,30 @@
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
   </Style>
+
+  <!-- The editable centre frequency under each EQ slider: sized to fit "16000" in a 44px column. -->
+  <Style Selector="TextBox.band-frequency">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="Opacity" Value="0.6" />
+    <Setter Property="Padding" Value="2,1" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Width" Value="42" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="TextBox.band-frequency:pointerover">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="TextBox.band-frequency:focus">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
   <Style Selector="Border.eq-panel">
     <Setter Property="Background" Value="{DynamicResource AppPlaceholderBackgroundBrush}" />
     <Setter Property="CornerRadius" Value="10" />
