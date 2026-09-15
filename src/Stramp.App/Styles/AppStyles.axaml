@@ -7,6 +7,71 @@
     <Setter Property="Foreground" Value="{DynamicResource AppIconBrush}" />
   </Style>
 
+  <!-- Title-bar menu: compact trigger, elevated rounded popup, and Stramp hover states. -->
+  <Style Selector="Button.top-menu-trigger">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="7,3" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Bold" />
+  </Style>
+  <Style Selector="Button.top-menu-trigger:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+  <Style Selector="MenuFlyoutPresenter.stramp-menu-flyout">
+    <Setter Property="Background" Value="{DynamicResource AppDialogBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="5" />
+    <Setter Property="MinWidth" Value="220" />
+  </Style>
+  <Style Selector="MenuItem.stramp-menu-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="MenuItem.stramp-menu-item:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+  <Style Selector="MenuItem.stramp-menu-item PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+  </Style>
+
+  <!-- Playback-device popup. -->
+  <Style Selector="FlyoutPresenter.stramp-device-flyout">
+    <Setter Property="Background" Value="{DynamicResource AppDialogBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="11" />
+    <Setter Property="Padding" Value="5" />
+  </Style>
+  <Style Selector="ListBox.device-picker">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ListBox.device-picker ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="7" />
+    <Setter Property="Padding" Value="9,7" />
+    <Setter Property="Margin" Value="0,1" />
+  </Style>
+  <Style Selector="ListBox.device-picker ListBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+    <Setter Property="CornerRadius" Value="7" />
+  </Style>
+  <Style Selector="ListBox.device-picker ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="CornerRadius" Value="7" />
+  </Style>
+  <Style Selector="ListBox.device-picker ListBoxItem:selected PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
   <!-- Flat, icon-only transport buttons (prev/next/shuffle/reshuffle) -->
   <Style Selector="Button.transport">
     <Setter Property="Background" Value="Transparent" />
@@ -117,6 +182,54 @@
   </Style>
   <Style Selector="ListBox.flat-list ListBoxItem:pressed /template/ ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- Only the left library/source lists get this narrow, accent-aware scrollbar. -->
+  <Style Selector="ListBox.library-scroll ScrollBar:vertical">
+    <Setter Property="Width" Value="9" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.library-scroll ScrollBar:vertical /template/ Thumb">
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Margin" Value="2,1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+  </Style>
+  <Style Selector="ListBox.library-scroll ScrollBar:vertical /template/ Thumb:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
+  </Style>
+  <Style Selector="ListBox.library-scroll ScrollBar:vertical /template/ Thumb:pressed">
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+  </Style>
+
+  <!-- Lyrics keep their chrome out of sight until the pointer approaches the right edge. -->
+  <Style Selector="ScrollViewer.lyrics-scroll ScrollBar:vertical">
+    <Setter Property="Width" Value="8" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.14" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="ScrollViewer.lyrics-scroll.scrollbar-near ScrollBar:vertical">
+    <Setter Property="Opacity" Value="0.72" />
+  </Style>
+  <Style Selector="ScrollViewer.lyrics-scroll ScrollBar:vertical:pointerover">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="ScrollViewer.lyrics-scroll ScrollBar:vertical /template/ Thumb">
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Margin" Value="2,1" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+  </Style>
+  <Style Selector="ScrollViewer.lyrics-scroll ScrollBar:vertical /template/ Thumb:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
+  </Style>
+  <Style Selector="ScrollViewer.lyrics-scroll ScrollBar:vertical /template/ Thumb:pressed">
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
   </Style>
 
   <!-- Lyrics panel: the line being sung sits in a raised bubble at the middle of the panel and

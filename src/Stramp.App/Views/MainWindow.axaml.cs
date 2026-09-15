@@ -45,6 +45,9 @@ public partial class MainWindow : Window
     private const double MinLyricsFontSize = 16;
     private const double MaxLyricsFontSize = 30;
 
+    /// <summary>Distance from the right edge that reveals the otherwise hidden lyric scrollbar.</summary>
+    private const double LyricsScrollbarRevealDistance = 44;
+
     private readonly DispatcherTimer _frameTimer;
     private readonly BeatDetector _kickDetector = new(sensitivity: 1.9, refractoryFrames: 7);
     private readonly BeatDetector _hihatDetector = new(sensitivity: 2.2, refractoryFrames: 3);
@@ -503,6 +506,38 @@ public partial class MainWindow : Window
         _lyricsManualScrollFrames = LyricsManualScrollFrames;
         _lyricsScrollTarget = null;
     }
+
+    private void OnLyricsPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var point = e.GetCurrentPoint(LyricsScroller);
+        var nearScrollbar = point.Position.X >=
+            Math.Max(0, LyricsScroller.Bounds.Width - LyricsScrollbarRevealDistance);
+        var keepVisibleWhileDragging =
+            LyricsScroller.Classes.Contains("scrollbar-near") && point.Properties.IsLeftButtonPressed;
+        SetLyricsScrollbarVisible(nearScrollbar || keepVisibleWhileDragging);
+    }
+
+    private void OnLyricsPointerExited(object? sender, PointerEventArgs e)
+    {
+        if (!e.GetCurrentPoint(LyricsScroller).Properties.IsLeftButtonPressed)
+            SetLyricsScrollbarVisible(false);
+    }
+
+    private void OnLyricsPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        var position = e.GetPosition(LyricsScroller);
+        SetLyricsScrollbarVisible(position.X >=
+            Math.Max(0, LyricsScroller.Bounds.Width - LyricsScrollbarRevealDistance));
+    }
+
+    private void OnLyricsPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (!LyricsScroller.IsPointerOver)
+            SetLyricsScrollbarVisible(false);
+    }
+
+    private void SetLyricsScrollbarVisible(bool visible) =>
+        LyricsScroller.Classes.Set("scrollbar-near", visible);
 
     /// <summary>Clicking a timed line jumps playback to it; unsynced lines carry no time to jump to.</summary>
     private void OnLyricTapped(object? sender, TappedEventArgs e)

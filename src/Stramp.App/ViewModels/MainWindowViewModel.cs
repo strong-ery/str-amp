@@ -12,6 +12,7 @@ using Stramp.Core.Lyrics;
 using Stramp.Core.Models;
 using Stramp.Core.Playback;
 using Stramp.Core.Settings;
+using Stramp.Integrations.Windows;
 
 namespace Stramp.App.ViewModels;
 
@@ -247,7 +248,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(
             settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting,
-            ApplyMonoOutputSetting, ApplyLrcLibSetting, ApplyLibraryMetadataCacheSetting);
+            ApplyMonoOutputSetting, ApplyLrcLibSetting, ApplyLibraryMetadataCacheSetting,
+            ApplyDesktopShortcutSetting, ApplyStartMenuShortcutSetting);
         Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
         ApplyEqualizer();
         ApplyEffects();
@@ -845,6 +847,22 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     {
         if (_settings.CacheLibraryMetadata && _libraryPaths.Count > 0)
             _ = ReloadLibraryAsync(restorePlaybackState: false, preservePlayback: true);
+    }
+
+    private void ApplyDesktopShortcutSetting(bool enabled)
+    {
+        if (!WindowsShortcutService.SetDesktopShortcut(enabled))
+            StatusText = enabled
+                ? "Couldn't create the Desktop shortcut."
+                : "Couldn't remove the Desktop shortcut.";
+    }
+
+    private void ApplyStartMenuShortcutSetting(bool enabled)
+    {
+        if (!WindowsShortcutService.SetStartMenuShortcut(enabled))
+            StatusText = enabled
+                ? "Couldn't create the Start Menu shortcut."
+                : "Couldn't remove the Start Menu shortcut.";
     }
 
     /// <summary>Jumps playback to a clicked lyric. Unsynced lines carry no time and are ignored.</summary>

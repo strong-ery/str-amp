@@ -19,6 +19,10 @@ public sealed class AppSettings
 
     /// <summary>Reuses tags for unchanged files so remote and other high-latency libraries load quickly.</summary>
     public bool CacheLibraryMetadata { get; set; } = true;
+
+    /// <summary>Keep a user-scoped shortcut pointing at the current Stramp executable.</summary>
+    public bool EnsureDesktopShortcut { get; set; }
+    public bool EnsureStartMenuShortcut { get; set; }
     public double Volume { get; set; } = 100;
 
     /// <summary>Endpoint the user pinned playback to. Null follows the system default device.</summary>

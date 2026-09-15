@@ -46,15 +46,45 @@
             <!-- Custom title bar (all system chrome is off) -->
             <Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="34" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0" Spacing="12">
-                    <Menu VerticalAlignment="Center">
-                        <MenuItem Header="stramp">
-                            <MenuItem Header="Toggle Fullscreen" Click="OnToggleFullScreenClicked" InputGesture="F11" />
-                            <MenuItem Header="Equalize Side Panels" Command="{Binding EqualizeSidePanelsCommand}" />
-                            <MenuItem Header="Add Library Folder…" Click="OnOpenLibraryClicked" />
-                            <MenuItem Header="Import Playlist…" Click="OnImportPlaylistClicked" />
-                            <MenuItem Header="Settings…" Command="{Binding OpenSettingsCommand}" />
-                        </MenuItem>
-                    </Menu>
+                    <Button Classes="top-menu-trigger" Content="stramp" VerticalAlignment="Center">
+                        <Button.Flyout>
+                            <MenuFlyout Placement="BottomEdgeAlignedLeft"
+                                        FlyoutPresenterClasses="stramp-menu-flyout">
+                                <MenuItem Header="Toggle Fullscreen" Classes="stramp-menu-item"
+                                          Click="OnToggleFullScreenClicked" InputGesture="F11">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.FullScreen}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Equalize Side Panels" Classes="stramp-menu-item"
+                                          Command="{Binding EqualizeSidePanelsCommand}">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.EqualizePanels}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator Margin="7,4" />
+                                <MenuItem Header="Add Library Folder…" Classes="stramp-menu-item"
+                                          Click="OnOpenLibraryClicked">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.FolderOpen}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Import Playlist…" Classes="stramp-menu-item"
+                                          Click="OnImportPlaylistClicked">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.Playlist}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator Margin="7,4" />
+                                <MenuItem Header="Settings…" Classes="stramp-menu-item"
+                                          Command="{Binding OpenSettingsCommand}">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.Settings}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                     <TextBlock Text="{Binding StatusText}" Foreground="OrangeRed" VerticalAlignment="Center"
                                TextTrimming="CharacterEllipsis" FontSize="12" />
                 </StackPanel>
@@ -113,7 +143,7 @@
 
                         <Grid RowDefinitions="*">
                             <!-- Source menu: All Songs first, then playlists -->
-                            <ListBox x:Name="SourceList" Grid.Row="0" Classes="flat-list"
+                            <ListBox x:Name="SourceList" Grid.Row="0" Classes="flat-list library-scroll"
                                      ItemsSource="{Binding LibrarySources}"
                                      IsVisible="{Binding IsBrowsingSources}" Tapped="OnSourceTapped">
                                 <ListBox.ItemTemplate>
@@ -135,7 +165,7 @@
                             </ListBox>
 
                             <!-- Songs of the selected source -->
-                            <ListBox x:Name="LibraryList" Grid.Row="0" Classes="flat-list"
+                            <ListBox x:Name="LibraryList" Grid.Row="0" Classes="flat-list library-scroll"
                                      ItemsSource="{Binding LibraryRows}"
                                      ContainerPrepared="OnSongContainerPrepared"
                                      ContainerClearing="OnSongContainerClearing"
@@ -249,10 +279,14 @@
                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
 
                                     <!-- Unsynced files get the same list, minus the highlight and the seeking. -->
-                                    <ScrollViewer x:Name="LyricsScroller" Grid.Row="1"
+                                    <ScrollViewer x:Name="LyricsScroller" Grid.Row="1" Classes="lyrics-scroll"
                                                   IsVisible="{Binding HasLyrics}"
                                                   HorizontalScrollBarVisibility="Disabled"
                                                   VerticalScrollBarVisibility="Auto"
+                                                  PointerMoved="OnLyricsPointerMoved"
+                                                  PointerExited="OnLyricsPointerExited"
+                                                  PointerReleased="OnLyricsPointerReleased"
+                                                  PointerCaptureLost="OnLyricsPointerCaptureLost"
                                                   SizeChanged="OnLyricsViewportSizeChanged">
                                         <ItemsControl x:Name="LyricsItems" ItemsSource="{Binding LyricLines}"
                                                       Tapped="OnLyricTapped">
@@ -349,14 +383,21 @@
                                     Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
                                     ToolTip.Tip="Playback device">
                                 <Button.Flyout>
-                                    <Flyout Placement="Top">
-                                        <ListBox Background="Transparent" BorderThickness="0" FontSize="12"
+                                    <Flyout Placement="Top" FlyoutPresenterClasses="stramp-device-flyout">
+                                        <ListBox Classes="device-picker" FontSize="12"
                                                  MinWidth="200" MaxWidth="320" MaxHeight="220"
                                                  ItemsSource="{Binding OutputDevices}"
                                                  SelectedItem="{Binding SelectedOutputDevice}">
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:OutputDeviceRow">
-                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="9">
+                                                        <PathIcon Grid.Column="0" Data="{x:Static app:Icons.OutputDevice}"
+                                                                  Width="14" Height="14" Opacity="0.6"
+                                                                  VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
                                                 </DataTemplate>
                                             </ListBox.ItemTemplate>
                                         </ListBox>
@@ -416,14 +457,21 @@
                                     Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
                                     ToolTip.Tip="Playback device">
                                 <Button.Flyout>
-                                    <Flyout Placement="Top">
-                                        <ListBox Background="Transparent" BorderThickness="0" FontSize="12"
+                                    <Flyout Placement="Top" FlyoutPresenterClasses="stramp-device-flyout">
+                                        <ListBox Classes="device-picker" FontSize="12"
                                                  MinWidth="200" MaxWidth="320" MaxHeight="220"
                                                  ItemsSource="{Binding OutputDevices}"
                                                  SelectedItem="{Binding SelectedOutputDevice}">
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate x:DataType="vm:OutputDeviceRow">
-                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="9">
+                                                        <PathIcon Grid.Column="0" Data="{x:Static app:Icons.OutputDevice}"
+                                                                  Width="14" Height="14" Opacity="0.6"
+                                                                  VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="{Binding Name}"
+                                                                   TextTrimming="CharacterEllipsis"
+                                                                   VerticalAlignment="Center" />
+                                                    </Grid>
                                                 </DataTemplate>
                                             </ListBox.ItemTemplate>
                                         </ListBox>
@@ -770,6 +818,19 @@
                                          IsEnabled="{Binding Theme.DiscordRichPresenceEnabled}" />
                                 <TextBlock Classes="field-hint" TextWrapping="Wrap"
                                            Text="Advanced: leave blank to use str-amp's built-in Discord app. Only set this to point at your own Discord Application (discord.com/developers/applications) instead." />
+                            </StackPanel>
+
+                            <TextBlock Text="WINDOWS" Classes="section-header" Margin="0,6,0,0" />
+
+                            <StackPanel Spacing="10">
+                                <ToggleSwitch IsChecked="{Binding Theme.EnsureDesktopShortcut}"
+                                              OnContent="Ensure Desktop Shortcut"
+                                              OffContent="Ensure Desktop Shortcut" />
+                                <ToggleSwitch IsChecked="{Binding Theme.EnsureStartMenuShortcut}"
+                                              OnContent="Ensure appearance in Windows Start Menu"
+                                              OffContent="Ensure appearance in Windows Start Menu" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Shortcuts point to this copy of Stramp and use its app icon. Turning an option off removes the shortcut created by Stramp." />
                             </StackPanel>
 
                             <TextBlock Text="THEME" Classes="section-header" Margin="0,6,0,0" />

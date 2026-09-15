@@ -165,6 +165,8 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     private readonly Action _onMonoAudioChanged;
     private readonly Action _onLrcLibLookupChanged;
     private readonly Action _onLibraryMetadataCacheChanged;
+    private readonly Action<bool> _onDesktopShortcutChanged;
+    private readonly Action<bool> _onStartMenuShortcutChanged;
     private readonly Action _onDiscordSettingsChanged;
     private Action? _onEqualizerChanged;
     private Action? _onEffectsChanged;
@@ -263,6 +265,12 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     public partial bool CacheLibraryMetadata { get; set; }
 
     [ObservableProperty]
+    public partial bool EnsureDesktopShortcut { get; set; }
+
+    [ObservableProperty]
+    public partial bool EnsureStartMenuShortcut { get; set; }
+
+    [ObservableProperty]
     public partial bool DiscordRichPresenceEnabled { get; set; }
 
     [ObservableProperty]
@@ -275,7 +283,9 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         Action? onDiscordSettingsChanged = null,
         Action? onMonoAudioChanged = null,
         Action? onLrcLibLookupChanged = null,
-        Action? onLibraryMetadataCacheChanged = null)
+        Action? onLibraryMetadataCacheChanged = null,
+        Action<bool>? onDesktopShortcutChanged = null,
+        Action<bool>? onStartMenuShortcutChanged = null)
     {
         _settings = settings;
         _onManualColorsChanged = onManualColorsChanged;
@@ -284,6 +294,8 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _onMonoAudioChanged = onMonoAudioChanged ?? (() => { });
         _onLrcLibLookupChanged = onLrcLibLookupChanged ?? (() => { });
         _onLibraryMetadataCacheChanged = onLibraryMetadataCacheChanged ?? (() => { });
+        _onDesktopShortcutChanged = onDesktopShortcutChanged ?? (_ => { });
+        _onStartMenuShortcutChanged = onStartMenuShortcutChanged ?? (_ => { });
 
         DiscordRichPresenceEnabled = settings.DiscordRichPresenceEnabled;
         DiscordClientId = settings.DiscordClientId ?? "";
@@ -304,6 +316,8 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         MonoAudio = settings.MonoAudioEnabled;
         LrcLibLookup = settings.LrcLibLookupEnabled;
         CacheLibraryMetadata = settings.CacheLibraryMetadata;
+        EnsureDesktopShortcut = settings.EnsureDesktopShortcut;
+        EnsureStartMenuShortcut = settings.EnsureStartMenuShortcut;
         Primary = new ColorChannelEditor(ParseOrDefault(settings.PrimaryAccentColor, DefaultPrimary), ApplyLive);
         Secondary = new ColorChannelEditor(ParseOrDefault(settings.SecondaryAccentColor, DefaultSecondary), ApplyLive);
         Background = new ColorChannelEditor(ParseOrDefault(settings.BackgroundColor, DefaultBackground), ApplyLive);
@@ -407,6 +421,20 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _settings.CacheLibraryMetadata = value;
         SettingsService.Save(_settings);
         _onLibraryMetadataCacheChanged();
+    }
+
+    partial void OnEnsureDesktopShortcutChanged(bool value)
+    {
+        _settings.EnsureDesktopShortcut = value;
+        SettingsService.Save(_settings);
+        _onDesktopShortcutChanged(value);
+    }
+
+    partial void OnEnsureStartMenuShortcutChanged(bool value)
+    {
+        _settings.EnsureStartMenuShortcut = value;
+        SettingsService.Save(_settings);
+        _onStartMenuShortcutChanged(value);
     }
 
     partial void OnDiscordRichPresenceEnabledChanged(bool value)
