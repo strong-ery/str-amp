@@ -628,9 +628,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var q = value.Trim();
         var filtered = string.IsNullOrEmpty(q)
             ? _activeSongs
-            : _activeSongs.Where(s =>
-                s.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
-                s.Artist.Contains(q, StringComparison.OrdinalIgnoreCase));
+            : LibrarySearch.Rank(_activeSongs, q);
         PopulateLibraryRows(filtered);
     }
 
