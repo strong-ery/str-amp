@@ -776,6 +776,7 @@ public partial class MainWindow : Window
     private void UpdateImmersiveFullScreenState()
     {
         bool isFullScreen = WindowState == WindowState.FullScreen;
+        LyricsScroller.Classes.Set("immersive", isFullScreen);
 
         if (isFullScreen && !_isImmersiveFullScreen)
         {
