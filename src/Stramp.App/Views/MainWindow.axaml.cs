@@ -233,6 +233,14 @@ public partial class MainWindow : Window
         if (_observedTheme is not null)
             _observedTheme.PropertyChanged += OnThemePropertyChanged;
 
+        if (_isImmersiveFullScreen)
+        {
+            _savedIsLibraryOpen = _observedViewModel.IsLibraryOpen;
+            _savedIsUpNextOpen = _observedViewModel.IsUpNextOpen;
+            _observedViewModel.IsLibraryOpen = false;
+            _observedViewModel.IsUpNextOpen = false;
+        }
+
         UpdateColumnWidths(animate: false);
         UpdateLyricsSplit(animate: false);
         UpdateStageArtworkAndVisualizer();
@@ -660,6 +668,9 @@ public partial class MainWindow : Window
     // ── Window chrome ────────────────────────────────────────────────────────
 
     private WindowState _previousWindowState = WindowState.Normal;
+    private bool _savedIsLibraryOpen;
+    private bool _savedIsUpNextOpen;
+    private bool _isImmersiveFullScreen;
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -722,6 +733,49 @@ public partial class MainWindow : Window
             var isMaximized = WindowState == WindowState.Maximized;
             MaximizeIcon.Data = isMaximized ? Icons.WindowRestore : Icons.WindowMaximize;
             ResizeGrips.IsVisible = WindowState == WindowState.Normal;
+
+            UpdateImmersiveFullScreenState();
+        }
+    }
+
+    private void UpdateImmersiveFullScreenState()
+    {
+        bool isFullScreen = WindowState == WindowState.FullScreen;
+
+        if (isFullScreen && !_isImmersiveFullScreen)
+        {
+            _isImmersiveFullScreen = true;
+
+            ExtendClientAreaToDecorationsHint = false;
+            TitleBar.IsVisible = false;
+            MainContentGrid.Margin = new Thickness(0);
+
+            if (ViewModel is { } vm)
+            {
+                _savedIsLibraryOpen = vm.IsLibraryOpen;
+                _savedIsUpNextOpen = vm.IsUpNextOpen;
+
+                vm.IsLibraryOpen = false;
+                vm.IsUpNextOpen = false;
+            }
+
+            UpdateColumnWidths(animate: false);
+        }
+        else if (!isFullScreen && _isImmersiveFullScreen)
+        {
+            _isImmersiveFullScreen = false;
+
+            ExtendClientAreaToDecorationsHint = true;
+            TitleBar.IsVisible = true;
+            MainContentGrid.Margin = new Thickness(16, 6, 16, 16);
+
+            if (ViewModel is { } vm)
+            {
+                vm.IsLibraryOpen = _savedIsLibraryOpen;
+                vm.IsUpNextOpen = _savedIsUpNextOpen;
+            }
+
+            UpdateColumnWidths(animate: false);
         }
     }
 

@@ -44,7 +44,7 @@
     <Panel>
         <DockPanel>
             <!-- Custom title bar (all system chrome is off) -->
-            <Grid DockPanel.Dock="Top" Height="34" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+            <Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="34" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0" Spacing="12">
                     <Menu VerticalAlignment="Center">
                         <MenuItem Header="stramp">
