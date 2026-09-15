@@ -11,8 +11,28 @@ public interface IMediaPlayer : IDisposable
     /// <summary>Volume, 0-100.</summary>
     double Volume { get; set; }
 
+    /// <summary>Silences the output while leaving <see cref="Volume"/> untouched.</summary>
+    bool Muted { get; set; }
+
     /// <summary>Constant per-track loudness gain in dB. This is separate from user volume.</summary>
     double NormalizationGainDb { get; set; }
+
+    /// <summary>
+    /// Id of the endpoint playback is routed to, or null to follow the system default device
+    /// (including automatic hand-over when the user changes that default). Setting it re-opens the
+    /// current track on the new device at the same position and playing state; an id that no longer
+    /// resolves falls back to the system default.
+    /// </summary>
+    string? OutputDeviceId { get; set; }
+
+    /// <summary>
+    /// Currently available output endpoints, freshly enumerated. Empty when the backend has no
+    /// device selection of its own.
+    /// </summary>
+    IReadOnlyList<AudioOutputDevice> GetOutputDevices();
+
+    /// <summary>Collapses playback to mono: every output channel carries the same summed signal.</summary>
+    bool MonoOutput { get; set; }
 
     /// <summary>Fires with the current time position (seconds) as playback progresses.</summary>
     event Action<double>? TimePositionChanged;

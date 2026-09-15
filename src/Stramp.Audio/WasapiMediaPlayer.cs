@@ -24,16 +24,22 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     private readonly object _gate = new();
     private readonly Timer _positionTimer;
     private WasapiPlayer? _output;
+    private MMDevice? _outputDevice;
     private MediaFoundationReader? _reader;
     private GainSampleProvider? _normalizer;
     private EqualizerSampleProvider? _equalizer;
     private AudioEffectChain? _effects;
+    private MonoDownmixSampleProvider? _mono;
     private float[] _equalizerFrequencies = [.. DefaultBandFrequencies];
     private double[] _equalizerGains = new double[DefaultBandFrequencies.Length];
     private bool _equalizerEnabled;
     private AudioEffectSettings _effectSettings = AudioEffectSettings.None;
     private double _volume = 100;
+    private bool _muted;
     private double _normalizationGainDb;
+    private bool _monoOutput;
+    private string? _outputDeviceId;
+    private string? _currentPath;
     private bool _disposed;
 
     public event Action<double>? TimePositionChanged;
@@ -69,8 +75,24 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             lock (_gate)
             {
                 _volume = Math.Clamp(value, 0, 100);
-                if (_output is not null)
-                    _output.Volume = (float)(_volume / 100.0);
+                ApplyOutputVolume();
+            }
+        }
+    }
+
+    public bool Muted
+    {
+        get
+        {
+            lock (_gate)
+                return _muted;
+        }
+        set
+        {
+            lock (_gate)
+            {
+                _muted = value;
+                ApplyOutputVolume();
             }
         }
     }
@@ -92,6 +114,74 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         }
     }
 
+    public string? OutputDeviceId
+    {
+        get
+        {
+            lock (_gate)
+                return _outputDeviceId;
+        }
+        set
+        {
+            lock (_gate)
+            {
+                var id = string.IsNullOrWhiteSpace(value) ? null : value;
+                if (string.Equals(_outputDeviceId, id, StringComparison.OrdinalIgnoreCase))
+                    return;
+
+                _outputDeviceId = id;
+                if (_disposed || _currentPath is null)
+                    return;
+
+                // Re-open on the new endpoint where the old one left off. WASAPI streams are bound
+                // to a device for their lifetime, so switching means building the chain again.
+                var position = _reader?.CurrentTime.TotalSeconds ?? 0;
+                var wasPlaying = _output?.PlaybackState == PlaybackState.Playing;
+                OpenPlayback(_currentPath, position, wasPlaying);
+            }
+        }
+    }
+
+    public IReadOnlyList<AudioOutputDevice> GetOutputDevices()
+    {
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            using var endpoints = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+
+            var devices = new List<AudioOutputDevice>(endpoints.Count);
+            for (var i = 0; i < endpoints.Count; i++)
+            {
+                using var device = endpoints[i];
+                devices.Add(new AudioOutputDevice(device.ID, device.FriendlyName));
+            }
+            return devices;
+        }
+        catch (Exception)
+        {
+            // Endpoint enumeration is best-effort: a caller that gets nothing back just shows the
+            // system-default entry rather than failing.
+            return [];
+        }
+    }
+
+    public bool MonoOutput
+    {
+        get
+        {
+            lock (_gate)
+                return _monoOutput;
+        }
+        set
+        {
+            lock (_gate)
+            {
+                _monoOutput = value;
+                _mono?.SetEnabled(value);
+            }
+        }
+    }
+
     public IReadOnlyList<float> DefaultEqualizerBands => DefaultBandFrequencies;
 
     public WasapiMediaPlayer()
@@ -109,43 +199,119 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
-            CloseCurrentPlayback();
-
-            var reader = new MediaFoundationReader(path, new MediaFoundationReader.MediaFoundationReaderSettings
-            {
-                RequestFloatOutput = true,
-                RepositionInRead = true,
-            });
-            var normalizer = new GainSampleProvider(reader.ToSampleProvider(), _normalizationGainDb);
-            var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
-            equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
-            var effects = new AudioEffectChain(equalizer, _effectSettings);
-
-            // Shared mode is intentional: this is the normal Windows music-app path, supports the
-            // system volume mixer, and lets Windows perform the one required 44.1 -> 48 kHz conversion
-            // for devices such as the user's ME6S. Default-device routing also honors per-app routing.
-            var output = new WasapiPlayerBuilder()
-                .WithDefaultDeviceStreamRouting()
-                .WithEventSync()
-                .WithLatency(100)
-                .WithMmcssThreadPriority("Audio")
-                .WithCategory(AudioStreamCategory.Media)
-                .BuildAsync()
-                .GetAwaiter()
-                .GetResult();
-
-            output.Init(effects);
-            output.Volume = (float)(_volume / 100.0);
-            output.PlaybackStopped += (_, e) => HandlePlaybackStopped(output, e);
-
-            _reader = reader;
-            _normalizer = normalizer;
-            _equalizer = equalizer;
-            _effects = effects;
-            _output = output;
-            output.Play();
-            _positionTimer.Change(0, 100);
+            OpenPlayback(path, startSeconds: 0, play: true);
         }
+    }
+
+    /// <summary>
+    /// Builds the whole decode -> DSP -> output chain for a track and hands it to the endpoint.
+    /// The caller must hold <see cref="_gate"/>.
+    /// </summary>
+    private void OpenPlayback(string path, double startSeconds, bool play)
+    {
+        CloseCurrentPlayback();
+
+        var reader = new MediaFoundationReader(path, new MediaFoundationReader.MediaFoundationReaderSettings
+        {
+            RequestFloatOutput = true,
+            RepositionInRead = true,
+        });
+        if (startSeconds > 0)
+            reader.CurrentTime = TimeSpan.FromSeconds(
+                Math.Clamp(startSeconds, 0, reader.TotalTime.TotalSeconds));
+
+        var normalizer = new GainSampleProvider(reader.ToSampleProvider(), _normalizationGainDb);
+        var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
+        equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
+        var effects = new AudioEffectChain(equalizer, _effectSettings);
+
+        // Last in the chain, after the limiter: mono is about what leaves for the speakers, so
+        // it collapses the finished signal rather than something the later stages then widen.
+        var mono = new MonoDownmixSampleProvider(effects, _monoOutput);
+
+        var device = ResolveOutputDevice(_outputDeviceId);
+        var output = BuildOutput(device);
+
+        output.Init(mono);
+        output.Volume = EffectiveOutputVolume;
+        output.PlaybackStopped += (_, e) => HandlePlaybackStopped(output, e);
+
+        _currentPath = path;
+        _reader = reader;
+        _normalizer = normalizer;
+        _equalizer = equalizer;
+        _effects = effects;
+        _mono = mono;
+        _outputDevice = device;
+        _output = output;
+
+        if (!play)
+            return;
+
+        output.Play();
+        _positionTimer.Change(0, 100);
+    }
+
+    /// <summary>
+    /// Opens the stream on <paramref name="device"/>, or on whatever the system default currently
+    /// is when that is null.
+    /// </summary>
+    private static WasapiPlayer BuildOutput(MMDevice? device)
+    {
+        // Shared mode is intentional: this is the normal Windows music-app path, supports the
+        // system volume mixer, and lets Windows perform the one required 44.1 -> 48 kHz conversion
+        // for devices such as the user's ME6S.
+        var builder = new WasapiPlayerBuilder()
+            .WithEventSync()
+            .WithLatency(100)
+            .WithMmcssThreadPriority("Audio")
+            .WithCategory(AudioStreamCategory.Media);
+
+        // A device the user picked explicitly stays put; only the "system default" choice follows
+        // Windows around (and honors per-app routing), which is what stream routing is for.
+        if (device is not null)
+            return builder.WithDevice(device).Build();
+
+        return builder
+            .WithDefaultDeviceStreamRouting()
+            .BuildAsync()
+            .GetAwaiter()
+            .GetResult();
+    }
+
+    /// <summary>
+    /// Resolves a saved endpoint id, returning null — meaning "follow the system default" — when
+    /// the id is empty or names a device that is gone, disabled, or unplugged.
+    /// </summary>
+    private static MMDevice? ResolveOutputDevice(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+
+        try
+        {
+            using var enumerator = new MMDeviceEnumerator();
+            var device = enumerator.GetDevice(id);
+            if (device.State == DeviceState.Active)
+                return device;
+
+            device.Dispose();
+            return null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Volume as WASAPI wants it, with mute folded in. The caller must hold the lock.</summary>
+    private float EffectiveOutputVolume => _muted ? 0f : (float)(_volume / 100.0);
+
+    /// <summary>Pushes <see cref="EffectiveOutputVolume"/> to the live stream, if there is one.</summary>
+    private void ApplyOutputVolume()
+    {
+        if (_output is not null)
+            _output.Volume = EffectiveOutputVolume;
     }
 
     public void Pause()
@@ -262,11 +428,14 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         var output = _output;
         var reader = _reader;
+        var device = _outputDevice;
         _output = null;
         _reader = null;
         _normalizer = null;
         _equalizer = null;
         _effects = null;
+        _mono = null;
+        _outputDevice = null;
 
         if (output is not null)
         {
@@ -274,6 +443,17 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             output.Dispose();
         }
         reader?.Dispose();
+
+        // Released only after the stream that was rendering to it. Whether the player took
+        // ownership of the endpoint is unspecified, so tolerate it having been disposed already.
+        try
+        {
+            device?.Dispose();
+        }
+        catch (Exception)
+        {
+            // Nothing left to release.
+        }
     }
 
     public void Dispose()
@@ -283,6 +463,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             if (_disposed)
                 return;
             _disposed = true;
+            _currentPath = null;
             CloseCurrentPlayback();
         }
         _positionTimer.Dispose();
@@ -330,6 +511,65 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
 
         private static float DbToLinear(double gainDb) =>
             (float)Math.Pow(10, Math.Clamp(gainDb, -60, 24) / 20);
+    }
+
+    /// <summary>
+    /// Replaces every channel of a frame with their average, so both ears hear the same thing.
+    ///
+    /// Averaging rather than summing keeps the level where it was: identical channels stay at their
+    /// own level instead of arriving 6 dB louder, and channels that disagree partially cancel, which
+    /// is what a mono fold-down is for hearing in the first place.
+    ///
+    /// The switch fades over the same short ramp the gain stage uses rather than snapping, because
+    /// flipping it mid-track is otherwise a step change in every channel at once — a click.
+    /// </summary>
+    private sealed class MonoDownmixSampleProvider : ISampleProvider
+    {
+        private readonly ISampleProvider _source;
+        private readonly float _smoothingFactor;
+        private float _blend;
+        private float _targetBlend;
+
+        public WaveFormat WaveFormat => _source.WaveFormat;
+
+        public MonoDownmixSampleProvider(ISampleProvider source, bool enabled)
+        {
+            _source = source;
+            _blend = enabled ? 1 : 0;
+            _targetBlend = _blend;
+            _smoothingFactor = 1 - MathF.Exp(-1 / (0.02f * WaveFormat.SampleRate));
+        }
+
+        public void SetEnabled(bool enabled) =>
+            Volatile.Write(ref _targetBlend, enabled ? 1 : 0);
+
+        public int Read(Span<float> buffer)
+        {
+            var read = _source.Read(buffer);
+            var channels = WaveFormat.Channels;
+            var target = Volatile.Read(ref _targetBlend);
+
+            // Off and fully faded out, which is the default and the common case: nothing to do.
+            if (channels < 2 || (target == 0 && _blend == 0))
+                return read;
+
+            for (var frame = 0; frame + channels <= read; frame += channels)
+            {
+                _blend += (target - _blend) * _smoothingFactor;
+                if (MathF.Abs(target - _blend) < 0.000001f)
+                    _blend = target;
+
+                var sum = 0f;
+                for (var channel = 0; channel < channels; channel++)
+                    sum += buffer[frame + channel];
+
+                var mean = sum / channels;
+                for (var channel = 0; channel < channels; channel++)
+                    buffer[frame + channel] += (mean - buffer[frame + channel]) * _blend;
+            }
+
+            return read;
+        }
     }
 
     /// <summary>

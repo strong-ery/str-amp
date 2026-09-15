@@ -18,6 +18,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 {
     private const int QueueShowCount = 40;
 
+    /// <summary>The "no pinned endpoint" entry: playback follows whatever Windows is using.</summary>
+    private static readonly OutputDeviceRow SystemDefaultOutputDevice = new(null, "System default");
+
     private readonly IMediaPlayer _player;
     private readonly PlaybackQueue _queue = new();
     private readonly AppSettings _settings;
@@ -103,7 +106,30 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial string TotalText { get; set; } = "0:00";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VolumeIcon))]
     public partial double Volume { get; set; }
+
+    /// <summary>Silences playback without moving the volume slider.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(VolumeIcon))]
+    [NotifyPropertyChangedFor(nameof(VolumeToolTip))]
+    public partial bool IsMuted { get; set; }
+
+    public Geometry VolumeIcon => IsMuted ? Icons.VolumeMuted
+        : Volume <= 0 ? Icons.VolumeZero
+        : Volume < 50 ? Icons.VolumeLow
+        : Icons.VolumeHigh;
+
+    public string VolumeToolTip => IsMuted ? "Unmute" : "Mute";
+
+    /// <summary>Entries of the playback-device picker; the first one always follows the OS default.</summary>
+    public ObservableCollection<OutputDeviceRow> OutputDevices { get; } = [];
+
+    [ObservableProperty]
+    public partial OutputDeviceRow? SelectedOutputDevice { get; set; }
+
+    /// <summary>Suppresses device switching while the picker's list is being rebuilt.</summary>
+    private bool _isRefreshingOutputDevices;
 
     [ObservableProperty]
     public partial bool Shuffled { get; set; }
@@ -169,16 +195,20 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LoopMode = settings.LoopMode;
         Volume = settings.Volume;
         _player.Volume = settings.Volume;
+        _player.OutputDeviceId = settings.OutputDeviceId;
         IsLibraryOpen = settings.LibraryPanelOpen;
         IsUpNextOpen = settings.UpNextPanelOpen;
         LeftPanelWidth = settings.LeftPanelWidth > 0 ? settings.LeftPanelWidth : 280;
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(
-            settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting);
+            settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting,
+            ApplyMonoOutputSetting);
         Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
         ApplyEqualizer();
         ApplyEffects();
+        ApplyMonoOutputSetting();
         ApplyDiscordPresenceSetting();
+        RefreshOutputDevices();
 
         LibraryPath = settings.LibraryPath
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Music");
@@ -581,6 +611,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _settings.EqualizerGains,
             _settings.EqualizerEnabled);
 
+    private void ApplyMonoOutputSetting() => _player.MonoOutput = _settings.MonoAudioEnabled;
+
     private void ApplyDiscordPresenceSetting()
     {
         _discordPresence.Configure(_settings.DiscordClientId, _settings.DiscordRichPresenceEnabled);
@@ -787,7 +819,83 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _player.Volume = value;
         _settings.Volume = value;
         SettingsService.Save(_settings);
+
+        // Turning the level up is an implicit unmute; without this the slider (and the volume media
+        // keys, which come through here too) would appear dead while muted.
+        if (IsMuted && value > 0)
+            IsMuted = false;
     }
+
+    partial void OnIsMutedChanged(bool value) => _player.Muted = value;
+
+    [RelayCommand]
+    private void ToggleMute() => IsMuted = !IsMuted;
+
+    /// <summary>Re-enumerates endpoints and re-selects the saved one. Runs each time the picker opens.</summary>
+    [RelayCommand]
+    private void RefreshOutputDevices()
+    {
+        var rows = new List<OutputDeviceRow> { SystemDefaultOutputDevice };
+        foreach (var device in _player.GetOutputDevices())
+            rows.Add(new OutputDeviceRow(device.Id, device.Name));
+
+        var savedId = _settings.OutputDeviceId;
+        var saved = rows.FirstOrDefault(row => IsSameDevice(row.Id, savedId));
+
+        // A pinned device that is currently unplugged stays listed, so the picker still shows what
+        // playback is meant to route to rather than silently reading as "system default".
+        if (saved is null && !string.IsNullOrWhiteSpace(savedId))
+        {
+            saved = new OutputDeviceRow(savedId, "Unavailable device");
+            rows.Add(saved);
+        }
+
+        _isRefreshingOutputDevices = true;
+        try
+        {
+            OutputDevices.Clear();
+            foreach (var row in rows)
+                OutputDevices.Add(row);
+            SelectedOutputDevice = saved ?? SystemDefaultOutputDevice;
+        }
+        finally
+        {
+            _isRefreshingOutputDevices = false;
+        }
+    }
+
+    partial void OnSelectedOutputDeviceChanged(OutputDeviceRow? value)
+    {
+        if (_isRefreshingOutputDevices || value is null)
+            return;
+        ApplyOutputDevice(value.Id);
+    }
+
+    /// <summary>Routes playback to an endpoint, keeping position and playing state across the switch.</summary>
+    private void ApplyOutputDevice(string? deviceId)
+    {
+        if (IsSameDevice(_settings.OutputDeviceId, deviceId))
+            return;
+
+        try
+        {
+            _player.OutputDeviceId = deviceId;
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Could not switch playback device: {ex.Message}";
+            return;
+        }
+
+        _settings.OutputDeviceId = deviceId;
+        SettingsService.Save(_settings);
+    }
+
+    private static bool IsSameDevice(string? left, string? right) =>
+        string.Equals(
+            string.IsNullOrWhiteSpace(left) ? null : left,
+            string.IsNullOrWhiteSpace(right) ? null : right,
+            StringComparison.OrdinalIgnoreCase);
 
     public void BeginSeek() => _isSeeking = true;
 

@@ -274,10 +274,32 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid Grid.Column="3" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                            <PathIcon Grid.Column="0" Data="{x:Static app:Icons.VolumeHigh}" Width="16" Height="16" Opacity="0.7"
-                                      VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                        <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto,*" VerticalAlignment="Center">
+                            <Button Grid.Column="0" Classes="transport" Width="28" Height="28" Padding="5"
+                                    Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
+                                    ToolTip.Tip="Playback device">
+                                <Button.Flyout>
+                                    <Flyout Placement="Top">
+                                        <ListBox Background="Transparent" BorderThickness="0" FontSize="12"
+                                                 MinWidth="200" MaxWidth="320" MaxHeight="220"
+                                                 ItemsSource="{Binding OutputDevices}"
+                                                 SelectedItem="{Binding SelectedOutputDevice}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:OutputDeviceRow">
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Flyout>
+                                </Button.Flyout>
+                                <PathIcon Data="{x:Static app:Icons.OutputDevice}" Width="15" Height="15" Opacity="0.7" />
+                            </Button>
+                            <Button Grid.Column="1" Classes="transport" Classes.active="{Binding IsMuted}"
+                                    Width="28" Height="28" Padding="5" Margin="0,0,6,0"
+                                    Command="{Binding ToggleMuteCommand}" ToolTip.Tip="{Binding VolumeToolTip}">
+                                <PathIcon Data="{Binding VolumeIcon}" Width="16" Height="16" Opacity="0.7" />
+                            </Button>
+                            <Slider Grid.Column="2" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </Grid>
@@ -305,10 +327,32 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid ColumnDefinitions="Auto,*" Width="160" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <PathIcon Grid.Column="0" Data="{x:Static app:Icons.VolumeHigh}" Width="16" Height="16" Opacity="0.7"
-                                      VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <Slider Grid.Column="1" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                        <Grid ColumnDefinitions="Auto,Auto,*" Width="224" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Button Grid.Column="0" Classes="transport" Width="28" Height="28" Padding="5"
+                                    Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
+                                    ToolTip.Tip="Playback device">
+                                <Button.Flyout>
+                                    <Flyout Placement="Top">
+                                        <ListBox Background="Transparent" BorderThickness="0" FontSize="12"
+                                                 MinWidth="200" MaxWidth="320" MaxHeight="220"
+                                                 ItemsSource="{Binding OutputDevices}"
+                                                 SelectedItem="{Binding SelectedOutputDevice}">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:OutputDeviceRow">
+                                                    <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </Flyout>
+                                </Button.Flyout>
+                                <PathIcon Data="{x:Static app:Icons.OutputDevice}" Width="15" Height="15" Opacity="0.7" />
+                            </Button>
+                            <Button Grid.Column="1" Classes="transport" Classes.active="{Binding IsMuted}"
+                                    Width="28" Height="28" Padding="5" Margin="0,0,6,0"
+                                    Command="{Binding ToggleMuteCommand}" ToolTip.Tip="{Binding VolumeToolTip}">
+                                <PathIcon Data="{Binding VolumeIcon}" Width="16" Height="16" Opacity="0.7" />
+                            </Button>
+                            <Slider Grid.Column="2" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </StackPanel>
@@ -458,6 +502,13 @@
                                           HorizontalAlignment="Left" MinWidth="140" />
                                 <TextBlock Classes="field-hint" TextWrapping="Wrap"
                                            Text="Analyzes and caches the library in the background, then applies a constant clipping-safe gain. No compression, limiting, or file changes." />
+                            </StackPanel>
+
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding Theme.MonoAudio}"
+                                              OnContent="Mono audio" OffContent="Mono audio" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Sums the channels and sends the same signal to both ears. Useful for single-sided listening or hearing loss in one ear." />
                             </StackPanel>
 
                             <TextBlock Text="EQUALIZER" Classes="section-header" Margin="0,6,0,0" />

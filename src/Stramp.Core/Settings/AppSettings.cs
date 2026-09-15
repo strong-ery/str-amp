@@ -13,6 +13,9 @@ public sealed class AppSettings
 {
     public string? LibraryPath { get; set; }
     public double Volume { get; set; } = 100;
+
+    /// <summary>Endpoint the user pinned playback to. Null follows the system default device.</summary>
+    public string? OutputDeviceId { get; set; }
     public bool Shuffle { get; set; } = true;
     public LoopMode LoopMode { get; set; } = LoopMode.Off;
     public double WindowWidth { get; set; } = 980;
@@ -53,6 +56,9 @@ public sealed class AppSettings
     /// <summary>Applies cached per-track loudness gain during playback without modifying files.</summary>
     public bool AudioNormalizationEnabled { get; set; }
     public AudioNormalizationLevel AudioNormalizationLevel { get; set; } = AudioNormalizationLevel.Normal;
+
+    /// <summary>Sums the output to mono, so every channel carries the same signal.</summary>
+    public bool MonoAudioEnabled { get; set; }
 
     /// <summary>Per-band gains in dB. Empty means "flat"; resized to the backend's band count on load.</summary>
     public List<double> EqualizerGains { get; set; } = [];

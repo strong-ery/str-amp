@@ -162,6 +162,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     private readonly AppSettings _settings;
     private readonly Action _onManualColorsChanged;
     private readonly Action _onNormalizationChanged;
+    private readonly Action _onMonoAudioChanged;
     private readonly Action _onDiscordSettingsChanged;
     private Action? _onEqualizerChanged;
     private Action? _onEffectsChanged;
@@ -224,6 +225,9 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     [ObservableProperty]
     public partial AudioNormalizationLevel NormalizationLevel { get; set; }
 
+    [ObservableProperty]
+    public partial bool MonoAudio { get; set; }
+
     public IReadOnlyList<AudioNormalizationLevel> NormalizationLevels { get; } =
         Enum.GetValues<AudioNormalizationLevel>();
 
@@ -253,12 +257,14 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         AppSettings settings,
         Action onManualColorsChanged,
         Action? onNormalizationChanged = null,
-        Action? onDiscordSettingsChanged = null)
+        Action? onDiscordSettingsChanged = null,
+        Action? onMonoAudioChanged = null)
     {
         _settings = settings;
         _onManualColorsChanged = onManualColorsChanged;
         _onNormalizationChanged = onNormalizationChanged ?? (() => { });
         _onDiscordSettingsChanged = onDiscordSettingsChanged ?? (() => { });
+        _onMonoAudioChanged = onMonoAudioChanged ?? (() => { });
 
         DiscordRichPresenceEnabled = settings.DiscordRichPresenceEnabled;
         DiscordClientId = settings.DiscordClientId ?? "";
@@ -274,6 +280,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         EffectsEnabled = settings.EffectsEnabled;
         NormalizeAudio = settings.AudioNormalizationEnabled;
         NormalizationLevel = settings.AudioNormalizationLevel;
+        MonoAudio = settings.MonoAudioEnabled;
         Primary = new ColorChannelEditor(ParseOrDefault(settings.PrimaryAccentColor, DefaultPrimary), ApplyLive);
         Secondary = new ColorChannelEditor(ParseOrDefault(settings.SecondaryAccentColor, DefaultSecondary), ApplyLive);
         Background = new ColorChannelEditor(ParseOrDefault(settings.BackgroundColor, DefaultBackground), ApplyLive);
@@ -344,6 +351,13 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _settings.AudioNormalizationLevel = value;
         SettingsService.Save(_settings);
         _onNormalizationChanged();
+    }
+
+    partial void OnMonoAudioChanged(bool value)
+    {
+        _settings.MonoAudioEnabled = value;
+        SettingsService.Save(_settings);
+        _onMonoAudioChanged();
     }
 
     partial void OnDiscordRichPresenceEnabledChanged(bool value)
