@@ -21,6 +21,8 @@ public sealed class AlbumArtProvider : IDisposable
     private readonly BitmapLruCache _fullArtCache = new(FullArtCacheSize);
     private readonly ConcurrentDictionary<string, Lazy<Task<Bitmap?>>> _thumbnailInFlight =
         new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _thumbnailCancellation =
+        new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, Lazy<Task<Bitmap?>>> _fullArtInFlight =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _decodeSlots = new(ConcurrentDecodes);
@@ -28,19 +30,35 @@ public sealed class AlbumArtProvider : IDisposable
 
     /// <summary>Fetches original-resolution art for the large now-playing cover.</summary>
     public void GetArtAsync(string path, Action<Bitmap?> callback) =>
-        DeliverAsync(path, callback, thumbnail: false);
+        DeliverAsync(path, callback, thumbnail: false, CancellationToken.None);
 
     /// <summary>Fetches a high-DPI 96px thumbnail for a visible library or queue row.</summary>
     public void GetThumbnailAsync(string path, Action<Bitmap?> callback)
     {
         _thumbnailCache.Pin(path);
-        DeliverAsync(path, callback, thumbnail: true);
+        var cancellation = _thumbnailCancellation.GetOrAdd(
+            path, static _ => new CancellationTokenSource());
+        DeliverAsync(path, callback, thumbnail: true, cancellation.Token);
     }
 
     /// <summary>Releases a visible row's ownership so an old thumbnail can be evicted safely.</summary>
-    public void ReleaseThumbnail(string path) => _thumbnailCache.Unpin(path);
+    public void ReleaseThumbnail(string path)
+    {
+        if (!_thumbnailCache.Unpin(path))
+            return;
 
-    private async void DeliverAsync(string path, Action<Bitmap?> callback, bool thumbnail)
+        // Remove the lazy request first so a row that becomes visible again gets fresh work rather
+        // than inheriting a canceled waiter. The old task remains safely owned by its awaiter.
+        _thumbnailInFlight.TryRemove(path, out _);
+        if (_thumbnailCancellation.TryRemove(path, out var cancellation))
+        {
+            cancellation.Cancel();
+            cancellation.Dispose();
+        }
+    }
+
+    private async void DeliverAsync(
+        string path, Action<Bitmap?> callback, bool thumbnail, CancellationToken ct)
     {
         if (_disposed)
             return;
@@ -55,7 +73,7 @@ public sealed class AlbumArtProvider : IDisposable
         var inFlight = thumbnail ? _thumbnailInFlight : _fullArtInFlight;
         var request = inFlight.GetOrAdd(path, requestedPath =>
             new Lazy<Task<Bitmap?>>(
-                () => LoadAndCacheAsync(requestedPath, cache, thumbnail),
+                () => LoadAndCacheAsync(requestedPath, cache, thumbnail, ct),
                 LazyThreadSafetyMode.ExecutionAndPublication));
         Bitmap? bitmap;
         try
@@ -67,12 +85,14 @@ public sealed class AlbumArtProvider : IDisposable
             if (inFlight.TryGetValue(path, out var current) && ReferenceEquals(current, request))
                 inFlight.TryRemove(path, out _);
         }
-        if (_disposed)
+        if (_disposed || ct.IsCancellationRequested ||
+            (thumbnail && !_thumbnailCache.IsPinned(path)))
             return;
 
         Dispatcher.UIThread.Post(() =>
         {
-            if (!_disposed)
+            if (!_disposed && !ct.IsCancellationRequested &&
+                (!thumbnail || _thumbnailCache.IsPinned(path)))
                 callback(bitmap);
         });
     }
@@ -80,17 +100,19 @@ public sealed class AlbumArtProvider : IDisposable
     private async Task<Bitmap?> LoadAndCacheAsync(
         string path,
         BitmapLruCache cache,
-        bool thumbnail)
+        bool thumbnail,
+        CancellationToken ct)
     {
         var enteredDecodeSlot = false;
         try
         {
-            await _decodeSlots.WaitAsync();
+            await _decodeSlots.WaitAsync(ct);
             enteredDecodeSlot = true;
-            if (_disposed)
+            if (_disposed || ct.IsCancellationRequested ||
+                (thumbnail && !cache.IsPinned(path)))
                 return null;
 
-            return await Task.Run(() =>
+            var bitmap = await Task.Run(() =>
             {
                 if (!_byteCache.TryGet(path, out var bytes))
                 {
@@ -98,10 +120,22 @@ public sealed class AlbumArtProvider : IDisposable
                     _byteCache.Put(path, bytes);
                 }
 
-                var bitmap = DecodeSafely(bytes, thumbnail);
-                cache.Put(path, bitmap);
-                return bitmap;
+                return DecodeSafely(bytes, thumbnail);
             });
+
+            if (_disposed || ct.IsCancellationRequested ||
+                (thumbnail && !cache.IsPinned(path)))
+            {
+                bitmap?.Dispose();
+                return null;
+            }
+
+            cache.Put(path, bitmap);
+            return bitmap;
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
         }
         catch
         {
@@ -145,6 +179,13 @@ public sealed class AlbumArtProvider : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        foreach (var cancellation in _thumbnailCancellation.Values)
+        {
+            cancellation.Cancel();
+            cancellation.Dispose();
+        }
+        _thumbnailCancellation.Clear();
+        _thumbnailInFlight.Clear();
         _thumbnailCache.Dispose();
         _fullArtCache.Dispose();
     }
@@ -181,15 +222,23 @@ public sealed class AlbumArtProvider : IDisposable
             }
         }
 
-        public void Unpin(string path)
+        /// <returns>True when no visible row still owns this path.</returns>
+        public bool Unpin(string path)
         {
             lock (_gate)
             {
                 if (_disposed || !_entries.TryGetValue(path, out var entry))
-                    return;
+                    return true;
                 entry.PinCount = Math.Max(0, entry.PinCount - 1);
                 Trim();
+                return entry.PinCount == 0;
             }
+        }
+
+        public bool IsPinned(string path)
+        {
+            lock (_gate)
+                return !_disposed && _entries.TryGetValue(path, out var entry) && entry.PinCount > 0;
         }
 
         public bool TryGet(string path, out Bitmap? bitmap)

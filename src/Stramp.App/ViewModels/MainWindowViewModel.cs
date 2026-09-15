@@ -421,9 +421,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             return;
 
         row.IsArtRequested = true;
+        var requestVersion = ++row.ArtRequestVersion;
         _artProvider.GetThumbnailAsync(row.Song.Path, bitmap =>
         {
-            if (row.IsArtRequested)
+            if (row.IsArtRequested && row.ArtRequestVersion == requestVersion)
                 row.ArtBitmap = bitmap;
         });
     }
@@ -434,6 +435,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (!row.IsArtRequested)
             return;
         row.IsArtRequested = false;
+        row.ArtRequestVersion++;
         row.ArtBitmap = null;
         _artProvider.ReleaseThumbnail(row.Song.Path);
     }

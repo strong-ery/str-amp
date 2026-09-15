@@ -21,4 +21,7 @@ public partial class SongRow(Song song) : ObservableObject
 
     /// <summary>Whether a virtualized list container currently needs this thumbnail.</summary>
     internal bool IsArtRequested { get; set; }
+
+    /// <summary>Invalidates callbacks belonging to an earlier incarnation of a recycled row.</summary>
+    internal int ArtRequestVersion { get; set; }
 }
