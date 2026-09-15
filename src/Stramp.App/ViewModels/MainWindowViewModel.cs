@@ -1298,10 +1298,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// to a user staring at an empty panel but means very different things about retrying.</summary>
     private static string StatusFor(LyricsOrigin origin, bool searchedOnline) => origin switch
     {
-        LyricsOrigin.Instrumental => "This track is instrumental — no lyrics to show.",
-        LyricsOrigin.Unavailable => "Couldn't reach lrclib.net. Check your connection, then retry.",
-        _ when searchedOnline => "No lyrics found here or on lrclib.net.",
-        _ => "No .lrc beside this track. Turn on LRCLIB lookup in Settings to search online.",
+        LyricsOrigin.Instrumental => "This track is instrumental - no lyrics to show.",
+        LyricsOrigin.Unavailable => "Couldn't reach lrclib.net. Check your connection.",
+        _ when searchedOnline => "Hm... We couldn't find lyrics for this one.",
+        _ => "No lyrics found. Sorry!",
     };
 
     private static string SourceFor(LyricsOrigin origin, bool synced)
