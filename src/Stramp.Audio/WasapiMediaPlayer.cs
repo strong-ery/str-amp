@@ -38,6 +38,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     private bool _muted;
     private double _normalizationGainDb;
     private bool _monoOutput;
+    private bool _surroundSoundEnabled;
     private string? _outputDeviceId;
     private string? _currentPath;
     private bool _disposed;
@@ -182,6 +183,34 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         }
     }
 
+    public bool SurroundSoundEnabled
+    {
+        get
+        {
+            lock (_gate)
+                return _surroundSoundEnabled;
+        }
+        set
+        {
+            lock (_gate)
+            {
+                if (_surroundSoundEnabled == value)
+                    return;
+
+                _surroundSoundEnabled = value;
+                if (_disposed || _currentPath is null)
+                    return;
+
+                if (_reader is not null && _reader.WaveFormat.Channels > 2)
+                {
+                    var position = _reader.CurrentTime.TotalSeconds;
+                    var wasPlaying = _output?.PlaybackState == PlaybackState.Playing;
+                    OpenPlayback(_currentPath, position, wasPlaying);
+                }
+            }
+        }
+    }
+
     public IReadOnlyList<float> DefaultEqualizerBands => DefaultBandFrequencies;
 
     public WasapiMediaPlayer()
@@ -220,7 +249,17 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             reader.CurrentTime = TimeSpan.FromSeconds(
                 Math.Clamp(startSeconds, 0, reader.TotalTime.TotalSeconds));
 
-        var normalizer = new GainSampleProvider(reader.ToSampleProvider(), _normalizationGainDb);
+        var device = ResolveOutputDevice(_outputDeviceId);
+        var output = BuildOutput(device);
+
+        var isMultiChannel = reader.WaveFormat.Channels > 2;
+        var useSurround = isMultiChannel && _surroundSoundEnabled && CanDeviceSupportFormat(device, reader.WaveFormat);
+
+        ISampleProvider source = reader.ToSampleProvider();
+        if (!useSurround && isMultiChannel)
+            source = new SurroundToStereoSampleProvider(source);
+
+        var normalizer = new GainSampleProvider(source, _normalizationGainDb);
         var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
         equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
         var effects = new DfxEffectProcessor(equalizer, _effectSettings);
@@ -229,10 +268,25 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         // finished signal rather than something the later stages then widen.
         var mono = new MonoDownmixSampleProvider(effects, _monoOutput);
 
-        var device = ResolveOutputDevice(_outputDeviceId);
-        var output = BuildOutput(device);
+        try
+        {
+            output.Init(mono);
+        }
+        catch (Exception) when (useSurround)
+        {
+            // If native surround output failed on this endpoint, fall back to lossless stereo downmix.
+            output.Dispose();
+            source = new SurroundToStereoSampleProvider(reader.ToSampleProvider());
+            normalizer = new GainSampleProvider(source, _normalizationGainDb);
+            equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
+            equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
+            effects = new DfxEffectProcessor(equalizer, _effectSettings);
+            mono = new MonoDownmixSampleProvider(effects, _monoOutput);
 
-        output.Init(mono);
+            output = BuildOutput(device);
+            output.Init(mono);
+        }
+
         output.Volume = EffectiveOutputVolume;
         output.PlaybackStopped += (_, e) => HandlePlaybackStopped(output, e);
 
@@ -301,6 +355,30 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         catch (Exception)
         {
             return null;
+        }
+    }
+
+    private static bool CanDeviceSupportFormat(MMDevice? device, WaveFormat format)
+    {
+        try
+        {
+            if (device is not null)
+            {
+                using var client = device.CreateAudioClient();
+                return client.IsFormatSupported(AudioClientShareMode.Shared, format, out _);
+            }
+
+            using var enumerator = new MMDeviceEnumerator();
+            using var defaultDevice = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            if (defaultDevice is null)
+                return false;
+
+            using var defaultClient = defaultDevice.CreateAudioClient();
+            return defaultClient.IsFormatSupported(AudioClientShareMode.Shared, format, out _);
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -725,6 +725,13 @@
                                            Text="Sums the channels and sends the same signal to both ears. Useful for single-sided listening or hearing loss in one ear." />
                             </StackPanel>
 
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding Theme.SurroundSound}"
+                                              OnContent="5.1 surround sound" OffContent="5.1 surround sound" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Plays multi-channel tracks in 5.1 surround when supported by the audio device. When off or on stereo outputs, folds surround down to two ears properly and losslessly." />
+                            </StackPanel>
+
                             <TextBlock Text="EQUALIZER" Classes="section-header" Margin="0,6,0,0" />
 
                             <StackPanel Spacing="10">

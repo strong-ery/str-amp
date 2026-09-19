@@ -263,7 +263,7 @@
   <Style Selector="Border.lyric-line.active">
     <Setter Property="Opacity" Value="1" />
     <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
-    <Setter Property="RenderTransform" Value="scale(1.045)" />
+    <Setter Property="RenderTransform" Value="scale(1.025,1.045)" />
   </Style>
   <!-- A fullscreen lyric row can use nearly every available pixel. Keep a restrained horizontal
        lift so it still pops without scaling wrapped text through the clipping edge. -->

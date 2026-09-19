@@ -34,6 +34,9 @@ public interface IMediaPlayer : IDisposable
     /// <summary>Collapses playback to mono: every output channel carries the same summed signal.</summary>
     bool MonoOutput { get; set; }
 
+    /// <summary>When true, plays multi-channel tracks in surround when supported by the device. When false, folds down to stereo.</summary>
+    bool SurroundSoundEnabled { get; set; }
+
     /// <summary>Fires with the current time position (seconds) as playback progresses.</summary>
     event Action<double>? TimePositionChanged;
 
