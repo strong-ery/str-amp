@@ -163,6 +163,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     private readonly Action _onManualColorsChanged;
     private readonly Action _onNormalizationChanged;
     private readonly Action _onMonoAudioChanged;
+    private readonly Action _onSurroundSoundChanged;
     private readonly Action _onLrcLibLookupChanged;
     private readonly Action _onLibraryMetadataCacheChanged;
     private readonly Action<bool> _onDesktopShortcutChanged;
@@ -238,6 +239,9 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     [ObservableProperty]
     public partial bool MonoAudio { get; set; }
 
+    [ObservableProperty]
+    public partial bool SurroundSound { get; set; }
+
     public IReadOnlyList<AudioNormalizationLevel> NormalizationLevels { get; } =
         Enum.GetValues<AudioNormalizationLevel>();
 
@@ -282,6 +286,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         Action? onNormalizationChanged = null,
         Action? onDiscordSettingsChanged = null,
         Action? onMonoAudioChanged = null,
+        Action? onSurroundSoundChanged = null,
         Action? onLrcLibLookupChanged = null,
         Action? onLibraryMetadataCacheChanged = null,
         Action<bool>? onDesktopShortcutChanged = null,
@@ -292,6 +297,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _onNormalizationChanged = onNormalizationChanged ?? (() => { });
         _onDiscordSettingsChanged = onDiscordSettingsChanged ?? (() => { });
         _onMonoAudioChanged = onMonoAudioChanged ?? (() => { });
+        _onSurroundSoundChanged = onSurroundSoundChanged ?? (() => { });
         _onLrcLibLookupChanged = onLrcLibLookupChanged ?? (() => { });
         _onLibraryMetadataCacheChanged = onLibraryMetadataCacheChanged ?? (() => { });
         _onDesktopShortcutChanged = onDesktopShortcutChanged ?? (_ => { });
@@ -314,6 +320,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         NormalizeAudio = settings.AudioNormalizationEnabled;
         NormalizationLevel = settings.AudioNormalizationLevel;
         MonoAudio = settings.MonoAudioEnabled;
+        SurroundSound = settings.SurroundSoundEnabled;
         LrcLibLookup = settings.LrcLibLookupEnabled;
         CacheLibraryMetadata = settings.CacheLibraryMetadata;
         EnsureDesktopShortcut = settings.EnsureDesktopShortcut;
@@ -407,6 +414,13 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _settings.MonoAudioEnabled = value;
         SettingsService.Save(_settings);
         _onMonoAudioChanged();
+    }
+
+    partial void OnSurroundSoundChanged(bool value)
+    {
+        _settings.SurroundSoundEnabled = value;
+        SettingsService.Save(_settings);
+        _onSurroundSoundChanged();
     }
 
     partial void OnLrcLibLookupChanged(bool value)

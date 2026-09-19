@@ -82,6 +82,9 @@ public sealed class AppSettings
     /// <summary>Sums the output to mono, so every channel carries the same signal.</summary>
     public bool MonoAudioEnabled { get; set; }
 
+    /// <summary>When true, plays multi-channel audio (e.g. 5.1 surround) in surround when supported by the device. When false, folds down to stereo.</summary>
+    public bool SurroundSoundEnabled { get; set; }
+
     /// <summary>Per-band gains in dB. Empty means "flat"; resized to the backend's band count on load.</summary>
     public List<double> EqualizerGains { get; set; } = [];
 

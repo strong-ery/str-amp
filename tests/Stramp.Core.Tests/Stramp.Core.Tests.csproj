@@ -22,6 +22,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Stramp.Core\Stramp.Core.csproj" />
+    <ProjectReference Include="..\..\src\Stramp.Audio\Stramp.Audio.csproj" />
   </ItemGroup>
 
 </Project>

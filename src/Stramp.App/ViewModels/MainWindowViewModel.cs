@@ -248,12 +248,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
         Theme = new ThemeSettingsViewModel(
             settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting,
-            ApplyMonoOutputSetting, ApplyLrcLibSetting, ApplyLibraryMetadataCacheSetting,
+            ApplyMonoOutputSetting, ApplySurroundSoundSetting, ApplyLrcLibSetting, ApplyLibraryMetadataCacheSetting,
             ApplyDesktopShortcutSetting, ApplyStartMenuShortcutSetting);
         Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
         ApplyEqualizer();
         ApplyEffects();
         ApplyMonoOutputSetting();
+        ApplySurroundSoundSetting();
         ApplyDiscordPresenceSetting();
         RefreshOutputDevices();
 
@@ -911,6 +912,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _settings.EqualizerEnabled);
 
     private void ApplyMonoOutputSetting() => _player.MonoOutput = _settings.MonoAudioEnabled;
+
+    private void ApplySurroundSoundSetting() => _player.SurroundSoundEnabled = _settings.SurroundSoundEnabled;
 
     private void ApplyDiscordPresenceSetting()
     {
