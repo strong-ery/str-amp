@@ -1,4 +1,4 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Stramp.App.ViewModels"
         xmlns:conv="using:Stramp.App.Converters"
@@ -158,7 +158,7 @@
                         </Grid>
 
                         <Grid RowDefinitions="*">
-                            <!-- Source menu: All Songs first, then playlists -->
+                            <!-- Source menu: All Songs, then each library folder, then playlists -->
                             <ListBox x:Name="SourceList" Grid.Row="0" Classes="flat-list library-scroll"
                                      ItemsSource="{Binding LibrarySources}"
                                      IsVisible="{Binding IsBrowsingSources}" Tapped="OnSourceTapped">
@@ -168,7 +168,7 @@
                                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                                                 <PathIcon Grid.Column="0" Width="16" Height="16" Opacity="0.7"
                                                           VerticalAlignment="Center"
-                                                          Data="{x:Static app:Icons.Playlist}" />
+                                                          Data="{Binding Icon}" />
                                                 <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Name}" Classes="queue-title"
                                                                TextTrimming="CharacterEllipsis" />

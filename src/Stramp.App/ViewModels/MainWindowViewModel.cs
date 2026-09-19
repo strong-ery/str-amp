@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -586,23 +586,81 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void PopulateSources()
     {
         LibrarySources.Clear();
-        LibrarySources.Add(new LibrarySourceRow("All Songs", _library));
+        LibrarySources.Add(new LibrarySourceRow("All Songs", _library, LibrarySourceKind.AllSongs));
 
-        var importedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var playlist in PlaylistScanner.FromSaved(_settings.Playlists, _library))
+        var playlists = new List<Playlist>();
+        var playlistNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Prefer the first/imported copy when names collide across sources.
+        foreach (var playlist in PlaylistScanner.FromSaved(_settings.Playlists, _library)
+                     .Concat(_discoveredPlaylists))
         {
-            importedNames.Add(playlist.Name);
-            LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
+            if (playlistNames.Add(playlist.Name))
+                playlists.Add(playlist);
         }
 
-        foreach (var playlist in _discoveredPlaylists)
+        // One row per configured folder, so a library built from several folders can still be
+        // browsed a folder at a time. With a single folder the row would just repeat All Songs.
+        if (_libraryPaths.Count > 1)
         {
-            // Prefer the first/imported copy when names collide across sources.
-            if (!importedNames.Add(playlist.Name))
-                continue;
+            var takenNames = new HashSet<string>(playlistNames, StringComparer.OrdinalIgnoreCase)
+            {
+                "All Songs",
+            };
+            foreach (var path in _libraryPaths)
+            {
+                var name = UniqueFolderSourceName(path, takenNames);
+                takenNames.Add(name);
+                LibrarySources.Add(new LibrarySourceRow(name, SongsUnder(path), LibrarySourceKind.Folder));
+            }
+        }
+
+        foreach (var playlist in playlists)
             LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
+    }
+
+    /// <summary>The scanned songs that live inside one configured library folder. Songs under a
+    /// folder nested in another configured folder show up under both, which is what the paths say.</summary>
+    private List<Song> SongsUnder(string folder)
+    {
+        var prefix = folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                     + Path.DirectorySeparatorChar;
+        return _library
+            .Where(song => NormalizeSeparators(song.Path)
+                .StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    private static string NormalizeSeparators(string path) =>
+        Path.AltDirectorySeparatorChar == Path.DirectorySeparatorChar
+            ? path
+            : path.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+
+    /// <summary>Folder rows are labelled by folder name, which two library folders can share
+    /// ("D:\Music" and "E:\Music"). Source names key selection and saved state, so collisions
+    /// fall back to the full path and then to a numeric suffix.</summary>
+    private static string UniqueFolderSourceName(string path, HashSet<string> takenNames)
+    {
+        var leaf = new LibraryLocationRow(path).Name;
+        if (!takenNames.Contains(leaf))
+            return leaf;
+        if (!takenNames.Contains(path))
+            return path;
+
+        for (var suffix = 2; ; suffix++)
+        {
+            var candidate = $"{leaf} ({suffix})";
+            if (!takenNames.Contains(candidate))
+                return candidate;
         }
     }
+
+    /// <summary>What the selected source is, looked up by name so it survives a rescan.</summary>
+    private LibrarySourceKind CurrentSourceKind =>
+        LibrarySources.FirstOrDefault(source => string.Equals(
+                source.Name, CurrentSourceName, StringComparison.OrdinalIgnoreCase))?.Kind
+        ?? (string.Equals(CurrentSourceName, "All Songs", StringComparison.OrdinalIgnoreCase)
+            ? LibrarySourceKind.AllSongs
+            : LibrarySourceKind.Playlist);
 
     /// <summary>
     /// Parses an .m3u/.m3u8 once, stores its song paths in settings, and adds it to the source menu.
@@ -656,7 +714,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void UpdateSortOptionsForCurrentSource(string? savedSortOptionName = null)
     {
-        var isPlaylist = !string.Equals(CurrentSourceName, "All Songs", StringComparison.OrdinalIgnoreCase);
+        // Only playlists carry a meaningful hand-made order; folder rows sort like the library.
+        var isPlaylist = CurrentSourceKind == LibrarySourceKind.Playlist;
         var targetOptions = isPlaylist
             ? new[] { SortPlaylist, SortArtist, SortAlbum, SortSong }
             : new[] { SortArtist, SortAlbum, SortSong };
