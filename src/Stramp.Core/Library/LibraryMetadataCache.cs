@@ -38,6 +38,7 @@ public sealed class LibraryMetadataCache
                     Title = entry.Title,
                     Artist = entry.Artist,
                     Album = entry.Album,
+                    AlbumArtist = entry.AlbumArtist,
                     Duration = TimeSpan.FromTicks(entry.DurationTicks),
                 };
                 return true;
@@ -60,6 +61,7 @@ public sealed class LibraryMetadataCache
                 Title = song.Title,
                 Artist = song.Artist,
                 Album = song.Album,
+                AlbumArtist = song.AlbumArtist,
                 DurationTicks = song.Duration.Ticks,
             };
             lock (_gate)
@@ -117,6 +119,7 @@ public sealed class LibraryMetadataCache
         public string Title { get; init; } = "";
         public string Artist { get; init; } = "";
         public string Album { get; init; } = "";
+        public string AlbumArtist { get; init; } = "";
         public long DurationTicks { get; init; }
     }
 }

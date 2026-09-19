@@ -23,6 +23,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>The "no pinned endpoint" entry: playback follows whatever Windows is using.</summary>
     private static readonly OutputDeviceRow SystemDefaultOutputDevice = new(null, "System default");
 
+    private static readonly SortOptionRow SortPlaylist = new(LibrarySortOption.Playlist, "Playlist");
+    private static readonly SortOptionRow SortArtist = new(LibrarySortOption.Artist, "Artist Name");
+    private static readonly SortOptionRow SortAlbum = new(LibrarySortOption.Album, "Album Name");
+    private static readonly SortOptionRow SortSong = new(LibrarySortOption.Song, "Song Name");
+
     private readonly IMediaPlayer _player;
     private readonly PlaybackQueue _queue = new();
     private readonly AppSettings _settings;
@@ -70,6 +75,17 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public ObservableCollection<SongRow> QueueRows { get; } = [];
     public ObservableCollection<LibrarySourceRow> LibrarySources { get; } = [];
     public ObservableCollection<LibraryLocationRow> LibraryLocations { get; } = [];
+
+    public ObservableCollection<SortOptionRow> AvailableSortOptions { get; } = [];
+
+    [ObservableProperty]
+    private SortOptionRow? _selectedSortOption;
+
+    partial void OnSelectedSortOptionChanged(SortOptionRow? value)
+    {
+        UpdateDisplayedSongs();
+        SavePlaybackState();
+    }
 
     /// <summary>True while the library panel shows the source menu rather than a song list.</summary>
     [ObservableProperty]
@@ -416,7 +432,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             CurrentSourceName = "All Songs";
         }
-        PopulateLibraryRows(_activeSongs);
+        UpdateSortOptionsForCurrentSource();
+        UpdateDisplayedSongs();
 
         if (preservePlayback && previousQueue.Count > 0)
         {
@@ -468,7 +485,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CurrentSourceName = namedSource?.Name ??
             (string.IsNullOrWhiteSpace(state.SourceName) ? "All Songs" : state.SourceName);
         IsBrowsingSources = state.IsBrowsingSources;
-        PopulateLibraryRows(_activeSongs);
+        UpdateSortOptionsForCurrentSource(state.SortOption);
+        UpdateDisplayedSongs();
 
         Shuffled = state.Shuffled;
         LoopMode = state.LoopMode;
@@ -630,8 +648,67 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CurrentSourceName = source.Name;
         IsBrowsingSources = false;
         SearchText = "";
-        PopulateLibraryRows(_activeSongs);
+        UpdateSortOptionsForCurrentSource();
+        UpdateDisplayedSongs();
         SavePlaybackState(force: true);
+    }
+
+    private void UpdateSortOptionsForCurrentSource(string? savedSortOptionName = null)
+    {
+        var isPlaylist = !string.Equals(CurrentSourceName, "All Songs", StringComparison.OrdinalIgnoreCase);
+        var targetOptions = isPlaylist
+            ? new[] { SortPlaylist, SortArtist, SortAlbum, SortSong }
+            : new[] { SortArtist, SortAlbum, SortSong };
+
+        AvailableSortOptions.Clear();
+        foreach (var option in targetOptions)
+            AvailableSortOptions.Add(option);
+
+        if (!string.IsNullOrWhiteSpace(savedSortOptionName) &&
+            Enum.TryParse<LibrarySortOption>(savedSortOptionName, out var parsedSortOption))
+        {
+            var matched = AvailableSortOptions.FirstOrDefault(o => o.Option == parsedSortOption);
+            if (matched is not null)
+            {
+                SelectedSortOption = matched;
+                return;
+            }
+        }
+
+        SelectedSortOption = isPlaylist ? SortPlaylist : SortArtist;
+    }
+
+    private IEnumerable<Song> GetSortedSongs(IEnumerable<Song> songs)
+    {
+        return SelectedSortOption?.Option switch
+        {
+            LibrarySortOption.Album => songs
+                .OrderBy(s => s.Album, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(s => s.Artist, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase),
+
+            LibrarySortOption.Song => songs
+                .OrderBy(s => s.Title, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(s => s.Artist, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(s => s.Album, StringComparer.OrdinalIgnoreCase),
+
+            LibrarySortOption.Playlist => songs,
+
+            LibrarySortOption.Artist or _ => songs
+                .OrderBy(s => string.IsNullOrWhiteSpace(s.AlbumArtist) ? s.Artist : s.AlbumArtist, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(s => s.Album, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(s => s.Title, StringComparer.OrdinalIgnoreCase),
+        };
+    }
+
+    private void UpdateDisplayedSongs()
+    {
+        var sorted = GetSortedSongs(_activeSongs);
+        var q = SearchText.Trim();
+        var filtered = string.IsNullOrEmpty(q)
+            ? sorted
+            : LibrarySearch.Rank(sorted, q);
+        PopulateLibraryRows(filtered);
     }
 
     [RelayCommand]
@@ -675,17 +752,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     partial void OnSearchTextChanged(string value)
     {
-        var q = value.Trim();
-        var filtered = string.IsNullOrEmpty(q)
-            ? _activeSongs
-            : LibrarySearch.Rank(_activeSongs, q);
-        PopulateLibraryRows(filtered);
+        UpdateDisplayedSongs();
     }
 
     [RelayCommand]
     private void PlaySong(SongRow row)
     {
-        _queue.PlayFromLibrary(row.Song, _activeSongs, Shuffled);
+        _queue.PlayFromLibrary(row.Song, GetSortedSongs(_activeSongs), Shuffled);
         StartNormalizationWarmup();
         LoadCurrent();
     }
@@ -1477,6 +1550,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             LibraryPath = LibraryPath,
             SourceName = CurrentSourceName,
             IsBrowsingSources = IsBrowsingSources,
+            SortOption = SelectedSortOption?.Option.ToString(),
             // The full library is derived by scanning. Playlist paths are retained so an imported
             // or deleted playlist can still be restored as the active source.
             ActiveSongPaths = string.Equals(

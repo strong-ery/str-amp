@@ -18,5 +18,6 @@ public sealed class SavedPlaybackState
     public LoopMode LoopMode { get; set; }
     public double PositionSeconds { get; set; }
     public bool WasPlaying { get; set; }
+    public string? SortOption { get; set; }
     public DateTime SavedAtUtc { get; set; }
 }

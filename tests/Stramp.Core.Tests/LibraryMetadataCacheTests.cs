@@ -19,6 +19,7 @@ public class LibraryMetadataCacheTests
                 Path = audioPath,
                 Title = "Cached title",
                 Artist = "Cached artist",
+                AlbumArtist = "Cached album artist",
                 Album = "Cached album",
                 Duration = TimeSpan.FromSeconds(123),
             };
@@ -31,6 +32,7 @@ public class LibraryMetadataCacheTests
             Assert.True(restoredCache.TryGet(new FileInfo(audioPath), out var restored));
             Assert.Equal(song.Title, restored.Title);
             Assert.Equal(song.Artist, restored.Artist);
+            Assert.Equal(song.AlbumArtist, restored.AlbumArtist);
             Assert.Equal(song.Album, restored.Album);
             Assert.Equal(song.Duration, restored.Duration);
         }

@@ -134,12 +134,28 @@
                             </Button>
                         </Grid>
 
-                        <TextBox Text="{Binding SearchText}" PlaceholderText="Search…" DockPanel.Dock="Top"
-                                 Margin="0,0,0,8" IsVisible="{Binding !IsBrowsingSources}">
-                            <TextBox.InnerLeftContent>
-                                <PathIcon Data="{x:Static app:Icons.Search}" Width="14" Height="14" Opacity="0.6" Margin="8,0,0,0" />
-                            </TextBox.InnerLeftContent>
-                        </TextBox>
+                        <!-- Search & Sort Bar -->
+                        <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8" IsVisible="{Binding !IsBrowsingSources}">
+                            <TextBox Grid.Row="0" Text="{Binding SearchText}" PlaceholderText="Search…"
+                                     Classes="stramp-input" Margin="0,0,0,6">
+                                <TextBox.InnerLeftContent>
+                                    <PathIcon Data="{x:Static app:Icons.Search}" Width="12" Height="12" Opacity="0.55" Margin="8,0,2,0" />
+                                </TextBox.InnerLeftContent>
+                            </TextBox>
+
+                            <Grid Grid.Row="1" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                                <TextBlock Grid.Column="0" Text="Sort:" FontSize="11" FontWeight="SemiBold" Opacity="0.55"
+                                           VerticalAlignment="Center" Margin="2,0,6,0" />
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding AvailableSortOptions}" SelectedItem="{Binding SelectedSortOption}"
+                                          Classes="stramp-combo" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:SortOptionRow">
+                                            <TextBlock Text="{Binding Name}" FontSize="11" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </Grid>
 
                         <Grid RowDefinitions="*">
                             <!-- Source menu: All Songs first, then playlists -->

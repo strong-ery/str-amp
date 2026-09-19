@@ -11,5 +11,8 @@ public sealed class Song
     /// <summary>Album tag, or empty when the file has none. Sharpens online lyric matching.</summary>
     public string Album { get; init; } = "";
 
+    /// <summary>Album artist tag, or empty when the file has none.</summary>
+    public string AlbumArtist { get; init; } = "";
+
     public override string ToString() => $"{Artist} - {Title}";
 }
