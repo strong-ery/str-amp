@@ -27,17 +27,37 @@ public sealed class PlaybackQueue
         Position = 0;
     }
 
-    /// <summary>Starts a fresh queue with `song` first, followed by the rest of the library.</summary>
+    /// <summary>Starts a fresh queue on `song`. Shuffled, it hoists the pick to the front and
+    /// reshuffles the rest; unshuffled, it keeps library order so the next track is the one that
+    /// follows the pick rather than the top of the list.</summary>
     public void PlayFromLibrary(
         Song song, IEnumerable<Song> library, bool shuffled, int? shuffleSeed = null)
     {
-        var rest = library.Where(s => s.Path != song.Path).ToList();
-        if (shuffled)
-            ShuffleInPlace(rest, shuffleSeed);
-        else
+        if (!shuffled)
+        {
             ShuffleSeed = 0;
+            _songs = library.ToList();
+            Position = IndexOf(_songs, song);
+            if (Position < 0)
+            {
+                _songs.Insert(0, song);
+                Position = 0;
+            }
+            return;
+        }
+
+        var rest = library.Where(s => s.Path != song.Path).ToList();
+        ShuffleInPlace(rest, shuffleSeed);
         _songs = [song, .. rest];
         Position = 0;
+    }
+
+    /// <summary>Locates `song` in the queue, preferring the exact entry so duplicate paths in a
+    /// playlist resolve to the row that was actually clicked.</summary>
+    private static int IndexOf(List<Song> songs, Song song)
+    {
+        var exact = songs.FindIndex(s => ReferenceEquals(s, song));
+        return exact >= 0 ? exact : songs.FindIndex(s => s.Path == song.Path);
     }
 
     /// <summary>Restores an exact persisted queue, including its current entry and shuffle seed.</summary>
@@ -70,7 +90,7 @@ public sealed class PlaybackQueue
             return;
         }
 
-        Position = _songs.FindIndex(song => song.Path == current.Path);
+        Position = IndexOf(_songs, current);
         if (Position >= 0)
             return;
 

@@ -69,16 +69,41 @@ public class PlaybackQueueTests
     }
 
     [Fact]
-    public void PlayFromLibrary_PutsChosenSongFirst()
+    public void PlayFromLibrary_Shuffled_PutsChosenSongFirst()
     {
         var queue = new PlaybackQueue();
         var library = ThreeSongs();
 
-        queue.PlayFromLibrary(library[2], library, shuffled: false);
+        queue.PlayFromLibrary(library[2], library, shuffled: true);
 
         Assert.Equal(library[2], queue.Current);
         Assert.Equal(0, queue.Position);
         Assert.Equal(library.Count, queue.Songs.Count);
+    }
+
+    [Fact]
+    public void PlayFromLibrary_Unshuffled_KeepsLibraryOrderAroundChosenSong()
+    {
+        var queue = new PlaybackQueue();
+        var library = ThreeSongs();
+
+        queue.PlayFromLibrary(library[1], library, shuffled: false);
+
+        Assert.Equal(library, queue.Songs);
+        Assert.Equal(1, queue.Position);
+        Assert.Equal(library[1], queue.Current);
+    }
+
+    [Fact]
+    public void PlayFromLibrary_Unshuffled_AdvancesToTheFollowingTrackNotTheFirst()
+    {
+        var queue = new PlaybackQueue();
+        var library = ThreeSongs();
+        queue.PlayFromLibrary(library[1], library, shuffled: false);
+
+        queue.AdvanceOrRebuild(library, shuffled: false);
+
+        Assert.Equal(library[2], queue.Current);
     }
 
     [Fact]

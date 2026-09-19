@@ -441,7 +441,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             var songsByPath = _library.ToDictionary(song => song.Path, StringComparer.OrdinalIgnoreCase);
             var restoredQueue = ResolveSongs(previousQueue.Select(song => song.Path), songsByPath);
             var seen = restoredQueue.Select(song => song.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            restoredQueue.AddRange(_activeSongs.Where(song => seen.Add(song.Path)));
+            restoredQueue.AddRange(SortedActiveSongs.Where(song => seen.Add(song.Path)));
 
             if (previousCurrent is not null && !seen.Contains(previousCurrent.Path))
                 restoredQueue.Insert(Math.Clamp(previousQueuePosition, 0, restoredQueue.Count), previousCurrent);
@@ -457,7 +457,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         else
         {
             IsBrowsingSources = true;
-            _queue.Build(_activeSongs, Shuffled);
+            _queue.Build(SortedActiveSongs, Shuffled);
             _playbackStateReady = true;
             LoadCurrent(autoPlay: false);
         }
@@ -506,7 +506,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
         else
         {
-            _queue.Build(_activeSongs, Shuffled,
+            _queue.Build(SortedActiveSongs, Shuffled,
                 Shuffled && state.ShuffleSeed != 0 ? state.ShuffleSeed : null);
             var restoredPosition = !string.IsNullOrWhiteSpace(state.CurrentSongPath)
                 ? _queue.Songs.ToList().FindIndex(song => string.Equals(
@@ -679,6 +679,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         SelectedSortOption = isPlaylist ? SortPlaylist : SortArtist;
     }
 
+    /// <summary>The active source in the order the library list shows it. Queue rebuilds follow
+    /// this so "next" matches the list the user is looking at, not raw source order.</summary>
+    private IEnumerable<Song> SortedActiveSongs => GetSortedSongs(_activeSongs);
+
     private IEnumerable<Song> GetSortedSongs(IEnumerable<Song> songs)
     {
         return SelectedSortOption?.Option switch
@@ -704,7 +708,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     private void UpdateDisplayedSongs()
     {
-        var sorted = GetSortedSongs(_activeSongs);
+        var sorted = SortedActiveSongs;
         var q = SearchText.Trim();
         var filtered = string.IsNullOrEmpty(q)
             ? sorted
@@ -759,7 +763,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void PlaySong(SongRow row)
     {
-        _queue.PlayFromLibrary(row.Song, GetSortedSongs(_activeSongs), Shuffled);
+        _queue.PlayFromLibrary(row.Song, SortedActiveSongs, Shuffled);
         StartNormalizationWarmup();
         LoadCurrent();
     }
@@ -860,7 +864,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Next()
     {
-        _queue.AdvanceOrRebuild(_activeSongs, Shuffled);
+        _queue.AdvanceOrRebuild(SortedActiveSongs, Shuffled);
         LoadCurrent();
     }
 
@@ -891,7 +895,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Reshuffle();
         else
         {
-            _queue.RestoreOrderKeepingCurrent(_activeSongs);
+            _queue.RestoreOrderKeepingCurrent(SortedActiveSongs);
             RefreshQueueRows();
             StartNormalizationWarmup();
             SavePlaybackState(force: true);
@@ -1189,7 +1193,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Reshuffle()
     {
-        _queue.ReshuffleKeepingCurrent(_activeSongs);
+        _queue.ReshuffleKeepingCurrent(SortedActiveSongs);
         RefreshQueueRows();
         StartNormalizationWarmup();
         SavePlaybackState(force: true);
@@ -1545,7 +1549,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         var currentPath = _queue.Current?.Path;
         var activeSourcePosition = currentPath is null
             ? 0
-            : _activeSongs.FindIndex(song => string.Equals(
+            : SortedActiveSongs.ToList().FindIndex(song => string.Equals(
                 song.Path, currentPath, StringComparison.OrdinalIgnoreCase));
         var state = new SavedPlaybackState
         {
@@ -1639,7 +1643,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 return;
             }
 
-            _queue.AdvanceOrRebuild(_activeSongs, Shuffled);
+            _queue.AdvanceOrRebuild(SortedActiveSongs, Shuffled);
             LoadCurrent();
         });
     }
