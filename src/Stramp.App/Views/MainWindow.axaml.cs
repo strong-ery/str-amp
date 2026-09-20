@@ -48,6 +48,9 @@ public partial class MainWindow : Window
     /// <summary>Distance from the right edge that reveals the otherwise hidden lyric scrollbar.</summary>
     private const double LyricsScrollbarRevealDistance = 44;
 
+    /// <summary>Volume change per mouse wheel notch when scrolling over the volume slider.</summary>
+    private const double VolumeScrollStep = 5;
+
     private readonly DispatcherTimer _frameTimer;
     private readonly BeatDetector _kickDetector = new(sensitivity: 1.9, refractoryFrames: 7);
     private readonly BeatDetector _hihatDetector = new(sensitivity: 2.2, refractoryFrames: 3);
@@ -102,6 +105,11 @@ public partial class MainWindow : Window
             RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
 
         LyricsScroller.AddHandler(PointerWheelChangedEvent, OnLyricsWheelChanged,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+
+        VolumeSlider.AddHandler(PointerWheelChangedEvent, OnVolumeWheelChanged,
+            RoutingStrategies.Tunnel, handledEventsToo: true);
+        CompactVolumeSlider.AddHandler(PointerWheelChangedEvent, OnVolumeWheelChanged,
             RoutingStrategies.Tunnel, handledEventsToo: true);
 
         WaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
@@ -505,6 +513,16 @@ public partial class MainWindow : Window
     {
         _lyricsManualScrollFrames = LyricsManualScrollFrames;
         _lyricsScrollTarget = null;
+    }
+
+    private void OnVolumeWheelChanged(object? sender, PointerWheelEventArgs e)
+    {
+        if (ViewModel is not { } vm)
+            return;
+
+        var delta = e.Delta.Y * VolumeScrollStep;
+        vm.Volume = Math.Clamp(vm.Volume + delta, 0, 100);
+        e.Handled = true;
     }
 
     private void OnLyricsPointerMoved(object? sender, PointerEventArgs e)
