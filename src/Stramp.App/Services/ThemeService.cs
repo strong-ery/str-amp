@@ -1,5 +1,6 @@
 using System;
 using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Stramp.Core.Settings;
@@ -16,7 +17,7 @@ public static class ThemeService
     private static Color? _currentPrimary;
     private static Color? _currentSecondary;
     private static Color? _currentBackground;
-    private static DispatcherTimer? _animationTimer;
+    private static ulong _currentAnimationId;
 
     /// <summary>Applies the manually-configured colors from settings.</summary>
     public static void Apply(AppSettings settings) => ApplyColors(
@@ -62,44 +63,47 @@ public static class ThemeService
 
         StopAnimation();
 
+        var animationId = ++_currentAnimationId;
         var startTime = DateTime.UtcNow;
         const double durationMs = 350.0;
 
-        _animationTimer = new DispatcherTimer
+        var topLevel = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (topLevel is not null)
         {
-            Interval = TimeSpan.FromMilliseconds(16)
-        };
-
-        _animationTimer.Tick += (s, e) =>
-        {
-            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
-            double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
-
-            double easedT = t * t * (3 - 2 * t);
-
-            var currP = LerpColor(startPrimary, primary, easedT);
-            var currS = LerpColor(startSecondary, secondary, easedT);
-            var currB = LerpColor(startBackground, background, easedT);
-
-            UpdateCurrentColors(currP, currS, currB);
-            ApplyColorsDirect(currP, currS, currB);
-
-            if (t >= 1.0)
+            void Step(TimeSpan ts)
             {
-                StopAnimation();
-            }
-        };
+                if (animationId != _currentAnimationId)
+                    return;
 
-        _animationTimer.Start();
+                var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
+                double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
+                double easedT = t * t * (3 - 2 * t);
+
+                var currP = LerpColor(startPrimary, primary, easedT);
+                var currS = LerpColor(startSecondary, secondary, easedT);
+                var currB = LerpColor(startBackground, background, easedT);
+
+                UpdateCurrentColors(currP, currS, currB);
+                ApplyColorsDirect(currP, currS, currB);
+
+                if (t < 1.0)
+                {
+                    topLevel.RequestAnimationFrame(Step);
+                }
+            }
+
+            topLevel.RequestAnimationFrame(Step);
+        }
+        else
+        {
+            UpdateCurrentColors(primary, secondary, background);
+            ApplyColorsDirect(primary, secondary, background);
+        }
     }
 
     private static void StopAnimation()
     {
-        if (_animationTimer is not null)
-        {
-            _animationTimer.Stop();
-            _animationTimer = null;
-        }
+        _currentAnimationId++;
     }
 
     private static void UpdateCurrentColors(Color primary, Color secondary, Color background)

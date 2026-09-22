@@ -47,6 +47,7 @@ public sealed class SpectrumVisualizerControl : Control
     private float[] _ringLevels = [];
     private float[] _ringPeaks = [];
     private readonly Queue<float[]> _history = new();
+    private double _historyTimer;
     private float _peakEnvelope = 0.35f;
     private float _gain = 1f;
     private float _bass;
@@ -103,14 +104,15 @@ public sealed class SpectrumVisualizerControl : Control
         set => SetValue(InnerRadiusProperty, value);
     }
 
-    /// <summary>Push a new analyzed frame (values 0-1). Safe at any rate; the control self-smooths.</summary>
-    public void UpdateSpectrum(float[] bins)
+    /// <summary>Push a new analyzed frame (values 0-1) with the elapsed delta time. Safe at any rate; the control self-smooths.</summary>
+    public void UpdateSpectrum(float[] bins, double dt = 1.0 / 60.0)
     {
         if (_levels.Length != bins.Length)
         {
             _levels = new float[bins.Length];
             _peaks = new float[bins.Length];
             _history.Clear();
+            _historyTimer = 0;
         }
 
         if (_ringLevels.Length == 0)
@@ -123,21 +125,29 @@ public sealed class SpectrumVisualizerControl : Control
         for (var i = 0; i < bins.Length; i++)
             frameMax = Math.Max(frameMax, bins[i]);
 
+        var dtRatio = (float)(dt * 60.0);
+
         // Adaptive gain: follow a slowly-decaying envelope of the loudest recent bin so the ring
         // fills out on quiet material without clipping on loud material.
-        _peakEnvelope = Math.Max(frameMax, _peakEnvelope * 0.997f);
+        var envelopeDecay = (float)Math.Pow(0.997, dtRatio);
+        _peakEnvelope = Math.Max(frameMax, _peakEnvelope * envelopeDecay);
         var targetGain = _peakEnvelope > 0.08f ? 1f / _peakEnvelope : 1f;
-        _gain += (Math.Clamp(targetGain, 1f, 3.2f) - _gain) * 0.04f;
+        var gainLerp = 1f - (float)Math.Pow(1f - 0.04f, dtRatio);
+        _gain += (Math.Clamp(targetGain, 1f, 3.2f) - _gain) * gainLerp;
+
+        var riseRate = 1f - (float)Math.Pow(1f - RiseRate, dtRatio);
+        var fallRate = 1f - (float)Math.Pow(1f - FallRate, dtRatio);
+        var peakFall = PeakFallRate * dtRatio;
 
         for (var i = 0; i < bins.Length; i++)
         {
             var target = Math.Clamp(bins[i] * _gain, 0f, 1f);
-            var rate = target > _levels[i] ? RiseRate : FallRate;
+            var rate = target > _levels[i] ? riseRate : fallRate;
             _levels[i] += (target - _levels[i]) * rate;
 
             _peaks[i] = _levels[i] >= _peaks[i]
                 ? _levels[i]
-                : Math.Max(_levels[i], _peaks[i] - PeakFallRate);
+                : Math.Max(_levels[i], _peaks[i] - peakFall);
         }
 
         // Group the full-resolution bins down to the radial bar count.
@@ -153,18 +163,26 @@ public sealed class SpectrumVisualizerControl : Control
             _ringLevels[j] = sum / (end - start);
             _ringPeaks[j] = _ringLevels[j] >= _ringPeaks[j]
                 ? _ringLevels[j]
-                : Math.Max(_ringLevels[j], _ringPeaks[j] - PeakFallRate);
+                : Math.Max(_ringLevels[j], _ringPeaks[j] - peakFall);
         }
 
-        _history.Enqueue((float[])_levels.Clone());
-        while (_history.Count > HistoryDepth)
-            _history.Dequeue();
+        // Keep skyline trail temporally consistent (~116ms total) regardless of display refresh rate
+        _historyTimer += dt;
+        const double historyFrameDuration = 1.0 / 60.0;
+        if (_historyTimer >= historyFrameDuration)
+        {
+            _historyTimer %= historyFrameDuration;
+            _history.Enqueue((float[])_levels.Clone());
+            while (_history.Count > HistoryDepth)
+                _history.Dequeue();
+        }
 
         var bassBins = Math.Max(1, _levels.Length / 12);
         var bassSum = 0f;
         for (var i = 0; i < bassBins; i++)
             bassSum += _levels[i];
-        _bass += (bassSum / bassBins - _bass) * 0.25f;
+        var bassLerp = 1f - (float)Math.Pow(1f - 0.25f, dtRatio);
+        _bass += (bassSum / bassBins - _bass) * bassLerp;
 
         InvalidateVisual();
     }
@@ -179,6 +197,7 @@ public sealed class SpectrumVisualizerControl : Control
             Array.Clear(_ringPeaks);
         }
         _history.Clear();
+        _historyTimer = 0;
         _bass = 0;
         InvalidateVisual();
     }

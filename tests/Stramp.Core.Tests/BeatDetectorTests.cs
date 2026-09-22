@@ -57,4 +57,25 @@ public class BeatDetectorTests
         Assert.True(hardHit.Strength > softHit.Strength);
         Assert.InRange(hardHit.Strength, 0f, 1f);
     }
+
+    [Fact]
+    public void Update_HighRefreshRate_DeltaTime_RespectsRefractorySeconds()
+    {
+        // 6 frames at 60fps = 0.1s refractory period. At 120fps (dt = 1/120s), that's 12 frames.
+        var detector = new BeatDetector(sensitivity: 1.5, refractorySeconds: 0.1);
+        const double dt120 = 1.0 / 120.0;
+
+        for (var i = 0; i < 40; i++)
+            detector.Update(0.01f, dt120);
+
+        Assert.True(detector.Update(1.0f, dt120).IsHit);
+
+        // Within 0.1s (< 12 frames at 120fps), subsequent hits should be blocked by refractory period
+        for (var i = 0; i < 11; i++)
+            Assert.False(detector.Update(1.0f, dt120).IsHit);
+
+        // After 12 frames (0.1s), next spike should hit
+        detector.Update(0.01f, dt120);
+        Assert.True(detector.Update(1.0f, dt120).IsHit);
+    }
 }
