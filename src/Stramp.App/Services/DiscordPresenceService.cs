@@ -44,26 +44,26 @@ public sealed class DiscordPresenceService : IDisposable
     }
 
     /// <summary>
-    /// Publishes the current track. Timestamps are omitted while paused, which freezes Discord's
-    /// progress bar in place instead of it disappearing the way Spotify's integration does.
+    /// Publishes the current track while it's playing. Paused playback clears the activity so the
+    /// status only shows while music is actually playing.
     /// </summary>
     public void UpdateNowPlaying(Song song, bool isPlaying, double positionSeconds, double durationSeconds)
     {
         if (_client is null)
             return;
 
-        DateTimeOffset? start = null;
-        DateTimeOffset? end = null;
-        if (isPlaying)
+        if (!isPlaying)
         {
-            var now = DateTimeOffset.UtcNow;
-            start = now - TimeSpan.FromSeconds(positionSeconds);
-            end = start + TimeSpan.FromSeconds(Math.Max(durationSeconds, positionSeconds));
+            _client.ClearActivity();
+            return;
         }
+
+        var start = DateTimeOffset.UtcNow - TimeSpan.FromSeconds(positionSeconds);
+        var end = start + TimeSpan.FromSeconds(Math.Max(durationSeconds, positionSeconds));
 
         _client.SetActivity(new DiscordActivity(
             Details: song.Title,
-            State: isPlaying ? song.Artist : $"{song.Artist} · Paused",
+            State: song.Artist,
             LargeImageKey: LargeImageKey,
             LargeImageText: LargeImageText,
             StartTimestamp: start,
