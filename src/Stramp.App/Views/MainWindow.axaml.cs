@@ -34,8 +34,8 @@ public partial class MainWindow : Window
     private const double LyricsScrollEase = 0.16;
     private const double LyricsSettleDistance = 0.5;
 
-    /// <summary>Frames the auto-scroll keeps out of the way after a scroll by hand (~4s at 60fps).</summary>
-    private const int LyricsManualScrollFrames = 240;
+    /// <summary>Seconds the auto-scroll keeps out of the way after a scroll by hand (~4s).</summary>
+    private const double LyricsManualScrollDurationSeconds = 4.0;
 
     /// <summary>Share of the panel left blank top and bottom, so the end lines can still centre.</summary>
     private const double LyricsEdgePaddingFraction = 0.42;
@@ -51,9 +51,8 @@ public partial class MainWindow : Window
     /// <summary>Volume change per mouse wheel notch when scrolling over the volume slider.</summary>
     private const double VolumeScrollStep = 5;
 
-    private readonly DispatcherTimer _frameTimer;
-    private readonly BeatDetector _kickDetector = new(sensitivity: 1.9, refractoryFrames: 7);
-    private readonly BeatDetector _hihatDetector = new(sensitivity: 2.2, refractoryFrames: 3);
+    private readonly BeatDetector _kickDetector = new(sensitivity: 1.9, refractorySeconds: 7.0 / 60.0);
+    private readonly BeatDetector _hihatDetector = new(sensitivity: 2.2, refractorySeconds: 3.0 / 60.0);
 
     private readonly ScaleTransform _artScale = new();
     private readonly RotateTransform _artRotate = new();
@@ -65,11 +64,24 @@ public partial class MainWindow : Window
 
     private double? _lyricsScrollTarget;
     private double _lyricsEdgePadding;
-    private int _lyricsManualScrollFrames;
+    private double _lyricsManualScrollSecondsRemaining;
 
     private bool _isDraggingSplitter;
-    private DispatcherTimer? _columnAnimationTimer;
-    private DispatcherTimer? _lyricsAnimationTimer;
+    private bool _isColumnAnimating;
+    private double _colAnimStartLeft;
+    private double _colAnimTargetLeft;
+    private double _colAnimStartRight;
+    private double _colAnimTargetRight;
+    private DateTime _colAnimStartTime;
+
+    private bool _isLyricsAnimating;
+    private double _lyricsAnimStartPixels;
+    private double _lyricsAnimTargetPixels;
+    private DateTime _lyricsAnimStartTime;
+    private bool _lyricsAnimShouldBeOpen;
+
+    private bool _isFrameLoopRunning;
+    private TimeSpan? _lastFrameTimestamp;
 
     private ThumbnailToolbar? _thumbnailToolbar;
     private WindowsWindowIcon? _windowIcon;
@@ -88,12 +100,6 @@ public partial class MainWindow : Window
         {
             Children = { _artScale, _artRotate, _artTranslate },
         };
-
-        _frameTimer = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(16), // ~60fps
-        };
-        _frameTimer.Tick += OnFrameTick;
 
         // The Slider handles pointer events internally and marks them handled, so a normal
         // XAML event hookup never sees the press/release that bracket a scrub.
@@ -144,7 +150,7 @@ public partial class MainWindow : Window
 
         Opened += (_, _) =>
         {
-            _frameTimer.Start();
+            StartFrameLoop();
             SetUpThumbnailToolbar();
             UpdateColumnWidths(animate: false);
             UpdateLyricsSplit(animate: false);
@@ -152,7 +158,7 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) => UpdateColumnWidths(animate: false);
         Closed += (_, _) =>
         {
-            _frameTimer.Stop();
+            StopFrameLoop();
             _thumbnailToolbar?.Dispose();
             _windowIcon?.Dispose();
             _mediaKeys.Dispose();
@@ -160,6 +166,40 @@ public partial class MainWindow : Window
         };
         PropertyChanged += OnWindowPropertyChanged;
         DataContextChanged += OnDataContextChanged;
+    }
+
+    private void StartFrameLoop()
+    {
+        if (_isFrameLoopRunning)
+            return;
+
+        _isFrameLoopRunning = true;
+        _lastFrameTimestamp = null;
+        RequestAnimationFrame(OnAnimationFrame);
+    }
+
+    private void StopFrameLoop()
+    {
+        _isFrameLoopRunning = false;
+    }
+
+    private void OnAnimationFrame(TimeSpan timestamp)
+    {
+        if (!_isFrameLoopRunning)
+            return;
+
+        var dt = _lastFrameTimestamp is { } last
+            ? (timestamp - last).TotalSeconds
+            : 1.0 / 60.0;
+        _lastFrameTimestamp = timestamp;
+
+        // Guard against spikes from suspension, modal dialogs, or window dragging
+        dt = Math.Clamp(dt, 0.0001, 0.1);
+
+        OnFrameTick(dt);
+
+        if (_isFrameLoopRunning)
+            RequestAnimationFrame(OnAnimationFrame);
     }
 
     // ── Taskbar thumbnail buttons (Windows only) ─────────────────────────────
@@ -348,50 +388,48 @@ public partial class MainWindow : Window
 
         StopLyricsAnimation();
 
-        var startTime = DateTime.UtcNow;
-        const double durationMs = 250.0;
-
-        _lyricsAnimationTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(16)
-        };
-
-        _lyricsAnimationTimer.Tick += (s, e) =>
-        {
-            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
-            double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
-            double easedT = t * t * (3 - 2 * t);
-
-            double currPixels = startPixels + (targetPixels - startPixels) * easedT;
-
-            if (currPixels > 1)
-            {
-                lyricsCol.Width = new GridLength(currPixels, GridUnitType.Pixel);
-            }
-            else
-            {
-                lyricsCol.Width = new GridLength(0);
-            }
-
-            if (t >= 1.0)
-            {
-                StopLyricsAnimation();
-                lyricsCol.Width = shouldBeOpen ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-            }
-        };
-
-        _lyricsAnimationTimer.Start();
+        _lyricsAnimStartPixels = startPixels;
+        _lyricsAnimTargetPixels = targetPixels;
+        _lyricsAnimStartTime = DateTime.UtcNow;
+        _lyricsAnimShouldBeOpen = shouldBeOpen;
+        _isLyricsAnimating = true;
     }
 
-    private bool IsPanelAnimating => _columnAnimationTimer != null || _lyricsAnimationTimer != null;
+    private bool IsPanelAnimating => _isColumnAnimating || _isLyricsAnimating;
 
     private void StopLyricsAnimation()
     {
-        if (_lyricsAnimationTimer is not null)
+        if (_isLyricsAnimating)
         {
-            _lyricsAnimationTimer.Stop();
-            _lyricsAnimationTimer = null;
+            _isLyricsAnimating = false;
             RefreshLyricsLayoutAfterAnimation();
+        }
+    }
+
+    private void StepLyricsPanelAnimation()
+    {
+        if (!_isLyricsAnimating || NowPlayingSplit.ColumnDefinitions.Count < 2)
+            return;
+
+        var lyricsCol = NowPlayingSplit.ColumnDefinitions[1];
+
+        const double durationMs = 250.0;
+        var elapsed = (DateTime.UtcNow - _lyricsAnimStartTime).TotalMilliseconds;
+        double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
+        double easedT = t * t * (3 - 2 * t);
+
+        double currPixels = _lyricsAnimStartPixels + (_lyricsAnimTargetPixels - _lyricsAnimStartPixels) * easedT;
+
+        if (currPixels > 1)
+            lyricsCol.Width = new GridLength(currPixels, GridUnitType.Pixel);
+        else
+            lyricsCol.Width = new GridLength(0);
+
+        if (t >= 1.0)
+        {
+            var shouldBeOpen = _lyricsAnimShouldBeOpen;
+            StopLyricsAnimation();
+            lyricsCol.Width = shouldBeOpen ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         }
     }
 
@@ -418,7 +456,7 @@ public partial class MainWindow : Window
 
         LyricsScroller.Offset = default;
         _lyricsScrollTarget = null;
-        _lyricsManualScrollFrames = 0;
+        _lyricsManualScrollSecondsRemaining = 0;
     }
 
     /// <summary>
@@ -462,7 +500,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void ScrollActiveLyricIntoView()
     {
-        if (_lyricsManualScrollFrames > 0 || IsPanelAnimating)
+        if (_lyricsManualScrollSecondsRemaining > 0 || IsPanelAnimating)
             return;
 
         if (ViewModel is not { IsLyricsSynced: true } vm || vm.ActiveLyricLine is not { } active)
@@ -484,14 +522,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>Moves the panel a fraction of the way to its target, once per animation frame.</summary>
-    private void StepLyricsScroll()
+    private void StepLyricsScroll(double dt)
     {
         if (IsPanelAnimating)
             return;
 
         // Scrolling by hand takes over; the panel only takes itself back once the user has stopped.
-        if (_lyricsManualScrollFrames > 0 && --_lyricsManualScrollFrames == 0)
-            ScrollActiveLyricIntoView();
+        if (_lyricsManualScrollSecondsRemaining > 0)
+        {
+            _lyricsManualScrollSecondsRemaining -= dt;
+            if (_lyricsManualScrollSecondsRemaining <= 0)
+            {
+                _lyricsManualScrollSecondsRemaining = 0;
+                ScrollActiveLyricIntoView();
+            }
+        }
 
         if (_lyricsScrollTarget is not { } target)
             return;
@@ -505,13 +550,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        LyricsScroller.Offset = LyricsScroller.Offset.WithY(current + remaining * LyricsScrollEase);
+        var dtRatio = dt * 60.0;
+        var ease = 1.0 - Math.Pow(1.0 - LyricsScrollEase, dtRatio);
+        LyricsScroller.Offset = LyricsScroller.Offset.WithY(current + remaining * ease);
     }
 
     /// <summary>A scroll by hand parks the auto-scroll, so the two never fight over the panel.</summary>
     private void OnLyricsWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        _lyricsManualScrollFrames = LyricsManualScrollFrames;
+        _lyricsManualScrollSecondsRemaining = LyricsManualScrollDurationSeconds;
         _lyricsScrollTarget = null;
     }
 
@@ -619,35 +666,47 @@ public partial class MainWindow : Window
 
         StopColumnAnimation();
 
-        var startTime = DateTime.UtcNow;
+        _colAnimStartLeft = startLeft;
+        _colAnimTargetLeft = leftTarget;
+        _colAnimStartRight = startRight;
+        _colAnimTargetRight = rightTarget;
+        _colAnimStartTime = DateTime.UtcNow;
+        _isColumnAnimating = true;
+    }
+
+    private void StopColumnAnimation()
+    {
+        if (_isColumnAnimating)
+        {
+            _isColumnAnimating = false;
+            RefreshLyricsLayoutAfterAnimation();
+        }
+    }
+
+    private void StepColumnAnimation()
+    {
+        if (!_isColumnAnimating)
+            return;
+
         const double durationMs = 250.0;
+        var elapsed = (DateTime.UtcNow - _colAnimStartTime).TotalMilliseconds;
+        double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
+        double easedT = t * t * (3 - 2 * t);
 
-        _columnAnimationTimer = new DispatcherTimer
+        double currLeft = _colAnimStartLeft + (_colAnimTargetLeft - _colAnimStartLeft) * easedT;
+        double currRight = _colAnimStartRight + (_colAnimTargetRight - _colAnimStartRight) * easedT;
+
+        ApplyLeftColumnWidth(currLeft);
+        ApplyRightColumnWidth(currRight);
+
+        if (t >= 1.0)
         {
-            Interval = TimeSpan.FromMilliseconds(16)
-        };
-
-        _columnAnimationTimer.Tick += (s, e) =>
-        {
-            var elapsed = (DateTime.UtcNow - startTime).TotalMilliseconds;
-            double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
-            double easedT = t * t * (3 - 2 * t);
-
-            double currLeft = startLeft + (leftTarget - startLeft) * easedT;
-            double currRight = startRight + (rightTarget - startRight) * easedT;
-
-            ApplyLeftColumnWidth(currLeft);
-            ApplyRightColumnWidth(currRight);
-
-            if (t >= 1.0)
-            {
-                StopColumnAnimation();
-                ApplyLeftColumnWidth(leftTarget);
-                ApplyRightColumnWidth(rightTarget);
-            }
-        };
-
-        _columnAnimationTimer.Start();
+            var leftTarget = _colAnimTargetLeft;
+            var rightTarget = _colAnimTargetRight;
+            StopColumnAnimation();
+            ApplyLeftColumnWidth(leftTarget);
+            ApplyRightColumnWidth(rightTarget);
+        }
     }
 
     private void ApplyLeftColumnWidth(double width)
@@ -677,16 +736,6 @@ public partial class MainWindow : Window
         {
             rightCol.Width = new GridLength(0);
             RightSplitter.IsVisible = false;
-        }
-    }
-
-    private void StopColumnAnimation()
-    {
-        if (_columnAnimationTimer is not null)
-        {
-            _columnAnimationTimer.Stop();
-            _columnAnimationTimer = null;
-            RefreshLyricsLayoutAfterAnimation();
         }
     }
 
@@ -976,33 +1025,37 @@ public partial class MainWindow : Window
 
     // ── Animation loop ───────────────────────────────────────────────────────
 
-    private void OnFrameTick(object? sender, EventArgs e)
+    private void OnFrameTick(double dt)
     {
         var vm = ViewModel;
         if (vm is null)
             return;
 
         vm.TickProgress();
-        StepLyricsScroll();
+        StepColumnAnimation();
+        StepLyricsPanelAnimation();
+        StepLyricsScroll(dt);
 
         var frame = vm.VisualizerFeed.GetFrame(vm.ProgressSeconds, SpectrumBins);
         if (frame is not null && vm.IsPlaying)
         {
-            Visualizer.UpdateSpectrum(frame.DisplayBins);
+            Visualizer.UpdateSpectrum(frame.DisplayBins, dt);
 
             // Pulses are sized by how hard the hit was, so the cover tracks the track's dynamics
             // instead of punching identically on every detected onset.
-            var kick = _kickDetector.Update(frame.LowBandEnergy);
+            var kick = _kickDetector.Update(frame.LowBandEnergy, dt);
             if (kick.IsHit)
                 _kickPulse = Math.Max(_kickPulse, kick.Strength);
 
-            var hihat = _hihatDetector.Update(frame.HighBandEnergy);
+            var hihat = _hihatDetector.Update(frame.HighBandEnergy, dt);
             if (hihat.IsHit)
                 _hihatPulse = Math.Max(_hihatPulse, hihat.Strength);
         }
 
-        _kickPulse *= (float)PulseDecayPerTick;
-        _hihatPulse *= (float)PulseDecayPerTick;
+        var dtRatio = dt * 60.0;
+        var pulseDecay = (float)Math.Pow(PulseDecayPerTick, dtRatio);
+        _kickPulse *= pulseDecay;
+        _hihatPulse *= pulseDecay;
 
         if (!vm.Theme.AnimateAlbumArt)
         {
@@ -1014,7 +1067,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        _driftPhase += 0.018;
+        _driftPhase += 0.018 * dtRatio;
         var driftX = Math.Sin(_driftPhase * 0.7) * DriftPixels;
         var driftY = Math.Cos(_driftPhase * 0.5) * DriftPixels;
 

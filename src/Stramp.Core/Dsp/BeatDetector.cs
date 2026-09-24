@@ -16,23 +16,30 @@ public readonly record struct BeatHit(bool IsHit, float Strength);
 public sealed class BeatDetector
 {
     private readonly double _sensitivity;
-    private readonly int _refractoryFrames;
+    private readonly double _refractorySeconds;
     private double _average;
     private bool _seeded;
-    private int _framesSinceHit;
+    private double _secondsSinceHit;
 
     public BeatDetector(double sensitivity = 1.5, int refractoryFrames = 6)
+        : this(sensitivity, refractoryFrames / 60.0)
     {
-        _sensitivity = sensitivity;
-        _refractoryFrames = refractoryFrames;
-        _framesSinceHit = refractoryFrames;
     }
 
-    /// <summary>Feed one frame's band energy.</summary>
-    public BeatHit Update(float energy)
+    public BeatDetector(double sensitivity, double refractorySeconds)
     {
-        if (_framesSinceHit < int.MaxValue - 1)
-            _framesSinceHit++;
+        _sensitivity = sensitivity;
+        _refractorySeconds = refractorySeconds;
+        _secondsSinceHit = refractorySeconds;
+    }
+
+    /// <summary>Feed one frame's band energy assuming a default 60fps tick.</summary>
+    public BeatHit Update(float energy) => Update(energy, 1.0 / 60.0);
+
+    /// <summary>Feed one frame's band energy with the elapsed delta time since last frame.</summary>
+    public BeatHit Update(float energy, double dt)
+    {
+        _secondsSinceHit += dt;
 
         if (!_seeded)
         {
@@ -42,12 +49,12 @@ public sealed class BeatDetector
 
         var isHit = energy > _average * _sensitivity
             && energy > 1e-4
-            && _framesSinceHit >= _refractoryFrames;
+            && _secondsSinceHit >= _refractorySeconds;
 
         var strength = 0f;
         if (isHit)
         {
-            _framesSinceHit = 0;
+            _secondsSinceHit = 0;
 
             // How far past the threshold did it land? A hit that barely qualifies reads soft,
             // one that massively overshoots reads full strength.
@@ -56,8 +63,9 @@ public sealed class BeatDetector
             strength = (float)Math.Clamp(0.35 + overshoot, 0.35, 1.0);
         }
 
-        const double alpha = 0.08;
-        _average = _average * (1 - alpha) + energy * alpha;
+        var dtRatio = dt * 60.0;
+        var alpha = 1.0 - Math.Pow(1.0 - 0.08, dtRatio);
+        _average = _average * (1.0 - alpha) + energy * alpha;
 
         return new BeatHit(isHit, strength);
     }
