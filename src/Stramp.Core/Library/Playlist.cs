@@ -6,5 +6,6 @@ namespace Stramp.Core.Library;
 public sealed class Playlist
 {
     public required string Name { get; init; }
+    public string? FilePath { get; init; }
     public required IReadOnlyList<Song> Songs { get; init; }
 }

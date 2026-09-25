@@ -41,6 +41,7 @@ public static class PlaylistScanner
                 playlists.Add(new Playlist
                 {
                     Name = Path.GetFileNameWithoutExtension(file),
+                    FilePath = file,
                     Songs = songs,
                 });
             }
@@ -106,14 +107,19 @@ public static class PlaylistScanner
 
         foreach (var entry in saved)
         {
-            if (string.IsNullOrWhiteSpace(entry.Name) || entry.SongPaths.Count == 0)
+            if (string.IsNullOrWhiteSpace(entry.Name))
                 continue;
 
-            var songs = ResolveSongs(entry.SongPaths, byPath);
-            if (songs.Count == 0)
+            var songs = entry.SongPaths.Count > 0 ? ResolveSongs(entry.SongPaths, byPath) : [];
+            if (entry.SongPaths.Count > 0 && songs.Count == 0)
                 continue;
 
-            playlists.Add(new Playlist { Name = entry.Name, Songs = songs });
+            playlists.Add(new Playlist
+            {
+                Name = entry.Name,
+                FilePath = entry.FilePath,
+                Songs = songs,
+            });
         }
 
         playlists.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));

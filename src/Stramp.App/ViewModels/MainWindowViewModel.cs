@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -110,6 +110,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     public partial string CurrentArtist { get; set; } = "";
+
+    public Song? CurrentSong => _queue.Current;
+    public bool HasCurrentSong => _queue.Current is not null;
 
     [ObservableProperty]
     public partial bool IsPlaying { get; set; }
@@ -234,6 +237,44 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [ObservableProperty]
     public partial bool IsSettingsOpen { get; set; }
 
+    [ObservableProperty]
+    public partial bool IsAddToPlaylistOpen { get; set; }
+
+    [ObservableProperty]
+    public partial string AddToPlaylistSongTitle { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string AddToPlaylistSongArtist { get; set; } = "";
+
+    [ObservableProperty]
+    public partial Bitmap? AddToPlaylistSongArt { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsCreatingNewPlaylistInDialog { get; set; }
+
+    [ObservableProperty]
+    public partial string NewPlaylistNameInDialog { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string? NewPlaylistErrorMessage { get; set; }
+
+    public ObservableCollection<PlaylistPickerItem> PlaylistPickerItems { get; } = [];
+
+    [ObservableProperty]
+    public partial bool HasNoPlaylistsInPicker { get; set; }
+
+    [ObservableProperty]
+    public partial SongRow? SelectedLibraryRow { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsNewPlaylistDialogOpen { get; set; }
+
+    [ObservableProperty]
+    public partial string StandaloneNewPlaylistName { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string? StandaloneNewPlaylistError { get; set; }
+
     public AudioVisualizerFeed VisualizerFeed { get; } = new();
 
     public AppSettings Settings => _settings;
@@ -298,6 +339,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _player.TimePositionChanged += OnTimePositionChanged;
         _player.PlaybackEnded += OnPlaybackEnded;
 
+        EnsurePlaylistsOnDisk();
+
         if (_libraryPaths.Any(Directory.Exists))
             _ = ReloadLibraryAsync(restorePlaybackState: true, preservePlayback: false);
         else if (_libraryPaths.Count == 0)
@@ -329,6 +372,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LibraryPath = _libraryPaths[0];
         PersistLibraryLocations();
         RefreshLibraryLocations();
+        OnPropertyChanged(nameof(EffectivePlaylistsDirectory));
         _ = ReloadLibraryAsync(restorePlaybackState: false, preservePlayback: true);
     }
 
@@ -343,6 +387,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         LibraryPath = _libraryPaths.FirstOrDefault() ?? "";
         PersistLibraryLocations();
         RefreshLibraryLocations();
+        OnPropertyChanged(nameof(EffectivePlaylistsDirectory));
         _ = ReloadLibraryAsync(restorePlaybackState: false, preservePlayback: true);
     }
 
@@ -355,6 +400,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         CancelNormalizationWarmup();
 
         var sourcePaths = _libraryPaths.ToArray();
+        var effectivePlDir = EffectivePlaylistsDirectory;
         List<Song> scannedSongs;
         List<Playlist> scannedPlaylists;
         try
@@ -364,11 +410,26 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
                 var songs = LibraryScanner.Scan(sourcePaths, scan.Token,
                     _settings.CacheLibraryMetadata ? _libraryMetadataCache : null);
                 var playlists = new List<Playlist>();
+                var scannedDirPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var path in sourcePaths.Where(Directory.Exists))
                 {
                     scan.Token.ThrowIfCancellationRequested();
-                    playlists.AddRange(PlaylistScanner.Scan(path, songs));
+                    var fullSource = Path.GetFullPath(path);
+                    scannedDirPaths.Add(fullSource);
+                    playlists.AddRange(PlaylistScanner.Scan(fullSource, songs));
                 }
+
+                if (Directory.Exists(effectivePlDir))
+                {
+                    var fullPlDir = Path.GetFullPath(effectivePlDir);
+                    if (!scannedDirPaths.Any(src => fullPlDir.Equals(src, StringComparison.OrdinalIgnoreCase) ||
+                                                    fullPlDir.StartsWith(src.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        scan.Token.ThrowIfCancellationRequested();
+                        playlists.AddRange(PlaylistScanner.Scan(fullPlDir, songs));
+                    }
+                }
+
                 return (songs, playlists);
             }, scan.Token);
             scan.Token.ThrowIfCancellationRequested();
@@ -404,6 +465,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         _library = scannedSongs;
         _discoveredPlaylists = scannedPlaylists;
+        EnsurePlaylistsOnDisk();
         PopulateSources();
 
         if (_library.Count == 0)
@@ -471,8 +533,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         if (state is null || !PlaybackStateMatchesLibrary(state))
             return false;
 
-        var songsByPath = _library.ToDictionary(song => song.Path, StringComparer.OrdinalIgnoreCase);
-        var savedActiveSongs = ResolveSongs(state.ActiveSongPaths, songsByPath);
+        var savedActiveSongs = PlaylistScanner.ResolveSongs(state.ActiveSongPaths, _library);
         var namedSource = LibrarySources.FirstOrDefault(source =>
             string.Equals(source.Name, state.SourceName, StringComparison.OrdinalIgnoreCase));
 
@@ -491,7 +552,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
         Shuffled = state.Shuffled;
         LoopMode = state.LoopMode;
-        var restoredQueue = ResolveSongs(state.QueuePaths, songsByPath);
+        var restoredQueue = PlaylistScanner.ResolveSongs(state.QueuePaths, _library);
         if (restoredQueue.Count > 0)
         {
             var position = state.QueuePosition;
@@ -615,7 +676,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         }
 
         foreach (var playlist in playlists)
-            LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs));
+            LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs, LibrarySourceKind.Playlist, playlist.FilePath));
     }
 
     /// <summary>The scanned songs that live inside one configured library folder. Songs under a
@@ -655,7 +716,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>What the selected source is, looked up by name so it survives a rescan.</summary>
-    private LibrarySourceKind CurrentSourceKind =>
+    public LibrarySourceKind CurrentSourceKind =>
         LibrarySources.FirstOrDefault(source => string.Equals(
                 source.Name, CurrentSourceName, StringComparison.OrdinalIgnoreCase))?.Kind
         ?? (string.Equals(CurrentSourceName, "All Songs", StringComparison.OrdinalIgnoreCase)
@@ -685,6 +746,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _settings.Playlists.Add(new SavedPlaylist
         {
             Name = name,
+            FilePath = playlistFile,
             SongPaths = paths,
         });
         SettingsService.Save(_settings);
@@ -709,7 +771,549 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         SearchText = "";
         UpdateSortOptionsForCurrentSource();
         UpdateDisplayedSongs();
+        OnPropertyChanged(nameof(IsViewingPlaylist));
+
+        if (_activeSongs.Count > 0)
+        {
+            if (IsPlaying && _queue.Current is { } currentSong)
+            {
+                _queue.PlayFromLibrary(currentSong, SortedActiveSongs, Shuffled);
+                RefreshQueueRows();
+            }
+            else
+            {
+                _queue.Build(SortedActiveSongs, Shuffled);
+                LoadCurrent(autoPlay: false);
+            }
+            StartNormalizationWarmup();
+        }
+
         SavePlaybackState(force: true);
+    }
+
+    public bool IsViewingPlaylist => !IsBrowsingSources && CurrentSourceKind == LibrarySourceKind.Playlist;
+
+    [RelayCommand]
+    public void MoveSongInPlaylistUp(SongRow? row) => MoveSongInPlaylist(row, -1);
+
+    [RelayCommand]
+    public void MoveSongInPlaylistDown(SongRow? row) => MoveSongInPlaylist(row, 1);
+
+    [RelayCommand]
+    public void MoveSongInPlaylistToTop(SongRow? row) => MoveSongInPlaylist(row, -int.MaxValue);
+
+    [RelayCommand]
+    public void MoveSongInPlaylistToBottom(SongRow? row) => MoveSongInPlaylist(row, int.MaxValue);
+
+    public void MoveSongInPlaylist(SongRow? row, int delta)
+    {
+        row ??= SelectedLibraryRow;
+        if (row is null || !IsViewingPlaylist)
+            return;
+
+        var currentIndex = _activeSongs.FindIndex(s => string.Equals(s.Path, row.Song.Path, StringComparison.OrdinalIgnoreCase));
+        if (currentIndex < 0)
+            return;
+
+        int newIndex;
+        if (delta == -int.MaxValue)
+            newIndex = 0;
+        else if (delta == int.MaxValue)
+            newIndex = _activeSongs.Count - 1;
+        else
+            newIndex = Math.Clamp(currentIndex + delta, 0, _activeSongs.Count - 1);
+
+        if (newIndex == currentIndex)
+            return;
+
+        var song = _activeSongs[currentIndex];
+        _activeSongs.RemoveAt(currentIndex);
+        _activeSongs.Insert(newIndex, song);
+
+        // Ensure we are viewing in Playlist order so user immediately sees their reorder
+        if (SelectedSortOption?.Option != LibrarySortOption.Playlist)
+            SelectedSortOption = SortPlaylist;
+
+        var playlistName = CurrentSourceName;
+        var saved = _settings.Playlists.FirstOrDefault(p =>
+            string.Equals(p.Name, playlistName, StringComparison.OrdinalIgnoreCase));
+
+        if (saved is null)
+        {
+            var discovered = _discoveredPlaylists.FirstOrDefault(p =>
+                string.Equals(p.Name, playlistName, StringComparison.OrdinalIgnoreCase));
+            if (discovered is not null)
+            {
+                saved = new SavedPlaylist
+                {
+                    Name = playlistName,
+                    FilePath = discovered.FilePath,
+                    SongPaths = _activeSongs.Select(s => s.Path).ToList(),
+                };
+                _settings.Playlists.Add(saved);
+            }
+        }
+        else
+        {
+            saved.SongPaths = _activeSongs.Select(s => s.Path).ToList();
+        }
+
+        if (saved is not null && !string.IsNullOrEmpty(saved.FilePath))
+        {
+            try
+            {
+                PlaylistWriter.Write(saved.FilePath, _activeSongs);
+            }
+            catch
+            {
+            }
+        }
+
+        SettingsService.Save(_settings);
+
+        if (!Shuffled)
+        {
+            _queue.RestoreOrderKeepingCurrent(SortedActiveSongs);
+            RefreshQueueRows();
+        }
+
+        UpdateDisplayedSongs();
+        SelectedLibraryRow = LibraryRows.FirstOrDefault(r => string.Equals(r.Song.Path, song.Path, StringComparison.OrdinalIgnoreCase));
+        SavePlaybackState(force: true);
+        StatusText = $"Moved '{song.Title}' to #{newIndex + 1}";
+    }
+
+    private Song? _targetSongForPlaylist;
+
+    public List<Playlist> GetAllPlaylists()
+    {
+        var playlists = new List<Playlist>();
+        var playlistNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var playlist in PlaylistScanner.FromSaved(_settings.Playlists, _library)
+                     .Concat(_discoveredPlaylists))
+        {
+            if (playlistNames.Add(playlist.Name))
+                playlists.Add(playlist);
+        }
+        return playlists;
+    }
+
+    [RelayCommand]
+    public void OpenAddToPlaylistForCurrentSong()
+    {
+        if (_queue.Current is { } song)
+            OpenAddToPlaylist(song);
+    }
+
+    [RelayCommand]
+    public void OpenAddToPlaylistForSong(SongRow? row)
+    {
+        if (row is not null)
+            OpenAddToPlaylist(row.Song);
+    }
+
+    public void OpenAddToPlaylist(Song? song)
+    {
+        song ??= _queue.Current;
+        if (song is null)
+            return;
+
+        _targetSongForPlaylist = song;
+        AddToPlaylistSongTitle = song.Title;
+        AddToPlaylistSongArtist = song.Artist;
+        AddToPlaylistSongArt = null;
+
+        _artProvider.GetArtAsync(song.Path, bitmap =>
+        {
+            if (_targetSongForPlaylist?.Path == song.Path)
+                AddToPlaylistSongArt = bitmap;
+        });
+
+        RefreshPlaylistPickerItems();
+
+        IsCreatingNewPlaylistInDialog = false;
+        NewPlaylistNameInDialog = "";
+        NewPlaylistErrorMessage = null;
+        IsAddToPlaylistOpen = true;
+    }
+
+    private void RefreshPlaylistPickerItems()
+    {
+        PlaylistPickerItems.Clear();
+        var playlists = GetAllPlaylists();
+        foreach (var p in playlists)
+        {
+            var alreadyIn = _targetSongForPlaylist is not null &&
+                p.Songs.Any(s => string.Equals(s.Path, _targetSongForPlaylist.Path, StringComparison.OrdinalIgnoreCase));
+            PlaylistPickerItems.Add(new PlaylistPickerItem(p.Name, p.Songs.Count, alreadyIn, p.FilePath));
+        }
+        HasNoPlaylistsInPicker = PlaylistPickerItems.Count == 0;
+    }
+
+    [RelayCommand]
+    public void CloseAddToPlaylist() => IsAddToPlaylistOpen = false;
+
+    [RelayCommand]
+    public void AddSongToExistingPlaylist(PlaylistPickerItem? item)
+    {
+        if (_targetSongForPlaylist is null || item is null)
+            return;
+
+        if (item.IsAlreadyAdded)
+        {
+            StatusText = $"'{_targetSongForPlaylist.Title}' is already in {item.Name}";
+            return;
+        }
+
+        AddSongToPlaylistCore(item.Name, _targetSongForPlaylist, item.FilePath);
+        item.IsAlreadyAdded = true;
+        item.IsJustAdded = true;
+        item.SongCount++;
+        StatusText = $"Added '{_targetSongForPlaylist.Title}' to {item.Name}";
+    }
+
+    [RelayCommand]
+    public void StartCreateNewPlaylistInDialog()
+    {
+        IsCreatingNewPlaylistInDialog = true;
+        NewPlaylistNameInDialog = "";
+        NewPlaylistErrorMessage = null;
+    }
+
+    [RelayCommand]
+    public void CancelCreateNewPlaylistInDialog()
+    {
+        IsCreatingNewPlaylistInDialog = false;
+        NewPlaylistNameInDialog = "";
+        NewPlaylistErrorMessage = null;
+    }
+
+    [RelayCommand]
+    public void ConfirmCreateNewPlaylistInDialog()
+    {
+        if (_targetSongForPlaylist is null)
+            return;
+
+        var name = NewPlaylistNameInDialog?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            NewPlaylistErrorMessage = "Please enter a playlist name.";
+            return;
+        }
+
+        if (GetAllPlaylists().Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            NewPlaylistErrorMessage = "A playlist with this name already exists.";
+            return;
+        }
+
+        var m3u8Path = DetermineM3u8Path(name);
+        AddSongToPlaylistCore(name, _targetSongForPlaylist, m3u8Path);
+
+        StatusText = $"Created playlist '{name}' with '{_targetSongForPlaylist.Title}'";
+        IsAddToPlaylistOpen = false;
+    }
+
+    [RelayCommand]
+    public void OpenNewPlaylistDialog()
+    {
+        StandaloneNewPlaylistName = "";
+        StandaloneNewPlaylistError = null;
+        IsNewPlaylistDialogOpen = true;
+    }
+
+    [RelayCommand]
+    public void CloseNewPlaylistDialog() => IsNewPlaylistDialogOpen = false;
+
+    [RelayCommand]
+    public void ConfirmStandaloneNewPlaylist()
+    {
+        var name = StandaloneNewPlaylistName?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            StandaloneNewPlaylistError = "Please enter a playlist name.";
+            return;
+        }
+
+        if (GetAllPlaylists().Any(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            StandaloneNewPlaylistError = "A playlist with this name already exists.";
+            return;
+        }
+
+        var m3u8Path = DetermineM3u8Path(name);
+        if (!string.IsNullOrEmpty(m3u8Path))
+        {
+            try
+            {
+                PlaylistWriter.Write(m3u8Path, []);
+            }
+            catch
+            {
+                m3u8Path = null;
+            }
+        }
+
+        _settings.Playlists.Add(new SavedPlaylist
+        {
+            Name = name,
+            FilePath = m3u8Path,
+            SongPaths = [],
+        });
+        SettingsService.Save(_settings);
+        PopulateSources();
+
+        IsNewPlaylistDialogOpen = false;
+        StatusText = $"Created playlist '{name}'";
+
+        var created = LibrarySources.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+        if (created is not null)
+            SelectSource(created);
+    }
+
+    public string EffectivePlaylistsDirectory
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(_settings.PlaylistsDirectory))
+                return _settings.PlaylistsDirectory;
+
+            var libraryRoot = _libraryPaths.FirstOrDefault(Directory.Exists);
+            if (!string.IsNullOrEmpty(libraryRoot))
+                return Path.Combine(libraryRoot, "Playlists");
+
+            return Path.Combine(SettingsService.ConfigDirectory, "playlists");
+        }
+    }
+
+    public bool HasCustomPlaylistsDirectory => !string.IsNullOrWhiteSpace(_settings.PlaylistsDirectory);
+
+    public void SetPlaylistsDirectory(string? folderPath)
+    {
+        if (string.IsNullOrWhiteSpace(folderPath))
+            _settings.PlaylistsDirectory = null;
+        else
+            _settings.PlaylistsDirectory = Path.GetFullPath(folderPath);
+
+        SettingsService.Save(_settings);
+        OnPropertyChanged(nameof(EffectivePlaylistsDirectory));
+        OnPropertyChanged(nameof(HasCustomPlaylistsDirectory));
+
+        EnsurePlaylistsOnDisk();
+        PopulateSources();
+    }
+
+    [RelayCommand]
+    public void ResetPlaylistsDirectory() => SetPlaylistsDirectory(null);
+
+    public void EnsurePlaylistsOnDisk()
+    {
+        try
+        {
+            var dir = EffectivePlaylistsDirectory;
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            bool changed = false;
+            foreach (var saved in _settings.Playlists)
+            {
+                if (string.IsNullOrWhiteSpace(saved.FilePath) || !File.Exists(saved.FilePath))
+                {
+                    saved.FilePath = Path.Combine(dir, $"{SanitizeFileName(saved.Name)}.m3u8");
+                    changed = true;
+                }
+
+                if (!File.Exists(saved.FilePath))
+                {
+                    var resolvedSongs = PlaylistScanner.ResolveSongs(saved.SongPaths, _library);
+                    PlaylistWriter.Write(saved.FilePath, resolvedSongs);
+                }
+            }
+
+            if (changed)
+                SettingsService.Save(_settings);
+        }
+        catch
+        {
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = name.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
+        var clean = new string(chars).Trim();
+        return string.IsNullOrWhiteSpace(clean) ? "Playlist" : clean;
+    }
+
+    private string? DetermineM3u8Path(string playlistName)
+    {
+        try
+        {
+            var dir = EffectivePlaylistsDirectory;
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            var safeName = SanitizeFileName(playlistName);
+            return Path.Combine(dir, $"{safeName}.m3u8");
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public void AddSongToPlaylistCore(string playlistName, Song song, string? filePath = null)
+    {
+        var saved = _settings.Playlists.FirstOrDefault(p =>
+            string.Equals(p.Name, playlistName, StringComparison.OrdinalIgnoreCase));
+
+        if (saved is null)
+        {
+            var discovered = _discoveredPlaylists.FirstOrDefault(p =>
+                string.Equals(p.Name, playlistName, StringComparison.OrdinalIgnoreCase));
+
+            saved = new SavedPlaylist
+            {
+                Name = playlistName,
+                FilePath = filePath ?? discovered?.FilePath,
+                SongPaths = discovered?.Songs.Select(s => s.Path).ToList() ?? [],
+            };
+            _settings.Playlists.Add(saved);
+        }
+
+        if (!saved.SongPaths.Any(p => string.Equals(p, song.Path, StringComparison.OrdinalIgnoreCase)))
+            saved.SongPaths.Add(song.Path);
+
+        if (string.IsNullOrEmpty(saved.FilePath) && !string.IsNullOrEmpty(filePath))
+            saved.FilePath = filePath;
+
+        if (!string.IsNullOrEmpty(saved.FilePath))
+        {
+            try
+            {
+                var resolvedSongs = PlaylistScanner.ResolveSongs(saved.SongPaths, _library);
+                PlaylistWriter.Write(saved.FilePath, resolvedSongs);
+            }
+            catch
+            {
+            }
+        }
+
+        SettingsService.Save(_settings);
+
+        if (string.Equals(CurrentSourceName, playlistName, StringComparison.OrdinalIgnoreCase))
+        {
+            var resolvedSongs = PlaylistScanner.ResolveSongs(saved.SongPaths, _library);
+            _activeSongs = [.. resolvedSongs];
+            UpdateDisplayedSongs();
+        }
+
+        PopulateSources();
+    }
+
+    [RelayCommand]
+    public void RemoveSongFromCurrentPlaylist(SongRow? row)
+    {
+        if (row is null || CurrentSourceKind != LibrarySourceKind.Playlist)
+            return;
+
+        var playlistName = CurrentSourceName;
+        var saved = _settings.Playlists.FirstOrDefault(p =>
+            string.Equals(p.Name, playlistName, StringComparison.OrdinalIgnoreCase));
+
+        if (saved is null)
+        {
+            var discovered = _discoveredPlaylists.FirstOrDefault(p =>
+                string.Equals(p.Name, playlistName, StringComparison.OrdinalIgnoreCase));
+            if (discovered is not null)
+            {
+                saved = new SavedPlaylist
+                {
+                    Name = playlistName,
+                    FilePath = discovered.FilePath,
+                    SongPaths = discovered.Songs.Select(s => s.Path).ToList(),
+                };
+                _settings.Playlists.Add(saved);
+            }
+        }
+
+        if (saved is not null)
+        {
+            saved.SongPaths.RemoveAll(p => string.Equals(p, row.Song.Path, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(saved.FilePath))
+            {
+                try
+                {
+                    var resolvedSongs = PlaylistScanner.ResolveSongs(saved.SongPaths, _library);
+                    PlaylistWriter.Write(saved.FilePath, resolvedSongs);
+                }
+                catch
+                {
+                }
+            }
+            SettingsService.Save(_settings);
+        }
+
+        _activeSongs.RemoveAll(s => string.Equals(s.Path, row.Song.Path, StringComparison.OrdinalIgnoreCase));
+        UpdateDisplayedSongs();
+        PopulateSources();
+        StatusText = $"Removed '{row.Title}' from {playlistName}";
+    }
+
+    [RelayCommand]
+    public void DeletePlaylist(LibrarySourceRow? row)
+    {
+        if (row is null || !row.IsPlaylist)
+            return;
+
+        var name = row.Name;
+        _settings.Playlists.RemoveAll(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+        _discoveredPlaylists.RemoveAll(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        if (!string.IsNullOrEmpty(row.FilePath) && File.Exists(row.FilePath))
+        {
+            try
+            {
+                File.Delete(row.FilePath);
+            }
+            catch
+            {
+            }
+        }
+
+        SettingsService.Save(_settings);
+
+        if (string.Equals(CurrentSourceName, name, StringComparison.OrdinalIgnoreCase))
+        {
+            CurrentSourceName = "All Songs";
+            _activeSongs = [.. _library];
+            IsBrowsingSources = true;
+            SearchText = "";
+            UpdateSortOptionsForCurrentSource();
+            UpdateDisplayedSongs();
+        }
+
+        PopulateSources();
+        StatusText = $"Deleted playlist '{name}'";
+    }
+
+    public string? ExportPlaylist(string playlistName, string targetFilePath)
+    {
+        var allPlaylists = GetAllPlaylists();
+        var playlist = allPlaylists.FirstOrDefault(p => string.Equals(p.Name, playlistName, StringComparison.OrdinalIgnoreCase));
+        if (playlist is null)
+            return $"Playlist '{playlistName}' not found.";
+
+        try
+        {
+            PlaylistWriter.Write(targetFilePath, playlist.Songs);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"Export failed: {ex.Message}";
+        }
     }
 
     private void UpdateSortOptionsForCurrentSource(string? savedSortOptionName = null)
@@ -779,6 +1383,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private void BackToSources()
     {
         IsBrowsingSources = true;
+        OnPropertyChanged(nameof(IsViewingPlaylist));
         SavePlaybackState(force: true);
     }
 
@@ -923,8 +1528,16 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Next()
     {
-        _queue.AdvanceOrRebuild(SortedActiveSongs, Shuffled);
-        LoadCurrent();
+        if (_queue.Current is not null && !_activeSongs.Any(s => s.Path == _queue.Current.Path))
+        {
+            _queue.Build(SortedActiveSongs, Shuffled);
+            LoadCurrent();
+        }
+        else
+        {
+            _queue.AdvanceOrRebuild(SortedActiveSongs, Shuffled);
+            LoadCurrent();
+        }
     }
 
     [RelayCommand]
@@ -954,7 +1567,18 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             Reshuffle();
         else
         {
-            _queue.RestoreOrderKeepingCurrent(SortedActiveSongs);
+            if (_queue.Current is null || !_activeSongs.Any(s => s.Path == _queue.Current.Path))
+            {
+                _queue.Build(SortedActiveSongs, shuffled: false);
+                if (IsPlaying)
+                    LoadCurrent(autoPlay: true);
+                else
+                    LoadCurrent(autoPlay: false);
+            }
+            else
+            {
+                _queue.RestoreOrderKeepingCurrent(SortedActiveSongs);
+            }
             RefreshQueueRows();
             StartNormalizationWarmup();
             SavePlaybackState(force: true);
@@ -1252,7 +1876,18 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     [RelayCommand]
     private void Reshuffle()
     {
-        _queue.ReshuffleKeepingCurrent(SortedActiveSongs);
+        if (_queue.Current is null || !_activeSongs.Any(s => s.Path == _queue.Current.Path))
+        {
+            _queue.Build(SortedActiveSongs, shuffled: true);
+            if (IsPlaying)
+                LoadCurrent(autoPlay: true);
+            else
+                LoadCurrent(autoPlay: false);
+        }
+        else
+        {
+            _queue.ReshuffleKeepingCurrent(SortedActiveSongs);
+        }
         RefreshQueueRows();
         StartNormalizationWarmup();
         SavePlaybackState(force: true);
@@ -1401,6 +2036,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _isAdvancing = false;
         CurrentTitle = song.Title;
         CurrentArtist = song.Artist;
+        OnPropertyChanged(nameof(CurrentSong));
+        OnPropertyChanged(nameof(HasCurrentSong));
         DurationSeconds = Math.Max(1, song.Duration.TotalSeconds);
         TotalText = FormatTime(song.Duration.TotalSeconds);
         _resumePositionSeconds = Math.Clamp(resumePositionSeconds, 0, DurationSeconds);

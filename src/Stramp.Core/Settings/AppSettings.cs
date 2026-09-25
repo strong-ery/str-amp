@@ -49,6 +49,9 @@ public sealed class AppSettings
     /// <summary>Playlists imported from .m3u/.m3u8; persisted so the source file is not needed again.</summary>
     public List<SavedPlaylist> Playlists { get; set; } = [];
 
+    /// <summary>Folder where .m3u8 playlists are saved and synced. If null/empty, uses music folder or app data.</summary>
+    public string? PlaylistsDirectory { get; set; }
+
     public string PrimaryAccentColor { get; set; } = "#7C5CFF";
     public string SecondaryAccentColor { get; set; } = "#FF5C93";
     public string BackgroundColor { get; set; } = "#0E0E12";

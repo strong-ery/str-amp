@@ -45,6 +45,18 @@ public static class Icons
     public static readonly Geometry Back = Geometry.Parse("M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z");
     public static readonly Geometry Playlist = Geometry.Parse(
         "M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18a3 3 0 101 2.82V8h3V6h-4z");
+    public static readonly Geometry PlaylistAdd = Geometry.Parse(
+        "M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z");
+    public static readonly Geometry Check = Geometry.Parse(
+        "M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z");
+    public static readonly Geometry ChevronUp = Geometry.Parse(
+        "M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z");
+    public static readonly Geometry ChevronDown = Geometry.Parse(
+        "M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6z");
+    public static readonly Geometry ChevronDoubleUp = Geometry.Parse(
+        "M7.41 18.41L12 13.83l4.59 4.58L18 17l-6-6-6 6 1.41 1.41zM7.41 11.41L12 6.83l4.59 4.58L18 10l-6-6-6 6 1.41 1.41z");
+    public static readonly Geometry ChevronDoubleDown = Geometry.Parse(
+        "M7.41 5.59L12 10.17l4.59-4.58L18 7l-6 6-6-6 1.41-1.41zM7.41 12.59L12 17.17l4.59-4.58L18 14l-6 6-6-6 1.41-1.41z");
     public static readonly Geometry LibraryMusic = Geometry.Parse(
         "M4 6H2v14a2 2 0 002 2h14v-2H4V6zm16-4H8a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2zm-6 12a2.5 2.5 0 110-5 2.5 2.5 0 010 5zm2-6V5h3V3h-4v6.5a2.5 2.5 0 101 2V8z");
     public static readonly Geometry Settings = Geometry.Parse(

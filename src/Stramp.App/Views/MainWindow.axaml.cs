@@ -1,4 +1,6 @@
 using System.Collections.Specialized;
+using System.Diagnostics;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -6,6 +8,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Stramp.App.Services;
 using Stramp.App.ViewModels;
 using Stramp.Core.Dsp;
@@ -821,10 +824,68 @@ public partial class MainWindow : Window
             ToggleFullScreen();
             e.Handled = true;
         }
-        else if (e.Key == Key.Escape && WindowState == WindowState.FullScreen)
+        else if (e.Key == Key.Escape)
         {
-            ToggleFullScreen();
+            if (ViewModel?.IsAddToPlaylistOpen == true)
+            {
+                ViewModel.CloseAddToPlaylistCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (ViewModel?.IsNewPlaylistDialogOpen == true)
+            {
+                ViewModel.CloseNewPlaylistDialogCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (ViewModel?.IsSettingsOpen == true)
+            {
+                ViewModel.CloseSettingsCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if (WindowState == WindowState.FullScreen)
+            {
+                ToggleFullScreen();
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Key.P && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            if (ViewModel?.HasCurrentSong == true)
+            {
+                ViewModel.OpenAddToPlaylistForCurrentSongCommand.Execute(null);
+                e.Handled = true;
+            }
+        }
+        else if (e.Key == Key.N && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            ViewModel?.OpenNewPlaylistDialogCommand.Execute(null);
             e.Handled = true;
+        }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+        {
+            if (e.Key == Key.Up && ViewModel?.IsViewingPlaylist == true)
+            {
+                if (ViewModel.SelectedLibraryRow is not null)
+                {
+                    ViewModel.MoveSongInPlaylistUp(ViewModel.SelectedLibraryRow);
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.Down && ViewModel?.IsViewingPlaylist == true)
+            {
+                if (ViewModel.SelectedLibraryRow is not null)
+                {
+                    ViewModel.MoveSongInPlaylistDown(ViewModel.SelectedLibraryRow);
+                    e.Handled = true;
+                }
+            }
+        }
+        else if (e.Key == Key.Delete && ViewModel?.IsViewingPlaylist == true)
+        {
+            if (ViewModel.SelectedLibraryRow is not null)
+            {
+                ViewModel.RemoveSongFromCurrentPlaylist(ViewModel.SelectedLibraryRow);
+                e.Handled = true;
+            }
         }
     }
 
@@ -938,6 +999,97 @@ public partial class MainWindow : Window
             ViewModel?.CloseSettingsCommand.Execute(null);
     }
 
+    private void OnAddToPlaylistScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, AddToPlaylistScrim))
+            ViewModel?.CloseAddToPlaylistCommand.Execute(null);
+    }
+
+    private void OnNewPlaylistScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, NewPlaylistScrim))
+            ViewModel?.CloseNewPlaylistDialogCommand.Execute(null);
+    }
+
+    private void OnNewPlaylistTextBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            ViewModel?.ConfirmCreateNewPlaylistInDialogCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            ViewModel?.CancelCreateNewPlaylistInDialogCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void OnStandaloneNewPlaylistKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            ViewModel?.ConfirmStandaloneNewPlaylistCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            ViewModel?.CloseNewPlaylistDialogCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void OnPlaylistPickerItemPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if ((e.Source as StyledElement)?.DataContext is PlaylistPickerItem item)
+        {
+            ViewModel?.AddSongToExistingPlaylistCommand.Execute(item);
+        }
+    }
+
+    private async void OnExportPlaylistSourceRowClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if ((sender as MenuItem)?.DataContext is LibrarySourceRow row && row.IsPlaylist)
+            await ExportPlaylistInteractive(row.Name);
+    }
+
+    private async void OnExportCurrentPlaylistClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (ViewModel is { CurrentSourceKind: LibrarySourceKind.Playlist } vm)
+            await ExportPlaylistInteractive(vm.CurrentSourceName);
+    }
+
+    private async Task ExportPlaylistInteractive(string playlistName)
+    {
+        if (ViewModel is null)
+            return;
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = $"Export '{playlistName}' as M3U8",
+            SuggestedFileName = $"{playlistName}.m3u8",
+            DefaultExtension = "m3u8",
+            FileTypeChoices =
+            [
+                new FilePickerFileType("M3U8 Playlist")
+                {
+                    Patterns = ["*.m3u8", "*.m3u"],
+                    MimeTypes = ["audio/x-mpegurl", "application/vnd.apple.mpegurl"],
+                },
+            ],
+        });
+
+        var path = file?.TryGetLocalPath();
+        if (path is null)
+            return;
+
+        var error = ViewModel.ExportPlaylist(playlistName, path);
+        if (error is not null)
+            ViewModel.StatusText = error;
+        else
+            ViewModel.StatusText = $"Exported playlist to {Path.GetFileName(path)}";
+    }
+
     // ── Library / queue ──────────────────────────────────────────────────────
 
     private void OnSongContainerPrepared(object? sender, ContainerPreparedEventArgs e)
@@ -963,6 +1115,42 @@ public partial class MainWindow : Window
         var folder = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
         if (folder is not null)
             ViewModel?.AddLibraryLocation(folder);
+    }
+
+    private async void OnChangePlaylistsFolderClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Choose folder to store .m3u8 playlists",
+            AllowMultiple = false,
+        });
+
+        var folder = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
+        if (folder is not null)
+            ViewModel?.SetPlaylistsDirectory(folder);
+    }
+
+    private void OnOpenPlaylistsFolderInExplorerClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        var path = ViewModel?.EffectivePlaylistsDirectory;
+        if (string.IsNullOrEmpty(path))
+            return;
+
+        try
+        {
+            if (!Directory.Exists(path))
+                Directory.CreateDirectory(path);
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                UseShellExecute = true,
+                Verb = "open",
+            });
+        }
+        catch
+        {
+        }
     }
 
     private async void OnImportPlaylistClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
@@ -1004,6 +1192,9 @@ public partial class MainWindow : Window
 
     private void OnSourceTapped(object? sender, TappedEventArgs e)
     {
+        if ((e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null)
+            return;
+
         if ((e.Source as StyledElement)?.DataContext is LibrarySourceRow source)
             ViewModel?.SelectSourceCommand.Execute(source);
     }

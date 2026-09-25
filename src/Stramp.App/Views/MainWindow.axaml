@@ -1,4 +1,4 @@
-﻿<Window xmlns="https://github.com/avaloniaui"
+<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Stramp.App.ViewModels"
         xmlns:conv="using:Stramp.App.Converters"
@@ -69,6 +69,12 @@
                                         <PathIcon Data="{x:Static app:Icons.FolderOpen}" Width="15" Height="15" />
                                     </MenuItem.Icon>
                                 </MenuItem>
+                                <MenuItem Header="New Playlist…" Classes="stramp-menu-item"
+                                          Command="{Binding OpenNewPlaylistDialogCommand}">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.Add}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <MenuItem Header="Import Playlist…" Classes="stramp-menu-item"
                                           Click="OnImportPlaylistClicked">
                                     <MenuItem.Icon>
@@ -120,7 +126,7 @@
                 <!-- Library (collapsible): source menu, then the song list for the chosen source -->
                 <Border x:Name="LibraryBorder" Grid.Column="0" ClipToBounds="True" HorizontalAlignment="Stretch">
                     <DockPanel HorizontalAlignment="Stretch">
-                        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,6">
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,6">
                             <Button Grid.Column="0" Classes="transport" Width="24" Height="24" Padding="3"
                                     Margin="0,0,6,0" IsVisible="{Binding !IsBrowsingSources}"
                                     Command="{Binding BackToSourcesCommand}" ToolTip.Tip="Back to playlists">
@@ -128,7 +134,12 @@
                             </Button>
                             <TextBlock Grid.Column="1" Text="{Binding LibraryHeaderText}" Classes="section-header"
                                        VerticalAlignment="Center" Margin="0" TextTrimming="CharacterEllipsis" />
-                            <Button Grid.Column="2" Classes="transport" Width="24" Height="24" Padding="3"
+                            <Button Grid.Column="2" Classes="transport" Width="24" Height="24" Padding="3" Margin="0,0,4,0"
+                                    IsVisible="{Binding IsBrowsingSources}"
+                                    Command="{Binding OpenNewPlaylistDialogCommand}" ToolTip.Tip="Create new playlist">
+                                <PathIcon Data="{x:Static app:Icons.Add}" Width="13" Height="13" />
+                            </Button>
+                            <Button Grid.Column="3" Classes="transport" Width="24" Height="24" Padding="3"
                                     Command="{Binding ToggleLibraryOpenCommand}" ToolTip.Tip="Collapse library">
                                 <PathIcon Data="{x:Static app:Icons.PanelLeft}" Width="14" Height="14" />
                             </Button>
@@ -165,6 +176,23 @@
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:LibrarySourceRow">
                                         <Border Classes="queue-row">
+                                            <Border.ContextMenu>
+                                                <ContextMenu IsVisible="{Binding IsPlaylist}">
+                                                    <MenuItem Header="Export to .m3u8…" Click="OnExportPlaylistSourceRowClicked">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.Playlist}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <Separator />
+                                                    <MenuItem Header="Delete playlist"
+                                                              Command="{Binding #Root.DataContext.DeletePlaylistCommand}"
+                                                              CommandParameter="{Binding}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
                                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                                                 <PathIcon Grid.Column="0" Width="16" Height="16" Opacity="0.7"
                                                           VerticalAlignment="Center"
@@ -183,12 +211,68 @@
                             <!-- Songs of the selected source -->
                             <ListBox x:Name="LibraryList" Grid.Row="0" Classes="flat-list library-scroll"
                                      ItemsSource="{Binding LibraryRows}"
+                                     SelectedItem="{Binding SelectedLibraryRow, Mode=TwoWay}"
                                      ContainerPrepared="OnSongContainerPrepared"
                                      ContainerClearing="OnSongContainerClearing"
                                      IsVisible="{Binding !IsBrowsingSources}" Tapped="OnLibraryTapped">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:SongRow">
                                         <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}">
+                                            <Border.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="Move up"
+                                                              InputGesture="Alt+Up"
+                                                              Command="{Binding #Root.DataContext.MoveSongInPlaylistUpCommand}"
+                                                              CommandParameter="{Binding}"
+                                                              IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.ChevronUp}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Move down"
+                                                              InputGesture="Alt+Down"
+                                                              Command="{Binding #Root.DataContext.MoveSongInPlaylistDownCommand}"
+                                                              CommandParameter="{Binding}"
+                                                              IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.ChevronDown}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Move to top"
+                                                              Command="{Binding #Root.DataContext.MoveSongInPlaylistToTopCommand}"
+                                                              CommandParameter="{Binding}"
+                                                              IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.ChevronDoubleUp}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Move to bottom"
+                                                              Command="{Binding #Root.DataContext.MoveSongInPlaylistToBottomCommand}"
+                                                              CommandParameter="{Binding}"
+                                                              IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.ChevronDoubleDown}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <Separator IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}" />
+                                                    <MenuItem Header="Add to playlist…"
+                                                              Command="{Binding #Root.DataContext.OpenAddToPlaylistForSongCommand}"
+                                                              CommandParameter="{Binding}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.PlaylistAdd}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <MenuItem Header="Remove from this playlist"
+                                                              InputGesture="Delete"
+                                                              Command="{Binding #Root.DataContext.RemoveSongFromCurrentPlaylistCommand}"
+                                                              CommandParameter="{Binding}"
+                                                              IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                </ContextMenu>
+                                            </Border.ContextMenu>
                                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
                                                 <Border Grid.Column="0" Classes="art-frame" Width="40" Height="40">
                                                     <Grid>
@@ -389,13 +473,20 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto,Auto,*" VerticalAlignment="Center">
-                            <Button Grid.Column="0" Classes="transport" Classes.active="{Binding IsLyricsOpen}"
+                        <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto,Auto,Auto,*" VerticalAlignment="Center">
+                            <Button Grid.Column="0" Classes="transport"
+                                    Width="28" Height="28" Padding="5" Margin="0,0,2,0"
+                                    Command="{Binding OpenAddToPlaylistForCurrentSongCommand}"
+                                    IsEnabled="{Binding HasCurrentSong}"
+                                    ToolTip.Tip="Add to playlist (Ctrl+P)">
+                                <PathIcon Data="{x:Static app:Icons.PlaylistAdd}" Width="15" Height="15" Opacity="0.7" />
+                            </Button>
+                            <Button Grid.Column="1" Classes="transport" Classes.active="{Binding IsLyricsOpen}"
                                     Width="28" Height="28" Padding="5" Margin="0,0,2,0"
                                     Command="{Binding ToggleLyricsOpenCommand}" ToolTip.Tip="Lyrics">
                                 <PathIcon Data="{x:Static app:Icons.Lyrics}" Width="15" Height="15" Opacity="0.7" />
                             </Button>
-                            <Button Grid.Column="1" Classes="transport" Width="28" Height="28" Padding="5"
+                            <Button Grid.Column="2" Classes="transport" Width="28" Height="28" Padding="5"
                                     Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
                                     ToolTip.Tip="Playback device">
                                 <Button.Flyout>
@@ -421,12 +512,12 @@
                                 </Button.Flyout>
                                 <PathIcon Data="{x:Static app:Icons.OutputDevice}" Width="15" Height="15" Opacity="0.7" />
                             </Button>
-                            <Button Grid.Column="2" Classes="transport" Classes.active="{Binding IsMuted}"
+                            <Button Grid.Column="3" Classes="transport" Classes.active="{Binding IsMuted}"
                                     Width="28" Height="28" Padding="5" Margin="0,0,6,0"
                                     Command="{Binding ToggleMuteCommand}" ToolTip.Tip="{Binding VolumeToolTip}">
                                 <PathIcon Data="{Binding VolumeIcon}" Width="16" Height="16" Opacity="0.7" />
                             </Button>
-                            <Slider x:Name="VolumeSlider" Grid.Column="3" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                            <Slider x:Name="VolumeSlider" Grid.Column="4" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </Grid>
@@ -463,13 +554,20 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid ColumnDefinitions="Auto,Auto,Auto,*" Width="254" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Button Grid.Column="0" Classes="transport" Classes.active="{Binding IsLyricsOpen}"
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" Width="284" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Button Grid.Column="0" Classes="transport"
+                                    Width="28" Height="28" Padding="5" Margin="0,0,2,0"
+                                    Command="{Binding OpenAddToPlaylistForCurrentSongCommand}"
+                                    IsEnabled="{Binding HasCurrentSong}"
+                                    ToolTip.Tip="Add to playlist (Ctrl+P)">
+                                <PathIcon Data="{x:Static app:Icons.PlaylistAdd}" Width="15" Height="15" Opacity="0.7" />
+                            </Button>
+                            <Button Grid.Column="1" Classes="transport" Classes.active="{Binding IsLyricsOpen}"
                                     Width="28" Height="28" Padding="5" Margin="0,0,2,0"
                                     Command="{Binding ToggleLyricsOpenCommand}" ToolTip.Tip="Lyrics">
                                 <PathIcon Data="{x:Static app:Icons.Lyrics}" Width="15" Height="15" Opacity="0.7" />
                             </Button>
-                            <Button Grid.Column="1" Classes="transport" Width="28" Height="28" Padding="5"
+                            <Button Grid.Column="2" Classes="transport" Width="28" Height="28" Padding="5"
                                     Margin="0,0,2,0" Command="{Binding RefreshOutputDevicesCommand}"
                                     ToolTip.Tip="Playback device">
                                 <Button.Flyout>
@@ -495,12 +593,12 @@
                                 </Button.Flyout>
                                 <PathIcon Data="{x:Static app:Icons.OutputDevice}" Width="15" Height="15" Opacity="0.7" />
                             </Button>
-                            <Button Grid.Column="2" Classes="transport" Classes.active="{Binding IsMuted}"
+                            <Button Grid.Column="3" Classes="transport" Classes.active="{Binding IsMuted}"
                                     Width="28" Height="28" Padding="5" Margin="0,0,6,0"
                                     Command="{Binding ToggleMuteCommand}" ToolTip.Tip="{Binding VolumeToolTip}">
                                 <PathIcon Data="{Binding VolumeIcon}" Width="16" Height="16" Opacity="0.7" />
                             </Button>
-                            <Slider x:Name="CompactVolumeSlider" Grid.Column="3" Minimum="0" Maximum="100" Value="{Binding Volume}"
+                            <Slider x:Name="CompactVolumeSlider" Grid.Column="4" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </StackPanel>
@@ -547,6 +645,13 @@
                                     <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}" ToolTip.Tip="Right-click to remove from queue">
                                         <Border.ContextMenu>
                                             <ContextMenu>
+                                                <MenuItem Header="Add to playlist…"
+                                                          Command="{Binding #Root.DataContext.OpenAddToPlaylistForSongCommand}"
+                                                          CommandParameter="{Binding}">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="{x:Static app:Icons.PlaylistAdd}" Width="14" Height="14" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
                                                 <MenuItem Header="Remove from queue"
                                                           Command="{Binding #Root.DataContext.RemoveFromQueueCommand}"
                                                           CommandParameter="{Binding}">
@@ -680,6 +785,46 @@
                                     <TextBlock Classes="field-hint" TextWrapping="Wrap"
                                                Text="Stores titles, artists, albums, and durations in Local AppData. Unchanged tracks no longer need to be opened again during a library scan." />
                                 </StackPanel>
+                            </StackPanel>
+
+                            <TextBlock Text="PLAYLIST STORAGE" Classes="section-header" Margin="0,8,0,0" />
+
+                            <StackPanel Spacing="8">
+                                <Border Classes="library-locations">
+                                    <Border Classes="library-location-row">
+                                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="10">
+                                            <Border Grid.Column="0" Classes="library-location-icon">
+                                                <PathIcon Data="{x:Static app:Icons.PlaylistAdd}"
+                                                          Width="16" Height="16" Opacity="0.8" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                                <TextBlock Text="Playlists Folder (.m3u8)" FontSize="12" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding EffectivePlaylistsDirectory}" Classes="field-hint"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           ToolTip.Tip="{Binding EffectivePlaylistsDirectory}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Classes="transport" Padding="8,4" Height="28"
+                                                    Click="OnChangePlaylistsFolderClicked"
+                                                    ToolTip.Tip="Choose a custom folder to store all your .m3u8 playlists">
+                                                <TextBlock Text="Change…" FontSize="11" />
+                                            </Button>
+                                            <Button Grid.Column="3" Classes="transport" Padding="8,4" Height="28"
+                                                    Click="OnOpenPlaylistsFolderInExplorerClicked"
+                                                    ToolTip.Tip="Open this folder in Windows File Explorer">
+                                                <TextBlock Text="Reveal" FontSize="11" />
+                                            </Button>
+                                            <Button Grid.Column="4" Classes="transport" Width="28" Height="28" Padding="6"
+                                                    Command="{Binding ResetPlaylistsDirectoryCommand}"
+                                                    IsVisible="{Binding HasCustomPlaylistsDirectory}"
+                                                    ToolTip.Tip="Reset to default playlists folder">
+                                                <PathIcon Data="{x:Static app:Icons.Delete}" Width="13" Height="13" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Created playlists are automatically written as standard .m3u8 files in this folder so you always have them on disk." />
                             </StackPanel>
 
                             <TextBlock Text="VISUALS" Classes="section-header" Margin="0,8,0,0" />
@@ -913,6 +1058,163 @@
                             </StackPanel>
                         </StackPanel>
                     </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- In-app Add to Playlist dialog -->
+        <Border x:Name="AddToPlaylistScrim" Classes="dialog-scrim" IsVisible="{Binding IsAddToPlaylistOpen}"
+                PointerPressed="OnAddToPlaylistScrimPressed">
+            <Border Classes="dialog-card" Width="440" MaxWidth="440" MaxHeight="560" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel Margin="22">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Add to Playlist" Classes="dialog-title" />
+                            <TextBlock Text="Choose a playlist or create a new one" FontSize="11" Opacity="0.55" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding CloseAddToPlaylistCommand}" ToolTip.Tip="Close">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Song being added preview -->
+                    <Border DockPanel.Dock="Top" Classes="playlist-song-preview" Margin="0,0,0,12">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Classes="art-frame" Width="38" Height="38">
+                                <Grid>
+                                    <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="16" Height="16" Opacity="0.35"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              IsVisible="{Binding AddToPlaylistSongArt, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                    <Image Source="{Binding AddToPlaylistSongArt}" Stretch="UniformToFill"
+                                           RenderOptions.BitmapInterpolationMode="HighQuality"
+                                           IsVisible="{Binding AddToPlaylistSongArt, Converter={StaticResource NullToBool}}" />
+                                </Grid>
+                            </Border>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="{Binding AddToPlaylistSongTitle}" FontWeight="SemiBold" FontSize="12"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding AddToPlaylistSongArtist}" FontSize="11" Opacity="0.6"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- "Create a new playlist" button at top -->
+                    <Button DockPanel.Dock="Top" Classes="create-playlist-btn"
+                            IsVisible="{Binding !IsCreatingNewPlaylistInDialog}"
+                            Command="{Binding StartCreateNewPlaylistInDialogCommand}"
+                            Margin="0,0,0,12" ToolTip.Tip="Create a new playlist with this song">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Border Grid.Column="0" Classes="create-playlist-icon-frame">
+                                <PathIcon Data="{x:Static app:Icons.Add}" Width="14" Height="14"
+                                          Foreground="{DynamicResource AppAccentBrush}" />
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="Create a new playlist" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" FontSize="12" />
+                        </Grid>
+                    </Button>
+
+                    <!-- Expanded inline creation input -->
+                    <Border DockPanel.Dock="Top" Classes="inline-create-box"
+                            IsVisible="{Binding IsCreatingNewPlaylistInDialog}"
+                            Margin="0,0,0,12">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="NEW PLAYLIST" Classes="section-header" Margin="0" />
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6">
+                                <TextBox x:Name="NewPlaylistTextBox" Grid.Column="0"
+                                         Text="{Binding NewPlaylistNameInDialog, Mode=TwoWay}"
+                                         PlaceholderText="Playlist name…" Classes="stramp-input"
+                                         KeyDown="OnNewPlaylistTextBoxKeyDown" />
+                                <Button Grid.Column="1" Classes="playlist-action-btn primary" Content="Create"
+                                        Command="{Binding ConfirmCreateNewPlaylistInDialogCommand}" />
+                                <Button Grid.Column="2" Classes="playlist-action-btn" Content="Cancel"
+                                        Command="{Binding CancelCreateNewPlaylistInDialogCommand}" />
+                            </Grid>
+                            <TextBlock Text="{Binding NewPlaylistErrorMessage}" Foreground="#FF5C5C" FontSize="11"
+                                       IsVisible="{Binding NewPlaylistErrorMessage, Converter={StaticResource NullToBool}}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- List of existing playlists -->
+                    <ScrollViewer Classes="library-scroll" MaxHeight="240">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="ALL PLAYLISTS" Classes="section-header" Margin="2,0,0,4" />
+                            <TextBlock Text="No playlists yet. Create your first playlist above!"
+                                       FontSize="12" Opacity="0.5" Margin="4,8"
+                                       IsVisible="{Binding HasNoPlaylistsInPicker}" />
+                            <ItemsControl ItemsSource="{Binding PlaylistPickerItems}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PlaylistPickerItem">
+                                        <Border Classes="playlist-picker-row"
+                                                PointerPressed="OnPlaylistPickerItemPointerPressed">
+                                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                                <Border Grid.Column="0" Classes="playlist-picker-icon-frame">
+                                                    <PathIcon Data="{x:Static app:Icons.Playlist}" Width="14" Height="14" Opacity="0.75" />
+                                                </Border>
+                                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{Binding CountText}" FontSize="11" Opacity="0.55" />
+                                                </StackPanel>
+                                                <Border Grid.Column="2" VerticalAlignment="Center">
+                                                    <Panel>
+                                                        <!-- When already in playlist -->
+                                                        <Border Classes="playlist-badge added" IsVisible="{Binding IsAlreadyAdded}">
+                                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                                <PathIcon Data="{x:Static app:Icons.Check}" Width="11" Height="11"
+                                                                          Foreground="{DynamicResource AppAccentBrush}" />
+                                                                <TextBlock Text="Added" FontSize="11" FontWeight="SemiBold"
+                                                                           Foreground="{DynamicResource AppAccentBrush}" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <!-- When not yet in playlist -->
+                                                        <Border Classes="playlist-badge add" IsVisible="{Binding !IsAlreadyAdded}">
+                                                            <PathIcon Data="{x:Static app:Icons.Add}" Width="13" Height="13" Opacity="0.6" />
+                                                        </Border>
+                                                    </Panel>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- In-app Create Playlist dialog (standalone) -->
+        <Border x:Name="NewPlaylistScrim" Classes="dialog-scrim" IsVisible="{Binding IsNewPlaylistDialogOpen}"
+                PointerPressed="OnNewPlaylistScrimPressed">
+            <Border Classes="dialog-card" Width="420" MaxWidth="420" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel Margin="22">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Create Playlist" Classes="dialog-title" />
+                            <TextBlock Text="Build a new M3U8 playlist in your library" FontSize="11" Opacity="0.55" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding CloseNewPlaylistDialogCommand}" ToolTip.Tip="Close">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Spacing="12">
+                        <TextBox x:Name="StandaloneNewPlaylistTextBox"
+                                 Text="{Binding StandaloneNewPlaylistName, Mode=TwoWay}"
+                                 PlaceholderText="Playlist name…" Classes="stramp-input"
+                                 KeyDown="OnStandaloneNewPlaylistKeyDown" />
+                        <TextBlock Text="{Binding StandaloneNewPlaylistError}" Foreground="#FF5C5C" FontSize="11"
+                                   IsVisible="{Binding StandaloneNewPlaylistError, Converter={StaticResource NullToBool}}" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                            <Button Grid.Column="1" Classes="playlist-action-btn" Content="Cancel"
+                                    Command="{Binding CloseNewPlaylistDialogCommand}" />
+                            <Button Grid.Column="2" Classes="playlist-action-btn primary" Content="Create Playlist"
+                                    Command="{Binding ConfirmStandaloneNewPlaylistCommand}" />
+                        </Grid>
+                    </StackPanel>
                 </DockPanel>
             </Border>
         </Border>

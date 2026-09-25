@@ -13,11 +13,13 @@ public enum LibrarySourceKind
 
 /// <summary>An entry in the library's source menu: "All Songs", one library folder, or one playlist.</summary>
 public sealed class LibrarySourceRow(
-    string name, IReadOnlyList<Song> songs, LibrarySourceKind kind = LibrarySourceKind.Playlist)
+    string name, IReadOnlyList<Song> songs, LibrarySourceKind kind = LibrarySourceKind.Playlist, string? filePath = null)
 {
     public string Name { get; } = name;
     public IReadOnlyList<Song> Songs { get; } = songs;
     public LibrarySourceKind Kind { get; } = kind;
+    public string? FilePath { get; } = filePath;
+    public bool IsPlaylist => Kind == LibrarySourceKind.Playlist;
     public string CountText => Songs.Count == 1 ? "1 song" : $"{Songs.Count} songs";
 
     public Geometry Icon => Kind switch

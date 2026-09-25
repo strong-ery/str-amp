@@ -4,5 +4,6 @@ namespace Stramp.Core.Settings;
 public sealed class SavedPlaylist
 {
     public string Name { get; set; } = "";
+    public string? FilePath { get; set; }
     public List<string> SongPaths { get; set; } = [];
 }

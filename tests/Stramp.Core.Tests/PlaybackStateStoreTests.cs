@@ -37,6 +37,53 @@ public class PlaybackStateStoreTests
             Assert.Equal(91.25, restored.PositionSeconds);
             Assert.Equal([@"C:\Music", @"D:\More Music"], restored.LibraryPaths);
             Assert.Equal([@"C:\Music\b.flac", @"C:\Music\a.flac"], restored.QueuePaths);
+            Assert.Equal("Favorites", restored.SourceName);
+            Assert.True(restored.Shuffled);
+            Assert.True(restored.WasPlaying);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_PreservesPlaylistSourceAndBrowsingMode()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"stramp-state-{Guid.NewGuid():N}");
+        var path = Path.Combine(directory, "state.json");
+        try
+        {
+            var store = new PlaybackStateStore(path);
+            store.Save(new SavedPlaybackState
+            {
+                LibraryPaths = [@"D:\Audio\Library"],
+                SourceName = "Cyberpunk Mix",
+                IsBrowsingSources = false,
+                SortOption = "Playlist",
+                ActiveSongPaths = [@"D:\Audio\Library\track1.mp3", @"D:\Audio\Library\track2.mp3"],
+                QueuePaths = [@"D:\Audio\Library\track2.mp3", @"D:\Audio\Library\track1.mp3"],
+                QueuePosition = 0,
+                CurrentSongPath = @"D:\Audio\Library\track2.mp3",
+                ShuffleSeed = 98765,
+                Shuffled = true,
+                LoopMode = LoopMode.Off,
+                PositionSeconds = 45.5,
+                WasPlaying = false,
+            });
+
+            var restored = store.Load();
+
+            Assert.NotNull(restored);
+            Assert.Equal("Cyberpunk Mix", restored.SourceName);
+            Assert.False(restored.IsBrowsingSources);
+            Assert.Equal("Playlist", restored.SortOption);
+            Assert.Equal(0, restored.QueuePosition);
+            Assert.Equal(98765, restored.ShuffleSeed);
+            Assert.True(restored.Shuffled);
+            Assert.Equal(@"D:\Audio\Library\track2.mp3", restored.CurrentSongPath);
+            Assert.Equal(45.5, restored.PositionSeconds);
         }
         finally
         {
