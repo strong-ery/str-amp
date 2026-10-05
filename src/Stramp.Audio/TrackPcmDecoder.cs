@@ -12,6 +12,7 @@ public static class TrackPcmDecoder
 {
     public static async Task<float[]?> DecodeMonoAsync(string path, int sampleRate, CancellationToken ct = default)
     {
+        Process? process = null;
         try
         {
             var psi = new ProcessStartInfo
@@ -34,10 +35,11 @@ public static class TrackPcmDecoder
             psi.ArgumentList.Add(sampleRate.ToString());
             psi.ArgumentList.Add("-");
 
-            using var process = Process.Start(psi);
+            process = Process.Start(psi);
             if (process is null)
                 return null;
 
+            using var cancellation = ct.Register(() => TryKill(process));
             using var stdout = new MemoryStream();
             var copyTask = process.StandardOutput.BaseStream.CopyToAsync(stdout, ct);
             var drainStderrTask = process.StandardError.ReadToEndAsync(ct);
@@ -63,6 +65,27 @@ public static class TrackPcmDecoder
         {
             // ffmpeg missing, unreadable file, etc — the visualizer just stays idle.
             return null;
+        }
+        finally
+        {
+            if (process is not null)
+            {
+                TryKill(process);
+                process.Dispose();
+            }
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // Cancellation is best-effort; the process may already have exited.
         }
     }
 }

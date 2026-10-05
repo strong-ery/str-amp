@@ -1569,25 +1569,36 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _listeningHistory.RecordTrackPlay(_queue.Current);
         }
         _pendingPlaybackPath = null;
-        _player.Play(path);
-        _playerHasCurrentTrack = true;
-        IsPlaying = true;
-        if (!_listeningStopwatch.IsRunning)
-            _listeningStopwatch.Restart();
-        if (_resumePositionSeconds > 0)
+        try
         {
-            _player.Seek(_resumePositionSeconds);
-            _reportedPosition = _resumePositionSeconds;
-            ProgressSeconds = _resumePositionSeconds;
-            ElapsedText = FormatTime(_resumePositionSeconds);
-            _resumePositionSeconds = 0;
+            _player.Play(path);
+            _playerHasCurrentTrack = true;
+            IsPlaying = true;
+            if (!_listeningStopwatch.IsRunning)
+                _listeningStopwatch.Restart();
+            if (_resumePositionSeconds > 0)
+            {
+                _player.Seek(_resumePositionSeconds);
+                _reportedPosition = _resumePositionSeconds;
+                ProgressSeconds = _resumePositionSeconds;
+                ElapsedText = FormatTime(_resumePositionSeconds);
+                _resumePositionSeconds = 0;
+            }
+            else
+            {
+                _reportedPosition = 0;
+            }
+            _sincePositionReport.Restart();
+            SavePlaybackState(force: true);
         }
-        else
+        catch (Exception ex)
         {
-            _reportedPosition = 0;
+            _playerHasCurrentTrack = false;
+            IsPlaying = false;
+            _sincePositionReport.Reset();
+            StatusText = $"Unable to play '{_queue.Current?.Title ?? Path.GetFileName(path)}': {ex.Message}";
+            SavePlaybackState(force: true);
         }
-        _sincePositionReport.Restart();
-        SavePlaybackState(force: true);
     }
 
     [RelayCommand]

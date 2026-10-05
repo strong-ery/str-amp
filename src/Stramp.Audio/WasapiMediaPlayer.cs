@@ -1,5 +1,6 @@
 using NAudio.CoreAudioApi;
 using NAudio.Dsp;
+using NAudio.MediaFoundation;
 using NAudio.Wave;
 using System.Runtime.Versioning;
 using Stramp.Audio.Effects;
@@ -41,6 +42,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     private bool _surroundSoundEnabled;
     private string? _outputDeviceId;
     private string? _currentPath;
+    private string? _tempPlaybackFile;
     private bool _disposed;
 
     public event Action<double>? TimePositionChanged;
@@ -240,70 +242,173 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     {
         CloseCurrentPlayback();
 
-        var reader = new MediaFoundationReader(path, new MediaFoundationReader.MediaFoundationReaderSettings
+        MediaFoundationReader? reader = null;
+        try
+        {
+            reader = CreateReader(path);
+            if (startSeconds > 0)
+                reader.CurrentTime = TimeSpan.FromSeconds(
+                    Math.Clamp(startSeconds, 0, reader.TotalTime.TotalSeconds));
+
+            var device = ResolveOutputDevice(_outputDeviceId);
+            var output = BuildOutput(device);
+
+            var isMultiChannel = reader.WaveFormat.Channels > 2;
+            var useSurround = isMultiChannel && _surroundSoundEnabled && CanDeviceSupportFormat(device, reader.WaveFormat);
+
+            ISampleProvider source = reader.ToSampleProvider();
+            if (!useSurround && isMultiChannel)
+                source = new SurroundToStereoSampleProvider(source);
+
+            var normalizer = new GainSampleProvider(source, _normalizationGainDb);
+            var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
+            equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
+            var effects = new DfxEffectProcessor(equalizer, _effectSettings);
+
+            // Last in the chain: mono is about what leaves for the speakers, so it collapses the
+            // finished signal rather than something the later stages then widen.
+            var mono = new MonoDownmixSampleProvider(effects, _monoOutput);
+
+            try
+            {
+                output.Init(mono);
+            }
+            catch (Exception) when (useSurround)
+            {
+                // If native surround output failed on this endpoint, fall back to lossless stereo downmix.
+                output.Dispose();
+                source = new SurroundToStereoSampleProvider(reader.ToSampleProvider());
+                normalizer = new GainSampleProvider(source, _normalizationGainDb);
+                equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
+                equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
+                effects = new DfxEffectProcessor(equalizer, _effectSettings);
+                mono = new MonoDownmixSampleProvider(effects, _monoOutput);
+
+                output = BuildOutput(device);
+                output.Init(mono);
+            }
+
+            output.Volume = EffectiveOutputVolume;
+            output.PlaybackStopped += (_, e) => HandlePlaybackStopped(output, e);
+
+            _currentPath = path;
+            _reader = reader;
+            _normalizer = normalizer;
+            _equalizer = equalizer;
+            _effects = effects;
+            _mono = mono;
+            _outputDevice = device;
+            _output = output;
+
+            if (!play)
+                return;
+
+            output.Play();
+            _positionTimer.Change(0, 100);
+        }
+        catch
+        {
+            reader?.Dispose();
+            if (_tempPlaybackFile is not null)
+            {
+                try { File.Delete(_tempPlaybackFile); } catch { }
+                _tempPlaybackFile = null;
+            }
+            throw;
+        }
+    }
+
+    private MediaFoundationReader CreateReader(string path)
+    {
+        var settings = new MediaFoundationReader.MediaFoundationReaderSettings
         {
             RequestFloatOutput = true,
             RepositionInRead = true,
-        });
-        if (startSeconds > 0)
-            reader.CurrentTime = TimeSpan.FromSeconds(
-                Math.Clamp(startSeconds, 0, reader.TotalTime.TotalSeconds));
-
-        var device = ResolveOutputDevice(_outputDeviceId);
-        var output = BuildOutput(device);
-
-        var isMultiChannel = reader.WaveFormat.Channels > 2;
-        var useSurround = isMultiChannel && _surroundSoundEnabled && CanDeviceSupportFormat(device, reader.WaveFormat);
-
-        ISampleProvider source = reader.ToSampleProvider();
-        if (!useSurround && isMultiChannel)
-            source = new SurroundToStereoSampleProvider(source);
-
-        var normalizer = new GainSampleProvider(source, _normalizationGainDb);
-        var equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
-        equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
-        var effects = new DfxEffectProcessor(equalizer, _effectSettings);
-
-        // Last in the chain: mono is about what leaves for the speakers, so it collapses the
-        // finished signal rather than something the later stages then widen.
-        var mono = new MonoDownmixSampleProvider(effects, _monoOutput);
+        };
 
         try
         {
-            output.Init(mono);
+            return new MediaFoundationReader(path, settings);
         }
-        catch (Exception) when (useSurround)
+        catch (Exception ex) when (ex is MediaFoundationException or System.Runtime.InteropServices.COMException)
         {
-            // If native surround output failed on this endpoint, fall back to lossless stereo downmix.
-            output.Dispose();
-            source = new SurroundToStereoSampleProvider(reader.ToSampleProvider());
-            normalizer = new GainSampleProvider(source, _normalizationGainDb);
-            equalizer = new EqualizerSampleProvider(normalizer, _equalizerFrequencies);
-            equalizer.Update(_equalizerFrequencies, _equalizerGains, _equalizerEnabled);
-            effects = new DfxEffectProcessor(equalizer, _effectSettings);
-            mono = new MonoDownmixSampleProvider(effects, _monoOutput);
+            // Windows Media Foundation's FLAC byte stream handler fails with 0xC00D36C4 when
+            // metadata blocks (such as high-res embedded cover art) exceed its internal buffer.
+            // Create a temporary FLAC with picture metadata blocks stripped, keeping audio frames intact.
+            if (path.EndsWith(".flac", StringComparison.OrdinalIgnoreCase))
+            {
+                var tempFlac = Path.Combine(Path.GetTempPath(), $"stramp_playback_{Guid.NewGuid():N}.flac");
+                if (FlacSanitizer.TryStripPictureBlocks(path, tempFlac))
+                {
+                    try
+                    {
+                        var strippedReader = new MediaFoundationReader(tempFlac, settings);
+                        _tempPlaybackFile = tempFlac;
+                        return strippedReader;
+                    }
+                    catch
+                    {
+                        try { File.Delete(tempFlac); } catch { }
+                    }
+                }
+            }
 
-            output = BuildOutput(device);
-            output.Init(mono);
+            // Fallback for other formats unsupported by Windows Media Foundation (e.g. .ogg, .opus)
+            // or unusual files if ffmpeg is available.
+            var tempWav = Path.Combine(Path.GetTempPath(), $"stramp_playback_{Guid.NewGuid():N}.wav");
+            if (TryDecodeWithFfmpeg(path, tempWav))
+            {
+                try
+                {
+                    var wavReader = new MediaFoundationReader(tempWav, settings);
+                    _tempPlaybackFile = tempWav;
+                    return wavReader;
+                }
+                catch
+                {
+                    try { File.Delete(tempWav); } catch { }
+                }
+            }
+
+            throw;
         }
+    }
 
-        output.Volume = EffectiveOutputVolume;
-        output.PlaybackStopped += (_, e) => HandlePlaybackStopped(output, e);
+    private static bool TryDecodeWithFfmpeg(string sourcePath, string targetWavPath)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("-y");
+            psi.ArgumentList.Add("-v");
+            psi.ArgumentList.Add("error");
+            psi.ArgumentList.Add("-i");
+            psi.ArgumentList.Add(sourcePath);
+            psi.ArgumentList.Add("-c:a");
+            psi.ArgumentList.Add("pcm_f32le");
+            psi.ArgumentList.Add(targetWavPath);
 
-        _currentPath = path;
-        _reader = reader;
-        _normalizer = normalizer;
-        _equalizer = equalizer;
-        _effects = effects;
-        _mono = mono;
-        _outputDevice = device;
-        _output = output;
+            using var process = System.Diagnostics.Process.Start(psi);
+            if (process is null)
+                return false;
 
-        if (!play)
-            return;
+            if (!process.WaitForExit(10000))
+            {
+                try { process.Kill(entireProcessTree: true); } catch { }
+                return false;
+            }
 
-        output.Play();
-        _positionTimer.Change(0, 100);
+            return process.ExitCode == 0 && File.Exists(targetWavPath) && new FileInfo(targetWavPath).Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -536,6 +641,19 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         catch (Exception)
         {
             // Nothing left to release.
+        }
+
+        if (_tempPlaybackFile is not null)
+        {
+            try
+            {
+                File.Delete(_tempPlaybackFile);
+            }
+            catch
+            {
+                // Best-effort temp file cleanup.
+            }
+            _tempPlaybackFile = null;
         }
     }
 
