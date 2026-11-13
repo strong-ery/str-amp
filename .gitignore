@@ -10,3 +10,6 @@ dist/
 # Intermediate output from building native/dfxbridge. The shipped binary is committed
 # separately under native/prebuilt.
 native/dfxbridge/build/
+
+# publish.ps1's output: the release zip gets attached to a GitHub release, not committed.
+publish/
