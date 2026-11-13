@@ -128,6 +128,17 @@ public sealed class PlaybackQueue
             Position = Math.Min(Position, _songs.Count - 1);
     }
 
+    /// <summary>
+    /// Removes every queued song at this path. Normally at most one, but the same file can be
+    /// queued more than once if it appears in several playlists merged into one source.
+    /// </summary>
+    public void RemoveAllMatching(string path)
+    {
+        for (var i = _songs.Count - 1; i >= 0; i--)
+            if (string.Equals(_songs[i].Path, path, StringComparison.OrdinalIgnoreCase))
+                RemoveAt(i);
+    }
+
     private void ShuffleInPlace(List<Song> list, int? shuffleSeed = null)
     {
         ShuffleSeed = shuffleSeed ?? Random.Shared.Next(1, int.MaxValue);
