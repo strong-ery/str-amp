@@ -30,6 +30,8 @@
         <conv:BoolToLibraryWidthConverter x:Key="LibraryWidth" />
         <conv:BoolToLibraryMarginConverter x:Key="LibraryMargin" />
         <conv:BoolToOpacityConverter x:Key="EnabledOpacity" />
+        <conv:BoolToFadeOpacityConverter x:Key="FadeOpacity" />
+        <conv:EnumEqualsConverter x:Key="EnumEquals" />
 
         <DataTemplate x:Key="ColorEditorTemplate" x:DataType="vm:ColorChannelEditor">
             <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -39,6 +41,41 @@
                     <TextBox Text="{Binding Hex}" FontSize="12" Padding="7,3" />
                 </StackPanel>
             </Grid>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TopTrackTemplate" x:DataType="vm:TopTrackRow">
+            <Border Classes="library-location-row">
+                <Grid ColumnDefinitions="22,*,Auto" ColumnSpacing="11">
+                    <TextBlock Grid.Column="0" Text="{Binding Rank}" FontSize="12" Opacity="0.5"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Artist}" Classes="field-hint" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PlayCountLabel}" FontSize="11" Opacity="0.8"
+                                   HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding FormattedTime}" Classes="field-hint" HorizontalAlignment="Right" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="TopArtistTemplate" x:DataType="vm:TopArtistRow">
+            <Border Classes="library-location-row">
+                <Grid ColumnDefinitions="22,*,Auto" ColumnSpacing="11">
+                    <TextBlock Grid.Column="0" Text="{Binding Rank}" FontSize="12" Opacity="0.5"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding Artist}" FontSize="12" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <StackPanel Grid.Column="2" Spacing="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PlayCountLabel}" FontSize="11" Opacity="0.8"
+                                   HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding FormattedTime}" Classes="field-hint" HorizontalAlignment="Right" />
+                    </StackPanel>
+                </Grid>
+            </Border>
         </DataTemplate>
     </Window.Resources>
 
@@ -82,6 +119,12 @@
                                         <PathIcon Data="{x:Static app:Icons.Playlist}" Width="15" Height="15" />
                                     </MenuItem.Icon>
                                 </MenuItem>
+                                <MenuItem Header="View Stats…" Classes="stramp-menu-item"
+                                          Command="{Binding OpenStatsCommand}">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.BarChart}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <Separator Margin="7,4" />
                                 <MenuItem Header="Settings…" Classes="stramp-menu-item"
                                           Command="{Binding OpenSettingsCommand}">
@@ -92,8 +135,6 @@
                             </MenuFlyout>
                         </Button.Flyout>
                     </Button>
-                    <TextBlock Text="{Binding StatusText}" Foreground="OrangeRed" VerticalAlignment="Center"
-                               TextTrimming="CharacterEllipsis" FontSize="12" />
                 </StackPanel>
 
                 <Border Grid.Column="1" Background="Transparent"
@@ -268,6 +309,14 @@
                                                               Command="{Binding #Root.DataContext.RemoveSongFromCurrentPlaylistCommand}"
                                                               CommandParameter="{Binding}"
                                                               IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
+                                                    <Separator />
+                                                    <MenuItem Header="Remove song (permanent)…"
+                                                              Command="{Binding #Root.DataContext.RequestDeleteSongPermanentlyCommand}"
+                                                              CommandParameter="{Binding}">
                                                         <MenuItem.Icon>
                                                             <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
                                                         </MenuItem.Icon>
@@ -660,6 +709,14 @@
                                                         <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
                                                     </MenuItem.Icon>
                                                 </MenuItem>
+                                                <Separator />
+                                                <MenuItem Header="Remove song (permanent)…"
+                                                          Command="{Binding #Root.DataContext.RequestDeleteSongPermanentlyCommand}"
+                                                          CommandParameter="{Binding}">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
                                             </ContextMenu>
                                         </Border.ContextMenu>
                                         <!-- Grid rather than a StackPanel: a horizontal StackPanel hands children
@@ -727,7 +784,7 @@
                             Command="{Binding Theme.ResetToDefaultsCommand}"
                             HorizontalAlignment="Left" Margin="0,14,0,0" />
 
-                    <ScrollViewer>
+                    <ScrollViewer x:Name="SettingsScroller">
                         <StackPanel Spacing="18">
                             <TextBlock Text="LIBRARY SOURCES" Classes="section-header" Margin="0,8,0,0" />
 
@@ -1060,6 +1117,14 @@
 
                             <TextBlock Text="LISTENING TIME" Classes="section-header" Margin="0,6,0,0" />
 
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding Theme.ListeningStatsEnabled}"
+                                              OnContent="Track listening stats"
+                                              OffContent="Track listening stats" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Powers the View Stats panel and the totals below. Stored locally only; turning this off stops new listening from being recorded, but keeps whatever's already saved." />
+                            </StackPanel>
+
                             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                                 <Border Classes="library-locations" Padding="14,12">
                                     <StackPanel Spacing="4">
@@ -1094,6 +1159,420 @@
                                 </Grid>
                             </Border>
                         </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- First-run setup wizard: no close button and the scrim doesn't dismiss it, so it has
+             to be stepped through (Back is still allowed) rather than skipped. -->
+        <Border x:Name="SetupWizardScrim" Classes="dialog-scrim" IsVisible="{Binding IsSetupWizardOpen}">
+            <Border Classes="dialog-card" Width="560" MaxWidth="560" MaxHeight="640" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel Margin="22">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <TextBlock Grid.Column="0" Text="{Binding SetupWizard.StepTitle}" Classes="dialog-title" />
+                        <TextBlock Grid.Column="1" Text="{Binding SetupWizard.StepNumberLabel}"
+                                   Classes="field-hint" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,14,0,0">
+                        <Button Grid.Column="1" Classes="playlist-action-btn" Content="Back"
+                                Command="{Binding SetupWizard.BackCommand}"
+                                IsVisible="{Binding !SetupWizard.IsFirstStep}" />
+                        <Button Grid.Column="2" Classes="playlist-action-btn primary"
+                                Content="{Binding SetupWizard.NextButtonText}"
+                                Command="{Binding SetupWizard.NextCommand}" />
+                    </Grid>
+
+                    <ScrollViewer x:Name="SetupWizardScroller">
+                        <StackPanel Spacing="18" Margin="0,10,0,0">
+
+                            <StackPanel Spacing="12"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=Welcome}">
+                                <TextBlock TextWrapping="Wrap" FontSize="13"
+                                           Text="str-amp has installed itself so it's ready whenever you open it again:" />
+                                <Border Classes="library-locations" Padding="12,10">
+                                    <TextBlock Text="{Binding SetupWizard.InstallDirectory}" FontSize="12" TextWrapping="Wrap" />
+                                </Border>
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="The next few steps walk through the basics. Every one of these can be changed later through stramp → Settings…" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="12"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=Library}">
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Which folders should str-amp build your library from?" />
+                                <Border Classes="library-locations">
+                                    <ItemsControl ItemsSource="{Binding LibraryLocations}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:LibraryLocationRow">
+                                                <Border Classes="library-location-row">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+                                                        <Border Grid.Column="0" Classes="library-location-icon">
+                                                            <PathIcon Data="{x:Static app:Icons.FolderOpen}"
+                                                                      Width="16" Height="16" Opacity="0.8" />
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding Name}" FontSize="12" FontWeight="SemiBold"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock Text="{Binding Path}" Classes="field-hint"
+                                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Path}" />
+                                                        </StackPanel>
+                                                        <Button Grid.Column="2" Classes="transport" Width="28" Height="28"
+                                                                Padding="6" VerticalAlignment="Center"
+                                                                Command="{Binding #Root.DataContext.RemoveLibraryLocationCommand}"
+                                                                CommandParameter="{Binding}" ToolTip.Tip="Remove library folder">
+                                                            <PathIcon Data="{x:Static app:Icons.Delete}" Width="14" Height="14" />
+                                                        </Button>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+                                <Button Classes="add-library-location" HorizontalAlignment="Left"
+                                        Click="OnOpenLibraryClicked">
+                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                        <PathIcon Data="{x:Static app:Icons.Add}" Width="15" Height="15" />
+                                        <TextBlock Text="Add folder" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <StackPanel Spacing="4" Margin="0,4,0,0">
+                                    <ToggleSwitch IsChecked="{Binding Theme.CacheLibraryMetadata}"
+                                                  OnContent="Cache metadata for optimized reads on slower drives"
+                                                  OffContent="Cache metadata for optimized reads on slower drives" />
+                                    <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                               Text="Recommended once your library passes a couple hundred songs. Stores titles, artists, albums, and durations in Local AppData." />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Spacing="12"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=Playlists}">
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Playlists you create are written as standard .m3u8 files here:" />
+                                <Border Classes="library-locations">
+                                    <Border Classes="library-location-row">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                                            <Border Grid.Column="0" Classes="library-location-icon">
+                                                <PathIcon Data="{x:Static app:Icons.PlaylistAdd}" Width="16" Height="16" Opacity="0.8" />
+                                            </Border>
+                                            <TextBlock Grid.Column="1" Text="{Binding EffectivePlaylistsDirectory}"
+                                                       Classes="field-hint" VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding EffectivePlaylistsDirectory}" />
+                                            <Button Grid.Column="2" Classes="transport" Padding="8,4" Height="28"
+                                                    Click="OnChangePlaylistsFolderClicked">
+                                                <TextBlock Text="Change…" FontSize="11" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </Border>
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="This default is fine for most people; change it any time from Settings." />
+                            </StackPanel>
+
+                            <StackPanel Spacing="14"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=Audio}">
+                                <StackPanel Spacing="5">
+                                    <ToggleSwitch IsChecked="{Binding Theme.NormalizeAudio}"
+                                                  OnContent="Normalize track loudness" OffContent="Normalize track loudness" />
+                                    <ComboBox ItemsSource="{Binding Theme.NormalizationLevels}"
+                                              SelectedItem="{Binding Theme.NormalizationLevel}"
+                                              IsEnabled="{Binding Theme.NormalizeAudio}"
+                                              HorizontalAlignment="Left" MinWidth="140" />
+                                </StackPanel>
+                                <ToggleSwitch IsChecked="{Binding Theme.MonoAudio}"
+                                              OnContent="Mono audio" OffContent="Mono audio" />
+                                <ToggleSwitch IsChecked="{Binding Theme.SurroundSound}"
+                                              OnContent="5.1 surround sound" OffContent="5.1 surround sound" />
+
+                                <ToggleSwitch IsChecked="{Binding Theme.EqualizerEnabled}"
+                                              OnContent="Equalizer enabled" OffContent="Equalizer enabled" />
+                                <Border Classes="eq-panel" IsEnabled="{Binding Theme.EqualizerEnabled}"
+                                        Opacity="{Binding Theme.EqualizerEnabled, Converter={StaticResource EnabledOpacity}}">
+                                    <StackPanel Spacing="6">
+                                        <ComboBox ItemsSource="{Binding Theme.EqualizerPresets}"
+                                                  SelectedItem="{Binding Theme.SelectedEqualizerPreset}"
+                                                  PlaceholderText="Choose a preset…"
+                                                  HorizontalAlignment="Stretch" FontSize="12">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="playback:EqualizerPreset">
+                                                    <TextBlock Text="{Binding Name}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                        <ItemsControl ItemsSource="{Binding Theme.EqualizerBands}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:EqualizerBandViewModel">
+                                                    <StackPanel Spacing="4" Width="40">
+                                                        <TextBlock Text="{Binding GainLabel}" FontSize="10"
+                                                                   Opacity="0.85" HorizontalAlignment="Center" />
+                                                        <Slider Orientation="Vertical" Height="100"
+                                                                Minimum="-20" Maximum="20"
+                                                                Value="{Binding Gain}" HorizontalAlignment="Center" />
+                                                        <TextBox Text="{Binding Frequency, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                                 Classes="band-frequency" ToolTip.Tip="Centre frequency in Hz" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Content="Flatten" Command="{Binding Theme.ResetEqualizerCommand}"
+                                                HorizontalAlignment="Center" FontSize="12" Padding="10,4" />
+                                    </StackPanel>
+                                </Border>
+
+                                <ToggleSwitch IsChecked="{Binding Theme.EffectsEnabled}"
+                                              OnContent="Enhancements enabled" OffContent="Enhancements enabled" />
+                                <Border Classes="eq-panel" IsEnabled="{Binding Theme.EffectsEnabled}"
+                                        Opacity="{Binding Theme.EffectsEnabled, Converter={StaticResource EnabledOpacity}}">
+                                    <StackPanel Spacing="6">
+                                        <ItemsControl ItemsSource="{Binding Theme.AudioEffects}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:AudioEffectViewModel">
+                                                    <Grid ColumnDefinitions="96,*,34" Margin="0,0,0,2"
+                                                          ToolTip.Tip="{Binding Description}">
+                                                        <TextBlock Grid.Column="0" Text="{Binding Name}" FontSize="11"
+                                                                   VerticalAlignment="Center" Opacity="0.8" />
+                                                        <Slider Grid.Column="1" Minimum="0" Maximum="10"
+                                                                TickFrequency="0.5" IsSnapToTickEnabled="False"
+                                                                Value="{Binding Amount}" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="2" Text="{Binding AmountLabel}" FontSize="10"
+                                                                   VerticalAlignment="Center" HorizontalAlignment="Right"
+                                                                   Opacity="0.6" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Content="No effects" Command="{Binding Theme.ResetEffectsCommand}"
+                                                HorizontalAlignment="Center" FontSize="12" Padding="10,4" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Spacing="14"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=VisualsArt}">
+                                <Border Classes="art-frame" Classes.circular="{Binding Theme.CircularAlbumArt}"
+                                        Width="140" Height="140" HorizontalAlignment="Center" Margin="0,0,0,4">
+                                    <Grid>
+                                        <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="40" Height="40" Opacity="0.35"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                  IsVisible="{Binding CurrentArtBitmap, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                        <Image Source="{Binding CurrentArtBitmap}" Stretch="UniformToFill"
+                                               RenderOptions.BitmapInterpolationMode="HighQuality"
+                                               IsVisible="{Binding CurrentArtBitmap, Converter={StaticResource NullToBool}}" />
+                                    </Grid>
+                                </Border>
+                                <ToggleSwitch IsChecked="{Binding Theme.CircularAlbumArt}"
+                                              OnContent="Circular album cover" OffContent="Circular album cover" />
+                                <ToggleSwitch IsChecked="{Binding Theme.AnimateAlbumArt}"
+                                              OnContent="Album art animation" OffContent="Album art animation" />
+                                <ToggleSwitch IsChecked="{Binding Theme.ShowWaveformProgress}"
+                                              OnContent="Waveform progress bar" OffContent="Waveform progress bar" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="14"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=VisualsTheme}">
+                                <ToggleSwitch IsChecked="{Binding Theme.ShowRingVisualizer}"
+                                              OnContent="Central visualizer" OffContent="Central visualizer" />
+                                <ToggleSwitch IsChecked="{Binding Theme.ShowBottomVisualizer}"
+                                              OnContent="Bottom visualizer" OffContent="Bottom visualizer" />
+                                <StackPanel Spacing="4" IsEnabled="{Binding Theme.ShowBottomVisualizer}"
+                                            Opacity="{Binding Theme.ShowBottomVisualizer, Converter={StaticResource EnabledOpacity}}">
+                                    <TextBlock Text="Bottom visualizer opacity" Classes="field-label" />
+                                    <Slider Minimum="0" Maximum="1" Value="{Binding Theme.BottomVisualizerOpacity}" />
+                                </StackPanel>
+                                <StackPanel Spacing="6">
+                                    <TextBlock Text="Album art color matching" Classes="field-label" />
+                                    <ComboBox ItemsSource="{Binding Theme.ArtColorModes}"
+                                              SelectedItem="{Binding Theme.ArtColorMode}"
+                                              HorizontalAlignment="Left" MinWidth="140" />
+                                    <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                               Text="Inferred creates a polished palette from the cover; Direct samples its real colors; None uses a manual theme you can set up later in Settings." />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Spacing="14"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=LyricsAndDiscord}">
+                                <StackPanel Spacing="5">
+                                    <ToggleSwitch IsChecked="{Binding Theme.LrcLibLookup}"
+                                                  OnContent="Look up lyrics on LRCLIB" OffContent="Look up lyrics on LRCLIB" />
+                                    <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                               Text="Sends the playing track's title, artist, album and length to lrclib.net when there's no .lrc file on disk already." />
+                                </StackPanel>
+                                <StackPanel Spacing="5">
+                                    <ToggleSwitch IsChecked="{Binding Theme.DiscordRichPresenceEnabled}"
+                                                  OnContent="Show now playing on Discord" OffContent="Show now playing on Discord" />
+                                    <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                               Text="Requires the Discord desktop app to be running." />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <StackPanel Spacing="14"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=Shortcuts}">
+                                <ToggleSwitch IsChecked="{Binding Theme.EnsureDesktopShortcut}"
+                                              OnContent="Desktop shortcut" OffContent="Desktop shortcut" />
+                                <ToggleSwitch IsChecked="{Binding Theme.EnsureStartMenuShortcut}"
+                                              OnContent="Start Menu shortcut" OffContent="Start Menu shortcut" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Shortcuts point to this copy of str-amp and use its app icon." />
+                            </StackPanel>
+
+                            <StackPanel Spacing="8"
+                                        IsVisible="{Binding SetupWizard.CurrentStep, Converter={StaticResource EnumEquals}, ConverterParameter=ListeningStats}">
+                                <ToggleSwitch IsChecked="{Binding Theme.ListeningStatsEnabled}"
+                                              OnContent="Track listening stats" OffContent="Track listening stats" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Powers the View Stats panel: most-played songs and artists, total and monthly listening time. Stored locally only; nothing is sent anywhere." />
+                            </StackPanel>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- In-app stats dialog -->
+        <Border x:Name="StatsScrim" Classes="dialog-scrim" IsVisible="{Binding IsStatsOpen}"
+                PointerPressed="OnStatsScrimPressed">
+            <Border Classes="dialog-card" Width="480" MaxWidth="480" MaxHeight="660" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel Margin="22">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <TextBlock Grid.Column="0" Text="Listening Stats" Classes="dialog-title" VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding CloseStatsCommand}">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+
+                    <ScrollViewer x:Name="StatsScroller">
+                        <StackPanel Spacing="18" Margin="0,8,0,0">
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="TOP SONGS · ALL TIME" Classes="section-header" />
+                                <Border Classes="library-locations">
+                                    <ItemsControl ItemsSource="{Binding Stats.TopSongsAllTime}"
+                                                  ItemTemplate="{StaticResource TopTrackTemplate}" />
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding Stats.TopSongsThisMonthLabel}" Classes="section-header" />
+                                <Border Classes="library-locations">
+                                    <ItemsControl ItemsSource="{Binding Stats.TopSongsThisMonth}"
+                                                  ItemTemplate="{StaticResource TopTrackTemplate}" />
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="TOP ARTISTS · ALL TIME" Classes="section-header" />
+                                <Border Classes="library-locations">
+                                    <ItemsControl ItemsSource="{Binding Stats.TopArtistsAllTime}"
+                                                  ItemTemplate="{StaticResource TopArtistTemplate}" />
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Spacing="8">
+                                <TextBlock Text="{Binding Stats.TopArtistsThisMonthLabel}" Classes="section-header" />
+                                <Border Classes="library-locations">
+                                    <ItemsControl ItemsSource="{Binding Stats.TopArtistsThisMonth}"
+                                                  ItemTemplate="{StaticResource TopArtistTemplate}" />
+                                </Border>
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- In-app generic confirmation dialog, used by anything destructive (currently just
+             permanent song deletion) -->
+        <Border x:Name="ConfirmScrim" Classes="dialog-scrim" IsVisible="{Binding IsConfirmDialogOpen}"
+                PointerPressed="OnConfirmScrimPressed">
+            <Border Classes="dialog-card" Width="400" MaxWidth="400" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Margin="22" Spacing="14">
+                    <TextBlock Text="{Binding ConfirmDialogTitle}" Classes="dialog-title" />
+                    <TextBlock Text="{Binding ConfirmDialogMessage}" TextWrapping="Wrap" FontSize="12"
+                               Foreground="#FF5C5C" />
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,8,0,0">
+                        <Button Grid.Column="1" Classes="playlist-action-btn" Content="Cancel"
+                                Command="{Binding CancelConfirmDialogCommand}" />
+                        <Button Grid.Column="2" Classes="playlist-action-btn primary"
+                                Content="{Binding ConfirmDialogConfirmText}"
+                                Command="{Binding AcceptConfirmDialogCommand}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+        </Border>
+
+        <!-- In-app "what's new" dialog, shown once right after an update -->
+        <Border x:Name="WhatsNewScrim" Classes="dialog-scrim" IsVisible="{Binding IsWhatsNewOpen}"
+                PointerPressed="OnWhatsNewScrimPressed">
+            <Border Classes="dialog-card" Width="440" MaxWidth="440" MaxHeight="520" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel Margin="22">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="What's New" Classes="dialog-title" />
+                            <TextBlock Classes="field-hint">
+                                <Run Text="str-amp " /><Run Text="{Binding WhatsNewVersion}" />
+                            </TextBlock>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding CloseWhatsNewCommand}">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+
+                    <Button DockPanel.Dock="Bottom" Classes="playlist-action-btn primary" Content="Got it"
+                            Command="{Binding CloseWhatsNewCommand}" HorizontalAlignment="Left" Margin="0,14,0,0" />
+
+                    <ScrollViewer>
+                        <TextBlock Text="{Binding WhatsNewNotes}" TextWrapping="Wrap" FontSize="12" Opacity="0.85" />
+                    </ScrollViewer>
+                </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- In-app update-available dialog -->
+        <Border x:Name="UpdateScrim" Classes="dialog-scrim" IsVisible="{Binding IsUpdateAvailable}"
+                PointerPressed="OnUpdateScrimPressed">
+            <Border Classes="dialog-card" Width="440" MaxWidth="440" MaxHeight="520" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel Margin="22">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,4">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Update Available" Classes="dialog-title" />
+                            <TextBlock Classes="field-hint">
+                                <Run Text="str-amp " /><Run Text="{Binding UpdateVersion}" /><Run Text=" is ready to install" />
+                            </TextBlock>
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding DismissUpdateCommand}" IsEnabled="{Binding !IsDownloadingUpdate}">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+
+                    <StackPanel DockPanel.Dock="Bottom" Spacing="8" Margin="0,14,0,0">
+                        <TextBlock Text="{Binding UpdateStatusText}" Classes="field-hint"
+                                   IsVisible="{Binding IsDownloadingUpdate}" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" IsVisible="{Binding !IsDownloadingUpdate}">
+                            <Button Grid.Column="0" Classes="playlist-action-btn primary" Content="Install &amp; Restart"
+                                    Command="{Binding InstallUpdateCommand}" HorizontalAlignment="Left" />
+                            <Button Grid.Column="1" Classes="playlist-action-btn" Content="Skip This Version"
+                                    Command="{Binding SkipUpdateCommand}" />
+                            <Button Grid.Column="2" Classes="playlist-action-btn" Content="Later"
+                                    Command="{Binding DismissUpdateCommand}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <ScrollViewer>
+                        <TextBlock Text="{Binding UpdateReleaseNotes}" TextWrapping="Wrap" FontSize="12" Opacity="0.85" />
                     </ScrollViewer>
                 </DockPanel>
             </Border>
@@ -1254,6 +1733,20 @@
                     </StackPanel>
                 </DockPanel>
             </Border>
+        </Border>
+
+        <!-- Transient status toast: fades in on a new message, fades out on its own a few
+             seconds later (see MainWindowViewModel's IsStatusVisible). -->
+        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18"
+                IsHitTestVisible="False"
+                Opacity="{Binding IsStatusVisible, Converter={StaticResource FadeOpacity}}">
+            <Border.Transitions>
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.4" Easing="CubicEaseOut" />
+                </Transitions>
+            </Border.Transitions>
+            <TextBlock Text="{Binding StatusText}" Foreground="White" FontSize="12"
+                       TextTrimming="CharacterEllipsis" MaxWidth="360" />
         </Border>
     </Panel>
 </Window>

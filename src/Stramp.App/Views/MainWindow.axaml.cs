@@ -104,6 +104,8 @@ public partial class MainWindow : Window
         CompactVolumeSlider.AddHandler(PointerWheelChangedEvent, OnVolumeWheelChanged,
             RoutingStrategies.Tunnel, handledEventsToo: true);
 
+        AttachSmoothScrollHandlers();
+
         WaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
         WaveformBar.ScrubCompleted += fraction => ViewModel?.CompleteScrub(fraction);
 
@@ -342,6 +344,12 @@ public partial class MainWindow : Window
             // Posted rather than called: the container for a line that just scrolled into the
             // list may not have been measured yet, and its bounds are what we scroll by.
             Dispatcher.UIThread.Post(ScrollActiveLyricIntoView, DispatcherPriority.Background);
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.IsRestartingForUpdate) && ViewModel?.IsRestartingForUpdate == true)
+        {
+            // The update helper is waiting for this process to exit before it can replace these
+            // files and relaunch the app itself.
+            Close();
         }
     }
 
@@ -830,7 +838,12 @@ public partial class MainWindow : Window
     /// <summary>Escape closes whichever dialog/overlay is on top, or exits full screen if none is open.</summary>
     private void HandleEscapeKeyDown(KeyEventArgs e)
     {
-        if (ViewModel?.IsAddToPlaylistOpen == true)
+        if (ViewModel?.IsSetupWizardOpen == true)
+        {
+            // Nothing to dismiss to: the wizard only leaves via its own Finish button.
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsAddToPlaylistOpen == true)
         {
             ViewModel.CloseAddToPlaylistCommand.Execute(null);
             e.Handled = true;
@@ -843,6 +856,26 @@ public partial class MainWindow : Window
         else if (ViewModel?.IsSettingsOpen == true)
         {
             ViewModel.CloseSettingsCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsStatsOpen == true)
+        {
+            ViewModel.CloseStatsCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsUpdateAvailable == true && ViewModel.IsDownloadingUpdate == false)
+        {
+            ViewModel.DismissUpdateCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsWhatsNewOpen == true)
+        {
+            ViewModel.CloseWhatsNewCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsConfirmDialogOpen == true)
+        {
+            ViewModel.CancelConfirmDialogCommand.Execute(null);
             e.Handled = true;
         }
         else if (WindowState == WindowState.FullScreen)
@@ -962,10 +995,34 @@ public partial class MainWindow : Window
             ViewModel?.CloseSettingsCommand.Execute(null);
     }
 
+    private void OnStatsScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, StatsScrim))
+            ViewModel?.CloseStatsCommand.Execute(null);
+    }
+
     private void OnAddToPlaylistScrimPressed(object? sender, PointerPressedEventArgs e)
     {
         if (ReferenceEquals(e.Source, AddToPlaylistScrim))
             ViewModel?.CloseAddToPlaylistCommand.Execute(null);
+    }
+
+    private void OnUpdateScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, UpdateScrim) && ViewModel?.IsDownloadingUpdate == false)
+            ViewModel.DismissUpdateCommand.Execute(null);
+    }
+
+    private void OnWhatsNewScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, WhatsNewScrim))
+            ViewModel?.CloseWhatsNewCommand.Execute(null);
+    }
+
+    private void OnConfirmScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, ConfirmScrim))
+            ViewModel?.CancelConfirmDialogCommand.Execute(null);
     }
 
     private void OnNewPlaylistScrimPressed(object? sender, PointerPressedEventArgs e)
@@ -1229,6 +1286,7 @@ public partial class MainWindow : Window
         StepColumnAnimation();
         StepLyricsPanelAnimation();
         StepLyricsScroll(dt);
+        StepSmoothScrolls(dt);
 
         var frame = vm.VisualizerFeed.GetFrame(vm.ProgressSeconds, SpectrumBins);
         if (frame is not null && vm.IsPlaying)

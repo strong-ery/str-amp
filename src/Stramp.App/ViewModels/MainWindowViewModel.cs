@@ -56,6 +56,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly ListeningHistoryStore _listeningHistoryStore;
     private readonly ListeningHistoryDatabase _listeningHistory;
 
+    /// <summary>Seconds actually listened to the current track this time through, toward the
+    /// "play" threshold applied in <see cref="AccrueListeningTime"/>.</summary>
+    private double _currentTrackListenedSeconds;
+    private bool _currentTrackPlayRecorded;
+
     /// <summary>Songs of the selected source (All Songs or a playlist): what the queue is built from.</summary>
     private List<Song> _activeSongs = [];
     private bool _isSeeking;
@@ -243,6 +248,9 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public partial bool IsSettingsOpen { get; set; }
 
     [ObservableProperty]
+    public partial bool IsStatsOpen { get; set; }
+
+    [ObservableProperty]
     public partial bool IsAddToPlaylistOpen { get; set; }
 
     [ObservableProperty]
@@ -297,6 +305,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     public AppSettings Settings => _settings;
 
     public ThemeSettingsViewModel Theme { get; }
+
+    public ListeningStatsViewModel Stats { get; } = new();
 
     public string ListeningHistoryFilePath => _listeningHistoryStore.FilePath;
 
@@ -392,6 +402,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             _ = ReloadLibraryAsync(restorePlaybackState: true, preservePlayback: false);
         else if (_libraryPaths.Count == 0)
             StatusText = "Add a folder to start building your library.";
+
+        InitializeSetupWizard();
+        CheckWhatsNew();
+        _ = CheckForUpdatesAsync();
     }
 
     public void Dispose()
@@ -415,6 +429,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _lyricsProvider.Dispose();
         _loudnessNormalizer.Dispose();
         _discordPresence.Dispose();
+        _updateChecker.Dispose();
         _player.Dispose();
     }
 }
