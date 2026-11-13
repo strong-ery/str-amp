@@ -11,6 +11,20 @@ public enum AlbumArtColorMode
 
 public sealed class AppSettings
 {
+    /// <summary>
+    /// Whether the first-run setup wizard has been completed. Defaults to true so an existing
+    /// config.json from before this setting existed never gets sent through setup again - only
+    /// <see cref="Stramp.Core.Settings.SettingsService.Load"/>'s genuinely-no-config-yet path sets
+    /// this false. Flip it to false by hand to re-run the wizard without touching anything else.
+    /// </summary>
+    public bool SetupCompleted { get; set; } = true;
+
+    /// <summary>
+    /// The app version last run. Used to show the "what's new" popup exactly once right after an
+    /// update; null on a fresh install, which skips it since the setup wizard covers onboarding.
+    /// </summary>
+    public string? LastSeenVersion { get; set; }
+
     /// <summary>Folders combined into the music library.</summary>
     public List<string>? LibraryPaths { get; set; }
 
@@ -66,13 +80,13 @@ public sealed class AppSettings
     public bool ShowBottomVisualizer { get; set; } = true;
     public bool AnimateAlbumArt { get; set; } = true;
     public bool DisableAnimations { get; set; }
-    public bool CircularAlbumArt { get; set; } = true;
+    public bool CircularAlbumArt { get; set; }
     public double BottomVisualizerOpacity { get; set; } = 0.85;
     public bool ShowWaveformProgress { get; set; } = true;
 
     public bool EqualizerEnabled { get; set; }
 
-    public bool DiscordRichPresenceEnabled { get; set; }
+    public bool DiscordRichPresenceEnabled { get; set; } = true;
 
     /// <summary>Null/empty uses str-amp's built-in Discord application (see DiscordPresenceService).
     /// Only needed to point at a different Discord Application, e.g. for local testing.</summary>
@@ -137,4 +151,18 @@ public sealed class AppSettings
         else
             MonthlyListenedSeconds[key] = seconds;
     }
+
+    /// <summary>
+    /// Whether listening history (total/monthly time, per-track play counts for the Stats panel)
+    /// is recorded at all. Purely local either way; this only controls whether it's kept.
+    /// </summary>
+    public bool ListeningStatsEnabled { get; set; } = true;
+
+    /// <summary>A release the user chose "skip this version" on; the update prompt stays quiet
+    /// until something newer than this comes along.</summary>
+    public string? SkippedUpdateVersion { get; set; }
+
+    /// <summary>When the app last asked GitHub for its latest release, so launches in quick
+    /// succession don't each spend a request on it.</summary>
+    public DateTime? LastUpdateCheckUtc { get; set; }
 }

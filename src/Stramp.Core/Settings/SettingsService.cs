@@ -29,7 +29,13 @@ public static class SettingsService
             // Corrupt/unreadable settings: fall back to defaults rather than crash the app.
         }
 
-        return new AppSettings();
+        // No config.json existed (or it was unreadable) - a genuinely fresh install, so the setup
+        // wizard should run. AppSettings.SetupCompleted defaults to true for every other path here,
+        // so an existing, merely-missing-this-field config never retriggers it. ArtColorMode is set
+        // explicitly too: leaving it null would fall back to Inferred (see ThemeSettingsViewModel's
+        // constructor), but Direct is the better first impression - sharper, more specific colors
+        // rather than a generic palette guess.
+        return new AppSettings { SetupCompleted = false, ArtColorMode = AlbumArtColorMode.Direct };
     }
 
     public static void Save(AppSettings settings)

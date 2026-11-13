@@ -100,6 +100,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         CacheLibraryMetadata = settings.CacheLibraryMetadata;
         EnsureDesktopShortcut = settings.EnsureDesktopShortcut;
         EnsureStartMenuShortcut = settings.EnsureStartMenuShortcut;
+        ListeningStatsEnabled = settings.ListeningStatsEnabled;
         Primary = new ColorChannelEditor(ParseOrDefault(settings.PrimaryAccentColor, DefaultPrimary), ApplyLive);
         Secondary = new ColorChannelEditor(ParseOrDefault(settings.SecondaryAccentColor, DefaultSecondary), ApplyLive);
         Background = new ColorChannelEditor(ParseOrDefault(settings.BackgroundColor, DefaultBackground), ApplyLive);

@@ -66,6 +66,9 @@ public partial class ThemeSettingsViewModel
     [ObservableProperty]
     public partial string DiscordClientId { get; set; } = "";
 
+    [ObservableProperty]
+    public partial bool ListeningStatsEnabled { get; set; }
+
     partial void OnShowRingVisualizerChanged(bool value)
     {
         _settings.ShowRingVisualizer = value;
@@ -173,5 +176,11 @@ public partial class ThemeSettingsViewModel
         _settings.DiscordClientId = value;
         SettingsService.Save(_settings);
         _onDiscordSettingsChanged();
+    }
+
+    partial void OnListeningStatsEnabledChanged(bool value)
+    {
+        _settings.ListeningStatsEnabled = value;
+        SettingsService.Save(_settings);
     }
 }
