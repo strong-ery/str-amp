@@ -32,6 +32,8 @@ Written in C#, with an Avalonia UI backend, lighter than Spotify, open source, f
 
 **str-amp** is Windows only, however Linux support is planned soon.
 
+**str-amp** was developed in-part with **Claude** by **Anthropic**, both contributors are real developers, and we *do not* use AI as a substitute for our better judgement.
+
 ---
 
 ### Credits:
