@@ -95,6 +95,8 @@ public static class FlacSanitizer
             }
             catch
             {
+                // Best-effort cleanup of a partially-written target; the caller already
+                // reports failure via the false return above.
             }
             return false;
         }
@@ -110,6 +112,7 @@ public static class FlacSanitizer
         }
         catch
         {
+            // Best-effort cleanup; nothing else holds a reference to targetPath to retry.
         }
     }
 }

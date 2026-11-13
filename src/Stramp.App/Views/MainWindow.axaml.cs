@@ -32,11 +32,6 @@ public partial class MainWindow : Window
     private const double KickShiftPixels = 7;
     private const double PulseDecayPerTick = 0.86;
 
-    // Lyrics auto-scroll. The panel eases toward the active line a fraction of the remaining
-    // distance each frame, which glides into place and absorbs a run of quick line changes.
-    private const double LyricsScrollEase = 0.16;
-    private const double LyricsSettleDistance = 0.5;
-
     /// <summary>Seconds the auto-scroll keeps out of the way after a scroll by hand (~4s).</summary>
     private const double LyricsManualScrollDurationSeconds = 4.0;
 
@@ -65,23 +60,11 @@ public partial class MainWindow : Window
     private float _kickPulse;
     private float _hihatPulse;
 
-    private double? _lyricsScrollTarget;
     private double _lyricsEdgePadding;
-    private double _lyricsManualScrollSecondsRemaining;
 
     private bool _isDraggingSplitter;
-    private bool _isColumnAnimating;
-    private double _colAnimStartLeft;
-    private double _colAnimTargetLeft;
-    private double _colAnimStartRight;
-    private double _colAnimTargetRight;
-    private DateTime _colAnimStartTime;
-
-    private bool _isLyricsAnimating;
-    private double _lyricsAnimStartPixels;
-    private double _lyricsAnimTargetPixels;
-    private DateTime _lyricsAnimStartTime;
-    private bool _lyricsAnimShouldBeOpen;
+    private readonly ColumnResizeAnimator _columnAnimator = new();
+    private readonly LyricsScrollAnimator _lyricsAnimator = new();
 
     private bool _isFrameLoopRunning;
     private TimeSpan? _lastFrameTimestamp;
@@ -414,48 +397,36 @@ public partial class MainWindow : Window
         }
 
         StopLyricsAnimation();
-
-        _lyricsAnimStartPixels = startPixels;
-        _lyricsAnimTargetPixels = targetPixels;
-        _lyricsAnimStartTime = DateTime.UtcNow;
-        _lyricsAnimShouldBeOpen = shouldBeOpen;
-        _isLyricsAnimating = true;
+        _lyricsAnimator.StartPanelAnimation(startPixels, targetPixels, shouldBeOpen);
     }
 
-    private bool IsPanelAnimating => _isColumnAnimating || _isLyricsAnimating;
+    private bool IsPanelAnimating => _columnAnimator.IsAnimating || _lyricsAnimator.IsPanelAnimating;
 
     private void StopLyricsAnimation()
     {
-        if (_isLyricsAnimating)
+        if (_lyricsAnimator.IsPanelAnimating)
         {
-            _isLyricsAnimating = false;
+            _lyricsAnimator.StopPanelAnimation();
             RefreshLyricsLayoutAfterAnimation();
         }
     }
 
     private void StepLyricsPanelAnimation()
     {
-        if (!_isLyricsAnimating || NowPlayingSplit.ColumnDefinitions.Count < 2)
+        if (!_lyricsAnimator.IsPanelAnimating || NowPlayingSplit.ColumnDefinitions.Count < 2)
             return;
 
         var lyricsCol = NowPlayingSplit.ColumnDefinitions[1];
-
-        const double durationMs = 250.0;
-        var elapsed = (DateTime.UtcNow - _lyricsAnimStartTime).TotalMilliseconds;
-        double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
-        double easedT = t * t * (3 - 2 * t);
-
-        double currPixels = _lyricsAnimStartPixels + (_lyricsAnimTargetPixels - _lyricsAnimStartPixels) * easedT;
+        var currPixels = _lyricsAnimator.StepPanelAnimation(out var finished, out var shouldBeOpen);
 
         if (currPixels > 1)
             lyricsCol.Width = new GridLength(currPixels, GridUnitType.Pixel);
         else
             lyricsCol.Width = new GridLength(0);
 
-        if (t >= 1.0)
+        if (finished)
         {
-            var shouldBeOpen = _lyricsAnimShouldBeOpen;
-            StopLyricsAnimation();
+            RefreshLyricsLayoutAfterAnimation();
             lyricsCol.Width = shouldBeOpen ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         }
     }
@@ -482,8 +453,8 @@ public partial class MainWindow : Window
             return;
 
         LyricsScroller.Offset = default;
-        _lyricsScrollTarget = null;
-        _lyricsManualScrollSecondsRemaining = 0;
+        _lyricsAnimator.ClearScrollTarget();
+        _lyricsAnimator.ClearManualScrollPause();
     }
 
     /// <summary>
@@ -527,7 +498,7 @@ public partial class MainWindow : Window
     /// </summary>
     private void ScrollActiveLyricIntoView()
     {
-        if (_lyricsManualScrollSecondsRemaining > 0 || IsPanelAnimating)
+        if (_lyricsAnimator.IsManualScrollPauseActive || IsPanelAnimating)
             return;
 
         if (ViewModel is not { IsLyricsSynced: true } vm || vm.ActiveLyricLine is not { } active)
@@ -545,7 +516,7 @@ public partial class MainWindow : Window
         // moves — so this target stays correct even while an earlier glide is still running.
         var lineCentre = _lyricsEdgePadding + container.Bounds.Top + container.Bounds.Height / 2;
         var maxOffset = Math.Max(0, LyricsScroller.Extent.Height - viewport);
-        _lyricsScrollTarget = Math.Clamp(lineCentre - viewport / 2, 0, maxOffset);
+        _lyricsAnimator.SetScrollTarget(Math.Clamp(lineCentre - viewport / 2, 0, maxOffset));
     }
 
     /// <summary>Moves the panel a fraction of the way to its target, once per animation frame.</summary>
@@ -555,38 +526,19 @@ public partial class MainWindow : Window
             return;
 
         // Scrolling by hand takes over; the panel only takes itself back once the user has stopped.
-        if (_lyricsManualScrollSecondsRemaining > 0)
-        {
-            _lyricsManualScrollSecondsRemaining -= dt;
-            if (_lyricsManualScrollSecondsRemaining <= 0)
-            {
-                _lyricsManualScrollSecondsRemaining = 0;
-                ScrollActiveLyricIntoView();
-            }
-        }
+        if (_lyricsAnimator.TickManualPause(dt))
+            ScrollActiveLyricIntoView();
 
-        if (_lyricsScrollTarget is not { } target)
-            return;
-
-        var current = LyricsScroller.Offset.Y;
-        var remaining = target - current;
-        if (Math.Abs(remaining) < LyricsSettleDistance)
-        {
-            LyricsScroller.Offset = LyricsScroller.Offset.WithY(target);
-            _lyricsScrollTarget = null;
-            return;
-        }
-
-        var dtRatio = dt * 60.0;
-        var ease = 1.0 - Math.Pow(1.0 - LyricsScrollEase, dtRatio);
-        LyricsScroller.Offset = LyricsScroller.Offset.WithY(current + remaining * ease);
+        var newOffset = _lyricsAnimator.EaseTowardTarget(dt, LyricsScroller.Offset.Y);
+        if (newOffset is { } offset)
+            LyricsScroller.Offset = LyricsScroller.Offset.WithY(offset);
     }
 
     /// <summary>A scroll by hand parks the auto-scroll, so the two never fight over the panel.</summary>
     private void OnLyricsWheelChanged(object? sender, PointerWheelEventArgs e)
     {
-        _lyricsManualScrollSecondsRemaining = LyricsManualScrollDurationSeconds;
-        _lyricsScrollTarget = null;
+        _lyricsAnimator.BeginManualScrollPause(LyricsManualScrollDurationSeconds);
+        _lyricsAnimator.ClearScrollTarget();
     }
 
     private void OnVolumeWheelChanged(object? sender, PointerWheelEventArgs e)
@@ -692,48 +644,29 @@ public partial class MainWindow : Window
         }
 
         StopColumnAnimation();
-
-        _colAnimStartLeft = startLeft;
-        _colAnimTargetLeft = leftTarget;
-        _colAnimStartRight = startRight;
-        _colAnimTargetRight = rightTarget;
-        _colAnimStartTime = DateTime.UtcNow;
-        _isColumnAnimating = true;
+        _columnAnimator.Start(startLeft, leftTarget, startRight, rightTarget);
     }
 
     private void StopColumnAnimation()
     {
-        if (_isColumnAnimating)
+        if (_columnAnimator.IsAnimating)
         {
-            _isColumnAnimating = false;
+            _columnAnimator.Stop();
             RefreshLyricsLayoutAfterAnimation();
         }
     }
 
     private void StepColumnAnimation()
     {
-        if (!_isColumnAnimating)
+        if (!_columnAnimator.IsAnimating)
             return;
 
-        const double durationMs = 250.0;
-        var elapsed = (DateTime.UtcNow - _colAnimStartTime).TotalMilliseconds;
-        double t = Math.Clamp(elapsed / durationMs, 0.0, 1.0);
-        double easedT = t * t * (3 - 2 * t);
+        var (left, right) = _columnAnimator.Step(out var finished);
+        ApplyLeftColumnWidth(left);
+        ApplyRightColumnWidth(right);
 
-        double currLeft = _colAnimStartLeft + (_colAnimTargetLeft - _colAnimStartLeft) * easedT;
-        double currRight = _colAnimStartRight + (_colAnimTargetRight - _colAnimStartRight) * easedT;
-
-        ApplyLeftColumnWidth(currLeft);
-        ApplyRightColumnWidth(currRight);
-
-        if (t >= 1.0)
-        {
-            var leftTarget = _colAnimTargetLeft;
-            var rightTarget = _colAnimTargetRight;
-            StopColumnAnimation();
-            ApplyLeftColumnWidth(leftTarget);
-            ApplyRightColumnWidth(rightTarget);
-        }
+        if (finished)
+            RefreshLyricsLayoutAfterAnimation();
     }
 
     private void ApplyLeftColumnWidth(double width)
@@ -850,26 +783,7 @@ public partial class MainWindow : Window
         }
         else if (e.Key == Key.Escape)
         {
-            if (ViewModel?.IsAddToPlaylistOpen == true)
-            {
-                ViewModel.CloseAddToPlaylistCommand.Execute(null);
-                e.Handled = true;
-            }
-            else if (ViewModel?.IsNewPlaylistDialogOpen == true)
-            {
-                ViewModel.CloseNewPlaylistDialogCommand.Execute(null);
-                e.Handled = true;
-            }
-            else if (ViewModel?.IsSettingsOpen == true)
-            {
-                ViewModel.CloseSettingsCommand.Execute(null);
-                e.Handled = true;
-            }
-            else if (WindowState == WindowState.FullScreen)
-            {
-                ToggleFullScreen();
-                e.Handled = true;
-            }
+            HandleEscapeKeyDown(e);
         }
         else if (e.Key == Key.P && e.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
@@ -910,6 +824,31 @@ public partial class MainWindow : Window
                 ViewModel.RemoveSongFromCurrentPlaylist(ViewModel.SelectedLibraryRow);
                 e.Handled = true;
             }
+        }
+    }
+
+    /// <summary>Escape closes whichever dialog/overlay is on top, or exits full screen if none is open.</summary>
+    private void HandleEscapeKeyDown(KeyEventArgs e)
+    {
+        if (ViewModel?.IsAddToPlaylistOpen == true)
+        {
+            ViewModel.CloseAddToPlaylistCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsNewPlaylistDialogOpen == true)
+        {
+            ViewModel.CloseNewPlaylistDialogCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsSettingsOpen == true)
+        {
+            ViewModel.CloseSettingsCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (WindowState == WindowState.FullScreen)
+        {
+            ToggleFullScreen();
+            e.Handled = true;
         }
     }
 
@@ -1172,8 +1111,10 @@ public partial class MainWindow : Window
                 Verb = "open",
             });
         }
-        catch
+        catch (Exception ex)
         {
+            if (ViewModel is { } vm)
+                vm.StatusText = $"Could not open folder: {ex.Message}";
         }
     }
 
@@ -1208,8 +1149,10 @@ public partial class MainWindow : Window
                 });
             }
         }
-        catch
+        catch (Exception ex)
         {
+            if (ViewModel is { } vm)
+                vm.StatusText = $"Could not open listening history: {ex.Message}";
         }
     }
 
