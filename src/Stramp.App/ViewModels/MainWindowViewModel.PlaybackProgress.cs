@@ -1,18 +1,5 @@
-using System.Collections.ObjectModel;
-using System.Diagnostics;
-using Avalonia.Media;
-using Avalonia.Media.Imaging;
 using Avalonia.Threading;
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using Stramp.App.Services;
-using Stramp.Audio;
-using Stramp.Core.Library;
-using Stramp.Core.Lyrics;
-using Stramp.Core.Models;
 using Stramp.Core.Playback;
-using Stramp.Core.Settings;
-using Stramp.Integrations.Windows;
 
 namespace Stramp.App.ViewModels;
 public partial class MainWindowViewModel

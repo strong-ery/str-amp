@@ -349,10 +349,10 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         IsLyricsOpen = settings.LyricsPanelOpen;
         LeftPanelWidth = settings.LeftPanelWidth > 0 ? settings.LeftPanelWidth : 280;
         RightPanelWidth = settings.RightPanelWidth > 0 ? settings.RightPanelWidth : 280;
-        Theme = new ThemeSettingsViewModel(
-            settings, ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting,
+        Theme = new ThemeSettingsViewModel(settings, new ThemeSettingsCallbacks(
+            ApplyTheme, ApplyNormalizationSetting, ApplyDiscordPresenceSetting,
             ApplyMonoOutputSetting, ApplySurroundSoundSetting, ApplyLrcLibSetting, ApplyLibraryMetadataCacheSetting,
-            ApplyDesktopShortcutSetting, ApplyStartMenuShortcutSetting);
+            ApplyDesktopShortcutSetting, ApplyStartMenuShortcutSetting));
         Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
         ApplyEqualizer();
         ApplyEffects();
