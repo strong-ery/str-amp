@@ -28,7 +28,9 @@ Written in C#, with an Avalonia UI backend, lighter than Spotify, open source, f
 
 ### Disclaimer:
 
-**str-amp** will never share any usage data outside of your machine, and it only ever needs network access to check for updates and ask to install them for you.
+**str-amp** will never share any usage data with anybody, and it only ever needs network access to check for updates / ask to install them for you.
+
+**str-amp** is Windows only, however Linux support is planned soon.
 
 ---
 
