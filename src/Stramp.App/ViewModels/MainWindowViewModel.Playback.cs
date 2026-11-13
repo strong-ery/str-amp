@@ -57,7 +57,7 @@ public partial class MainWindowViewModel
         if (_pendingPlaybackPath is not null)
             return;
 
-        // Nothing handed to the player yet (fresh launch) — start this track rather than toggling.
+        // Nothing handed to the player yet (fresh launch); start this track rather than toggling.
         if (!_playerHasCurrentTrack)
         {
             StartPlayback(song.Path);

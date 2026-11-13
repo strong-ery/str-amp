@@ -78,7 +78,7 @@ public static class PlaylistScanner
             if (line.Length == 0 || line.StartsWith('#'))
                 continue;
 
-            // Skip network streams — we only import local files.
+            // Skip network streams: we only import local files.
             if (line.Contains("://", StringComparison.Ordinal))
                 continue;
 
@@ -168,7 +168,7 @@ public static class PlaylistScanner
             }
             catch
             {
-                // Unreadable audio — skip this entry.
+                // Unreadable audio: skip this entry.
             }
         }
 

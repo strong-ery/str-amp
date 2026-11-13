@@ -5,7 +5,7 @@ namespace Stramp.App.Services;
 
 /// <summary>
 /// Owns the Discord Rich Presence connection and turns playback state into an activity payload.
-/// Ships pointed at str-amp's own Discord application, so any user just flips the toggle on — a
+/// Ships pointed at str-amp's own Discord application, so any user just flips the toggle on: a
 /// client ID is a public app identifier, not a credential, so it's fine to share across every
 /// install (the same way every game or app with Rich Presence works). Settings can override it
 /// with a different application for local testing.

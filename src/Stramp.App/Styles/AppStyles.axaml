@@ -213,7 +213,7 @@
     <Setter Property="FontWeight" Value="Bold" />
   </Style>
 
-  <!-- Library/queue lists: no chrome of their own at all — the only highlight is our own
+  <!-- Library/queue lists: no chrome of their own at all; the only highlight is our own
        Border.queue-row/.playing classes above, applied per-item in the DataTemplate. -->
   <Style Selector="ListBox.flat-list">
     <Setter Property="Background" Value="Transparent" />

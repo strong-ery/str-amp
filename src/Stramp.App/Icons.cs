@@ -3,7 +3,7 @@ using Avalonia.Media;
 namespace Stramp.App;
 
 /// <summary>
-/// Icon glyphs as vector path data (24x24 viewBox, Material Design Icons geometry — freely
+/// Icon glyphs as vector path data (24x24 viewBox, Material Design Icons geometry: freely
 /// reusable interface iconography, Apache-2.0). Used via PathIcon rather than a third-party
 /// icon-font package, to avoid an extra dependency for a handful of glyphs.
 /// </summary>

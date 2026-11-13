@@ -9,7 +9,7 @@ namespace Stramp.App.ViewModels;
 /// <summary>
 /// The owner-notification callbacks <see cref="ThemeSettingsViewModel"/> needs. Settings this
 /// panel owns outright (colors, visualizer toggles, ...) are applied and saved internally; these
-/// are the handful the owner must still react to itself — e.g. to restart a device, or push a
+/// are the handful the owner must still react to itself, e.g. to restart a device, or push a
 /// value to something outside this view model. All but <see cref="OnManualColorsChanged"/> are
 /// optional and default to doing nothing.
 /// </summary>
@@ -65,61 +65,6 @@ public partial class ThemeSettingsViewModel : ViewModelBase
 
     public bool UsesManualColors => ArtColorMode == AlbumArtColorMode.None;
 
-    [ObservableProperty]
-    public partial bool ShowRingVisualizer { get; set; }
-
-    [ObservableProperty]
-    public partial bool ShowBottomVisualizer { get; set; }
-
-    [ObservableProperty]
-    public partial bool AnimateAlbumArt { get; set; }
-
-    [ObservableProperty]
-    public partial bool DisableAnimations { get; set; }
-
-    [ObservableProperty]
-    public partial bool CircularAlbumArt { get; set; }
-
-    [ObservableProperty]
-    public partial double BottomVisualizerOpacity { get; set; }
-
-    [ObservableProperty]
-    public partial bool ShowWaveformProgress { get; set; }
-
-    [ObservableProperty]
-    public partial bool NormalizeAudio { get; set; }
-
-    [ObservableProperty]
-    public partial AudioNormalizationLevel NormalizationLevel { get; set; }
-
-    [ObservableProperty]
-    public partial bool MonoAudio { get; set; }
-
-    [ObservableProperty]
-    public partial bool SurroundSound { get; set; }
-
-    public IReadOnlyList<AudioNormalizationLevel> NormalizationLevels { get; } =
-        Enum.GetValues<AudioNormalizationLevel>();
-
-    /// <summary>Whether missing lyrics are looked up on lrclib.net.</summary>
-    [ObservableProperty]
-    public partial bool LrcLibLookup { get; set; }
-
-    [ObservableProperty]
-    public partial bool CacheLibraryMetadata { get; set; }
-
-    [ObservableProperty]
-    public partial bool EnsureDesktopShortcut { get; set; }
-
-    [ObservableProperty]
-    public partial bool EnsureStartMenuShortcut { get; set; }
-
-    [ObservableProperty]
-    public partial bool DiscordRichPresenceEnabled { get; set; }
-
-    [ObservableProperty]
-    public partial string DiscordClientId { get; set; } = "";
-
     public ThemeSettingsViewModel(AppSettings settings, ThemeSettingsCallbacks callbacks)
     {
         _settings = settings;
@@ -172,115 +117,6 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         _onManualColorsChanged();
     }
 
-    partial void OnShowRingVisualizerChanged(bool value)
-    {
-        _settings.ShowRingVisualizer = value;
-        SettingsService.Save(_settings);
-    }
-
-    partial void OnShowBottomVisualizerChanged(bool value)
-    {
-        _settings.ShowBottomVisualizer = value;
-        SettingsService.Save(_settings);
-    }
-
-    partial void OnAnimateAlbumArtChanged(bool value)
-    {
-        _settings.AnimateAlbumArt = value;
-        SettingsService.Save(_settings);
-    }
-
-    partial void OnDisableAnimationsChanged(bool value)
-    {
-        _settings.DisableAnimations = value;
-        SettingsService.Save(_settings);
-    }
-
-    partial void OnCircularAlbumArtChanged(bool value)
-    {
-        _settings.CircularAlbumArt = value;
-        SettingsService.Save(_settings);
-    }
-
-    partial void OnBottomVisualizerOpacityChanged(double value) =>
-        _settings.BottomVisualizerOpacity = value; // saved when the dialog closes, not on every drag tick
-
-    partial void OnShowWaveformProgressChanged(bool value)
-    {
-        _settings.ShowWaveformProgress = value;
-        SettingsService.Save(_settings);
-    }
-
-    partial void OnNormalizeAudioChanged(bool value)
-    {
-        _settings.AudioNormalizationEnabled = value;
-        SettingsService.Save(_settings);
-        _onNormalizationChanged();
-    }
-
-    partial void OnNormalizationLevelChanged(AudioNormalizationLevel value)
-    {
-        _settings.AudioNormalizationLevel = value;
-        SettingsService.Save(_settings);
-        _onNormalizationChanged();
-    }
-
-    partial void OnMonoAudioChanged(bool value)
-    {
-        _settings.MonoAudioEnabled = value;
-        SettingsService.Save(_settings);
-        _onMonoAudioChanged();
-    }
-
-    partial void OnSurroundSoundChanged(bool value)
-    {
-        _settings.SurroundSoundEnabled = value;
-        SettingsService.Save(_settings);
-        _onSurroundSoundChanged();
-    }
-
-    partial void OnLrcLibLookupChanged(bool value)
-    {
-        _settings.LrcLibLookupEnabled = value;
-        SettingsService.Save(_settings);
-        _onLrcLibLookupChanged();
-    }
-
-    partial void OnCacheLibraryMetadataChanged(bool value)
-    {
-        _settings.CacheLibraryMetadata = value;
-        SettingsService.Save(_settings);
-        _onLibraryMetadataCacheChanged();
-    }
-
-    partial void OnEnsureDesktopShortcutChanged(bool value)
-    {
-        _settings.EnsureDesktopShortcut = value;
-        SettingsService.Save(_settings);
-        _onDesktopShortcutChanged(value);
-    }
-
-    partial void OnEnsureStartMenuShortcutChanged(bool value)
-    {
-        _settings.EnsureStartMenuShortcut = value;
-        SettingsService.Save(_settings);
-        _onStartMenuShortcutChanged(value);
-    }
-
-    partial void OnDiscordRichPresenceEnabledChanged(bool value)
-    {
-        _settings.DiscordRichPresenceEnabled = value;
-        SettingsService.Save(_settings);
-        _onDiscordSettingsChanged();
-    }
-
-    partial void OnDiscordClientIdChanged(string value)
-    {
-        _settings.DiscordClientId = value;
-        SettingsService.Save(_settings);
-        _onDiscordSettingsChanged();
-    }
-
     private void ApplyLive()
     {
         if (_suppressApply)
@@ -330,72 +166,6 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         catch
         {
             return fallback;
-        }
-    }
-}
-
-public sealed record ThemePreset(string Name, string Primary, string Secondary, string Background)
-{
-    public IBrush PrimaryBrush => new SolidColorBrush(Color.Parse(Primary));
-    public IBrush SecondaryBrush => new SolidColorBrush(Color.Parse(Secondary));
-}
-
-/// <summary>One editable color: bound to the visual picker, with a hex box and preview swatch.</summary>
-public partial class ColorChannelEditor : ViewModelBase
-{
-    private readonly Action _onChanged;
-    private bool _updating;
-
-    [ObservableProperty]
-    public partial Color Color { get; set; }
-
-    [ObservableProperty]
-    public partial string Hex { get; set; } = "#000000";
-
-    [ObservableProperty]
-    public partial IBrush PreviewBrush { get; set; } = Brushes.Black;
-
-    public ColorChannelEditor(Color initial, Action onChanged)
-    {
-        _onChanged = onChanged;
-        SetColor(initial);
-    }
-
-    public void SetColor(Color color)
-    {
-        _updating = true;
-        Color = color;
-        Hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
-        PreviewBrush = new SolidColorBrush(color);
-        _updating = false;
-    }
-
-    partial void OnColorChanged(Color value)
-    {
-        if (_updating)
-            return;
-
-        _updating = true;
-        Hex = $"#{value.R:X2}{value.G:X2}{value.B:X2}";
-        PreviewBrush = new SolidColorBrush(value);
-        _updating = false;
-
-        _onChanged();
-    }
-
-    partial void OnHexChanged(string value)
-    {
-        if (_updating)
-            return;
-
-        try
-        {
-            SetColor(Avalonia.Media.Color.Parse(value));
-            _onChanged();
-        }
-        catch
-        {
-            // Invalid/partial hex while typing — ignore until it parses.
         }
     }
 }

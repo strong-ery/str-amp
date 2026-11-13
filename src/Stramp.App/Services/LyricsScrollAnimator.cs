@@ -4,7 +4,7 @@ namespace Stramp.App.Services;
 /// Owns the two pieces of lyrics-panel animation state: the panel's open/close width tween (eased
 /// pixel width toward 0 or half the card) and the auto-scroll that glides the list toward the
 /// active line, pausing itself for a few seconds after the user scrolls by hand. Kept together
-/// because both are what "the lyrics panel is animating" means to callers. Pure state/math — the
+/// because both are what "the lyrics panel is animating" means to callers. Pure state/math: the
 /// caller owns applying the stepped values to the actual grid column and scroll viewer.
 /// </summary>
 public sealed class LyricsScrollAnimator

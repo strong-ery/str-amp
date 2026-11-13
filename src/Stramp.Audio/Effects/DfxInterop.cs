@@ -5,12 +5,9 @@ namespace Stramp.Audio.Effects;
 /// <summary>
 /// The entry points of DfxBridge.dll, which wraps FxSound's DSP library.
 ///
-/// str-amp used to implement these five effects itself, porting what FxSound publishes. Four of
-/// them were faithful ports, but three parameter mappings had to be guessed because the functions
-/// that compute them are not in the open-source release, and the bass boost and output limiter had
-/// no counterpart there at all and were written from scratch. The result measured well and still
-/// did not sound right. Calling the library removes every one of those guesses: what plays is
-/// FxSound's processing, not an interpretation of it.
+/// These five effects are provided by FxSound's own DfxDsp library rather than a reimplementation:
+/// several of the parameter mappings are not derivable from the open-source release, and calling
+/// the library directly means what plays is FxSound's actual processing, not an approximation of it.
 ///
 /// The DLL ships prebuilt in native/prebuilt/x64. See COPYRIGHT for its source and how to rebuild.
 /// </summary>

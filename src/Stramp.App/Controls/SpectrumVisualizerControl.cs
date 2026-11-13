@@ -23,7 +23,7 @@ public sealed class SpectrumVisualizerControl : Control
     public static readonly StyledProperty<IBrush?> SecondaryBrushProperty =
         AvaloniaProperty.Register<SpectrumVisualizerControl, IBrush?>(nameof(SecondaryBrush));
 
-    /// <summary>Radius of the ring the bars grow out of — set to just outside the album art.</summary>
+    /// <summary>Radius of the ring the bars grow out of, set to just outside the album art.</summary>
     public static readonly StyledProperty<double> InnerRadiusProperty =
         AvaloniaProperty.Register<SpectrumVisualizerControl, double>(nameof(InnerRadius), 118d);
 
@@ -253,7 +253,7 @@ public sealed class SpectrumVisualizerControl : Control
         DrawTraceLine(context, width, height, maxHeight, secondary, userOpacity);
     }
 
-    /// <summary>Hard-stepped (bar-like) profile — the flat tops are what make it read as spiky.</summary>
+    /// <summary>Hard-stepped (bar-like) profile: the flat tops are what make it read as spiky.</summary>
     private static StreamGeometry BuildSteppedSkyline(float[] levels, double width, double height, double maxHeight)
     {
         var geometry = new StreamGeometry();

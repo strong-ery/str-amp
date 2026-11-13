@@ -6,7 +6,7 @@ namespace Stramp.Core.Lyrics;
 
 /// <summary>
 /// Looks tracks up on lrclib.net. The exact-signature endpoint is tried first, and a title/artist
-/// search only runs when that misses — most often because the local file's duration or album tag
+/// search only runs when that misses, most often because the local file's duration or album tag
 /// disagrees with what was uploaded.
 /// </summary>
 public sealed class LrcLibClient : IDisposable

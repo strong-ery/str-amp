@@ -26,7 +26,7 @@ public static class SettingsService
         }
         catch
         {
-            // Corrupt/unreadable settings — fall back to defaults rather than crash the app.
+            // Corrupt/unreadable settings: fall back to defaults rather than crash the app.
         }
 
         return new AppSettings();

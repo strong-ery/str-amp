@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stramp.Core.Playback;
@@ -7,151 +6,10 @@ using Stramp.Core.Settings;
 
 namespace Stramp.App.ViewModels;
 
-/// <summary>One EQ band: a draggable gain and an editable centre frequency.</summary>
-public partial class EqualizerBandViewModel : ViewModelBase
-{
-    /// <summary>
-    /// Range a centre frequency may be typed into. The audible band, give or take — the player
-    /// separately keeps bands ordered and below what the current sample rate can represent.
-    /// </summary>
-    public const double MinFrequencyHz = EqualizerBandLayout.MinFrequencyHz;
-    public const double MaxFrequencyHz = EqualizerBandLayout.MaxFrequencyHz;
-
-    private readonly Action<bool> _onChanged;
-
-    /// <summary>
-    /// Swallows change notifications. Starts on, because assigning the initial values below runs
-    /// the same change handlers, and the owner cannot answer questions about a band it has not
-    /// finished adding to its collection yet.
-    /// </summary>
-    private bool _suppressNotify = true;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(GainLabel))]
-    public partial double Gain { get; set; }
-
-    [ObservableProperty]
-    public partial double Frequency { get; set; }
-
-    /// <summary>
-    /// The band's gain as shown above its slider. Always carries an explicit sign so a boost reads
-    /// "+3" against a cut's "-3", and only shows a decimal when the value actually has one.
-    /// </summary>
-    public string GainLabel => Gain.ToString("+0.#;-0.#;0", CultureInfo.InvariantCulture);
-
-    /// <param name="onChanged">Called after a change; the argument is true when it was the
-    /// centre frequency that moved rather than the gain.</param>
-    public EqualizerBandViewModel(double frequencyHz, double gain, Action<bool> onChanged)
-    {
-        _onChanged = onChanged;
-        Gain = gain;
-        Frequency = frequencyHz;
-        _suppressNotify = false;
-    }
-
-    /// <summary>Sets the centre without reporting it, for the owner's own bookkeeping.</summary>
-    public void SetFrequencyQuietly(double value)
-    {
-        var wasSuppressed = _suppressNotify;
-        _suppressNotify = true;
-        Frequency = value;
-        _suppressNotify = wasSuppressed;
-    }
-
-    partial void OnGainChanged(double value)
-    {
-        if (!_suppressNotify)
-            _onChanged(false);
-    }
-
-    partial void OnFrequencyChanged(double value)
-    {
-        if (_suppressNotify)
-            return;
-
-        // A typed-in frequency can be anything, including blank or absurd. Snap it back into range
-        // first; the owner then holds it between its neighbours.
-        var clamped = double.IsFinite(value)
-            ? Math.Clamp(value, MinFrequencyHz, MaxFrequencyHz)
-            : MinFrequencyHz;
-
-        if (Math.Abs(clamped - value) > 1e-9)
-            SetFrequencyQuietly(clamped);
-
-        _onChanged(true);
-    }
-}
-
-/// <summary>One of the five post-equalizer enhancement effects, as a named 0-10 slider.</summary>
-public partial class AudioEffectViewModel : ViewModelBase
-{
-    private readonly Action _onChanged;
-
-    /// <summary>
-    /// Swallows change notifications. Starts on, because assigning the initial amount runs the
-    /// same change handler, and the owner cannot answer for an effect it is still constructing.
-    /// </summary>
-    private bool _suppressNotify = true;
-
-    public string Name { get; }
-    public string Description { get; }
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(AmountLabel))]
-    public partial double Amount { get; set; }
-
-    public AudioEffectViewModel(string name, string description, double amount, Action onChanged)
-    {
-        Name = name;
-        Description = description;
-        _onChanged = onChanged;
-        Amount = amount;
-        _suppressNotify = false;
-    }
-
-    /// <summary>
-    /// Shown beside the slider, rounded to a whole number the way FXSound shows the same value.
-    /// A preset's amount can sit between two of them — "Music" asks for 2.8 ambience — and is kept
-    /// at full precision underneath rather than being snapped to what the label can print.
-    /// </summary>
-    public string AmountLabel => Amount < AudioEffectSettings.OffThreshold
-        ? "off"
-        : Amount.ToString("0", CultureInfo.InvariantCulture);
-
-    /// <summary>Sets the amount without reporting it, for the owner's own bookkeeping.</summary>
-    public void SetQuietly(double value)
-    {
-        var wasSuppressed = _suppressNotify;
-        _suppressNotify = true;
-        Amount = Math.Clamp(Math.Round(value, 2), 0, AudioEffectSettings.MaxAmount);
-        _suppressNotify = wasSuppressed;
-    }
-
-    partial void OnAmountChanged(double value)
-    {
-        if (_suppressNotify)
-            return;
-
-        // Dragging lands on arbitrary decimals. Snap to whole numbers so a hand-set slider is
-        // exactly the value its label prints; presets bypass this and keep their own precision.
-        var snapped = double.IsFinite(value)
-            ? Math.Clamp(Math.Round(value), 0, AudioEffectSettings.MaxAmount)
-            : 0;
-
-        if (Math.Abs(snapped - value) > 1e-9)
-        {
-            SetQuietly(snapped);
-            _onChanged();
-            return;
-        }
-
-        _onChanged();
-    }
-}
-
 /// <summary>
-/// Equalizer and post-effects state for the theme panel: bands, presets, the five enhancement
-/// sliders, and the constraints that keep band centres ordered.
+/// Equalizer state for the theme panel: the band sliders, the built-in curve presets, and the
+/// constraints that keep band centres ordered. Effect-slider state lives alongside this in
+/// <see cref="ThemeSettingsViewModel.Effects"/>.cs; presets drive both from here.
 /// </summary>
 public partial class ThemeSettingsViewModel
 {
@@ -168,9 +26,6 @@ public partial class ThemeSettingsViewModel
     [ObservableProperty]
     public partial bool EqualizerEnabled { get; set; }
 
-    [ObservableProperty]
-    public partial bool EffectsEnabled { get; set; }
-
     public ObservableCollection<EqualizerBandViewModel> EqualizerBands { get; } = [];
 
     /// <summary>Built-in curves offered above the band sliders.</summary>
@@ -178,21 +33,11 @@ public partial class ThemeSettingsViewModel
         Stramp.Core.Playback.EqualizerPresets.All;
 
     /// <summary>
-    /// The preset showing in the dropdown. Null whenever the bands do not match one — which is the
+    /// The preset showing in the dropdown. Null whenever the bands do not match one, which is the
     /// case at startup, and again as soon as anything is adjusted by hand.
     /// </summary>
     [ObservableProperty]
     public partial EqualizerPreset? SelectedEqualizerPreset { get; set; }
-
-    /// <summary>The five enhancement effects, in the order they run.</summary>
-    public ObservableCollection<AudioEffectViewModel> AudioEffects { get; } = [];
-
-    partial void OnEffectsEnabledChanged(bool value)
-    {
-        _settings.EffectsEnabled = value;
-        SettingsService.Save(_settings);
-        _onEffectsChanged?.Invoke();
-    }
 
     partial void OnEqualizerEnabledChanged(bool value)
     {
@@ -229,65 +74,6 @@ public partial class ThemeSettingsViewModel
                 frequencyMoved => OnBandChanged(index, frequencyMoved)));
         }
     }
-
-    private void InitializeEffects()
-    {
-        AudioEffects.Clear();
-        AudioEffects.Add(new AudioEffectViewModel(
-            "Clarity", "Presence and air, from harmonics of the top end",
-            _settings.ClarityAmount, OnEffectChanged));
-        AudioEffects.Add(new AudioEffectViewModel(
-            "Ambience", "A short reverb, for a sense of space",
-            _settings.AmbienceAmount, OnEffectChanged));
-        AudioEffects.Add(new AudioEffectViewModel(
-            "Surround", "Stereo width, kept out of the bass so it stays mono-safe",
-            _settings.SurroundAmount, OnEffectChanged));
-        AudioEffects.Add(new AudioEffectViewModel(
-            "Dynamic Boost", "Lifts quiet passages without raising the peaks",
-            _settings.DynamicBoostAmount, OnEffectChanged));
-        AudioEffects.Add(new AudioEffectViewModel(
-            "Bass Boost", "Low shelf below about 150 Hz",
-            _settings.BassBoostAmount, OnEffectChanged));
-    }
-
-    private void OnEffectChanged()
-    {
-        if (_suppressEqualizerApply || AudioEffects.Count < 5)
-            return;
-
-        // Reaching for an effect means the bands are no longer purely the preset's either.
-        if (!_applyingPreset)
-            SelectedEqualizerPreset = null;
-
-        _settings.ClarityAmount = AudioEffects[0].Amount;
-        _settings.AmbienceAmount = AudioEffects[1].Amount;
-        _settings.SurroundAmount = AudioEffects[2].Amount;
-        _settings.DynamicBoostAmount = AudioEffects[3].Amount;
-        _settings.BassBoostAmount = AudioEffects[4].Amount;
-
-        _onEffectsChanged?.Invoke();
-    }
-
-    /// <summary>Moves all five effect sliders at once and tells the player a single time.</summary>
-    private void SetEffects(AudioEffectSettings effects)
-    {
-        if (AudioEffects.Count < 5)
-            return;
-
-        _suppressEqualizerApply = true;
-        AudioEffects[0].SetQuietly(effects.Clarity);
-        AudioEffects[1].SetQuietly(effects.Ambience);
-        AudioEffects[2].SetQuietly(effects.Surround);
-        AudioEffects[3].SetQuietly(effects.DynamicBoost);
-        AudioEffects[4].SetQuietly(effects.BassBoost);
-        _suppressEqualizerApply = false;
-
-        OnEffectChanged();
-    }
-
-    /// <summary>Turns all five effects off, leaving the equalizer alone.</summary>
-    [RelayCommand]
-    private void ResetEffects() => SetEffects(AudioEffectSettings.None);
 
     /// <summary>Writes the bands back to settings and hands the whole layout to the player.</summary>
     private void OnBandChanged(int index, bool frequencyMoved)

@@ -56,7 +56,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private readonly ListeningHistoryStore _listeningHistoryStore;
     private readonly ListeningHistoryDatabase _listeningHistory;
 
-    /// <summary>Songs of the selected source (All Songs or a playlist) — what the queue is built from.</summary>
+    /// <summary>Songs of the selected source (All Songs or a playlist): what the queue is built from.</summary>
     private List<Song> _activeSongs = [];
     private bool _isSeeking;
     private bool _isAdvancing;

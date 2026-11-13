@@ -40,7 +40,7 @@ public sealed class DiscordRichPresence : IDisposable
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromMilliseconds(500);
 
     // Discord's IPC schema validator rejects optional fields sent as an explicit `null` (e.g.
-    // "timestamps": null) with an ERROR frame instead of just ignoring them — they must be omitted
+    // "timestamps": null) with an ERROR frame instead of just ignoring them; they must be omitted
     // from the payload entirely.
     private static readonly JsonSerializerOptions ActivityJsonOptions = new()
     {
@@ -109,7 +109,7 @@ public sealed class DiscordRichPresence : IDisposable
             }
             catch
             {
-                // Discord isn't running, or dropped the pipe — fall through to the retry delay.
+                // Discord isn't running, or dropped the pipe: fall through to the retry delay.
             }
             finally
             {
@@ -139,7 +139,7 @@ public sealed class DiscordRichPresence : IDisposable
         await WriteFrameAsync(pipe, Opcode.Handshake,
             JsonSerializer.Serialize(new { v = 1, client_id = _clientId }), token);
 
-        // The first frame back is Discord's READY dispatch — its contents don't matter, only that
+        // The first frame back is Discord's READY dispatch; its contents don't matter, only that
         // the handshake was accepted.
         await ReadFrameAsync(pipe, token);
         _connected = true;
@@ -316,7 +316,7 @@ public sealed class DiscordRichPresence : IDisposable
         }
         catch
         {
-            // Best-effort shutdown — the process is exiting either way.
+            // Best-effort shutdown: the process is exiting either way.
         }
 
         _lifetimeCts.Dispose();

@@ -15,8 +15,8 @@ public static class EqualizerBandLayout
     public const double MaxFrequencyHz = 20000;
 
     /// <summary>
-    /// Smallest ratio kept between neighbouring centres. Deliberately tiny — some presets really do
-    /// place two bands about a sixth of an octave apart — but non-zero, so no two bands coincide.
+    /// Smallest ratio kept between neighbouring centres. Deliberately tiny, since some presets really
+    /// do place two bands about a sixth of an octave apart, but non-zero, so no two bands coincide.
     /// </summary>
     public const double MinSpacingRatio = 1.01;
 

@@ -6,7 +6,7 @@ namespace Stramp.Audio.Dsp;
 /// <summary>
 /// Interleaved, per-channel graphic EQ: a bank of peaking biquads, one per band, each sized to
 /// the gap it owns. Because neighbouring bells overlap, the filters are not driven straight off
-/// the sliders — <see cref="SolveBandGains"/> first works out the gains whose combined response
+/// the sliders: <see cref="SolveBandGains"/> first works out the gains whose combined response
 /// passes through the requested level at every band centre, so a slider moves its own part of
 /// the spectrum and leaves the rest where it was.
 ///
@@ -16,16 +16,14 @@ namespace Stramp.Audio.Dsp;
 /// The bank does take back its own peak, though. Modern masters arrive at full scale, so any
 /// boost on top has nowhere to go: measured with a +2 dB band on a normal track, this stage was
 /// handing on a signal at +2.56 dBFS. What that costs depends on what follows and both answers
-/// were bad -- with the enhancements off it reached the endpoint and was clipped there, and with
+/// were bad: with the enhancements off it reached the endpoint and was clipped there, and with
 /// them on it drove FxSound's limiter into continuous heavy reduction, which modulates the gain
 /// of everything else and is audible as distortion.
 ///
 /// So the bank is attenuated by the peak of its own combined response, computed across the
 /// spectrum rather than assumed from the largest slider, since overlapping bells add. A flat
-/// bank attenuates by nothing. This is not the old preamp that quietened the track whenever any
-/// band was raised: that one scaled by the largest boost whether or not the response actually
-/// reached it, so a boost bought nothing but a quieter mix. Here the shape the user drew is
-/// preserved exactly and only the part that would have gone past full scale is given up.
+/// bank attenuates by nothing, and a bank with headroom to spare is left alone. The shape the
+/// user drew is preserved exactly; only the part that would have gone past full scale is given up.
 /// </summary>
 internal sealed class EqualizerSampleProvider : ISampleProvider
 {
@@ -56,7 +54,7 @@ internal sealed class EqualizerSampleProvider : ISampleProvider
     /// <summary>
     /// Smallest ratio allowed between one band's centre and the next. Bands are kept strictly
     /// ascending so band <i>n</i> on screen is always band <i>n</i> in the bank, but the margin
-    /// is deliberately tiny — some presets really do put two bands a sixth of an octave apart.
+    /// is deliberately tiny, since some presets really do put two bands a sixth of an octave apart.
     /// </summary>
     private const float MinBandSpacingRatio = 1.01f;
 
@@ -162,8 +160,8 @@ internal sealed class EqualizerSampleProvider : ISampleProvider
     }
 
     /// <summary>
-    /// Stages a new band layout. Everything expensive — sanitising the frequencies, sizing each
-    /// band's Q, and solving the interaction between them — happens here on the caller's thread,
+    /// Stages a new band layout. Everything expensive (sanitising the frequencies, sizing each
+    /// band's Q, and solving the interaction between them) happens here on the caller's thread,
     /// so the audio thread only ever picks up a finished plan.
     /// </summary>
     public void Update(IReadOnlyList<float> centreFrequencies, IReadOnlyList<double> gainsDb, bool enabled)
@@ -311,7 +309,7 @@ internal sealed class EqualizerSampleProvider : ISampleProvider
             if (!float.IsFinite(value) || value <= 0)
                 value = floor;
 
-            // Keep ascending, but never push a band past what the sample rate can represent —
+            // Keep ascending, but never push a band past what the sample rate can represent:
             // one parked at the ceiling is rendered flat rather than being misplaced.
             result[i] = Math.Min(Math.Max(value, floor), ceiling);
             floor = result[i] * MinBandSpacingRatio;
@@ -346,7 +344,7 @@ internal sealed class EqualizerSampleProvider : ISampleProvider
     /// <summary>
     /// Turns slider positions into the filter gains that actually produce them. Neighbouring
     /// bells overlap, so driving each filter straight off its slider stacks the skirts and
-    /// overshoots — ten sliders at +6 dB measure nearer +9. This solves the interaction between
+    /// overshoots: ten sliders at +6 dB measure nearer +9. This solves the interaction between
     /// the bands so the response at each centre frequency lands on the number that was asked
     /// for, which is what makes one slider move one part of the spectrum and nothing else.
     /// </summary>
@@ -540,7 +538,7 @@ internal sealed class EqualizerSampleProvider : ISampleProvider
 
     /// <summary>
     /// A finished band layout: where the bands sit, how wide each one ended up, and the gains
-    /// the filters are driven at (which are not the slider values — see
+    /// the filters are driven at (which are not the slider values, see
     /// <see cref="SolveBandGains"/>). Immutable, so the audio thread adopts one atomically.
     /// </summary>
     private sealed record BandPlan(

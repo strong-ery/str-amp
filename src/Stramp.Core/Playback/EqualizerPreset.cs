@@ -3,7 +3,7 @@ namespace Stramp.Core.Playback;
 /// <summary>
 /// A named equalizer curve, stored as the frequency/gain points it was authored at rather than as
 /// gains for one particular set of sliders. The presets came from FXSound, where every preset
-/// carries its own band frequencies, so almost none of them line up with ours — and pinning the
+/// carries its own band frequencies, so almost none of them line up with ours, and pinning the
 /// numbers to today's band list would silently misplace them if that list ever changed.
 /// <see cref="GainsFor"/> resamples the curve onto whichever bands the player actually exposes.
 /// </summary>
@@ -20,7 +20,7 @@ public sealed record EqualizerPreset(
 
     /// <summary>
     /// The curve sampled at each of <paramref name="bandFrequencies"/>, interpolated linearly in
-    /// log frequency — the axis the bands are spaced on and the one the curve was drawn against.
+    /// log frequency (the axis the bands are spaced on and the one the curve was drawn against).
     /// Frequencies outside the curve hold its end value rather than extrapolating off it.
     /// </summary>
     public double[] GainsFor(IReadOnlyList<float> bandFrequencies)

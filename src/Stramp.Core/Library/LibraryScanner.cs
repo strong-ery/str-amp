@@ -121,7 +121,7 @@ public static class LibraryScanner
         }
         catch
         {
-            // Corrupt/unreadable tags — fall back to filename below.
+            // Corrupt/unreadable tags: fall back to filename below.
         }
 
         if (title is null || artist is null)

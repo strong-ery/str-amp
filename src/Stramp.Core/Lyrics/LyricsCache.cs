@@ -85,7 +85,7 @@ public sealed class LyricsCache(string? directory = null)
             }
             catch
             {
-                // Nothing cached, or the file is locked — the lookup runs again either way.
+                // Nothing cached, or the file is locked: the lookup runs again either way.
             }
         }
     }

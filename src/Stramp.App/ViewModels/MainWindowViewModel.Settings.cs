@@ -96,7 +96,7 @@ public partial class MainWindowViewModel
     }
 
     /// <summary>Pushes the current track/playback-state to Discord. A no-op when the integration
-    /// is off or not configured — see <see cref="DiscordPresenceService"/>.</summary>
+    /// is off or not configured; see <see cref="DiscordPresenceService"/>.</summary>
     private void UpdateDiscordPresence()
     {
         if (_queue.Current is { } song)

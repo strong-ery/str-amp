@@ -18,7 +18,7 @@ public enum LyricsOrigin
     /// <summary>LRCLIB has the track on file and says it has no words.</summary>
     Instrumental,
 
-    /// <summary>LRCLIB could not be reached at all — worth retrying, unlike a plain miss.</summary>
+    /// <summary>LRCLIB could not be reached at all; worth retrying, unlike a plain miss.</summary>
     Unavailable,
 }
 

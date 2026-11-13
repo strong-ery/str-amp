@@ -2,7 +2,7 @@ namespace Stramp.App.Services;
 
 /// <summary>
 /// Eases the library/up-next sidebar column widths toward their targets over a fixed duration,
-/// using a smoothstep so the columns glide to size instead of snapping. Pure state/math — the
+/// using a smoothstep so the columns glide to size instead of snapping. Pure state/math: the
 /// caller owns applying the stepped widths to the actual grid columns.
 /// </summary>
 public sealed class ColumnResizeAnimator

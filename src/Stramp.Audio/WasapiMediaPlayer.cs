@@ -440,7 +440,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     }
 
     /// <summary>
-    /// Resolves a saved endpoint id, returning null — meaning "follow the system default" — when
+    /// Resolves a saved endpoint id, returning null (meaning "follow the system default") when
     /// the id is empty or names a device that is gone, disabled, or unplugged.
     /// </summary>
     private static MMDevice? ResolveOutputDevice(string? id)
@@ -723,7 +723,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
     /// is what a mono fold-down is for hearing in the first place.
     ///
     /// The switch fades over the same short ramp the gain stage uses rather than snapping, because
-    /// flipping it mid-track is otherwise a step change in every channel at once — a click.
+    /// flipping it mid-track is otherwise a step change in every channel at once: a click.
     /// </summary>
     private sealed class MonoDownmixSampleProvider : ISampleProvider
     {

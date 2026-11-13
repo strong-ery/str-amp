@@ -7,7 +7,7 @@ using Avalonia.Media.Immutable;
 namespace Stramp.App.Controls;
 
 /// <summary>
-/// A compact saturation/value square with a hue strip underneath — drag either to pick a color.
+/// A compact saturation/value square with a hue strip underneath: drag either to pick a color.
 /// Hue/sat/value are kept as the source of truth so dragging into black or grey doesn't lose the
 /// hue you had selected (which is what happens if you round-trip through RGB every frame).
 /// </summary>

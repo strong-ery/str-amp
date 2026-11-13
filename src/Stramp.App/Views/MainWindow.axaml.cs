@@ -80,7 +80,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        // Transform the whole framed artwork, not the image inside the clipping frame —
+        // Transform the whole framed artwork, not the image inside the clipping frame:
         // transforming the inner image just slides the picture around behind a fixed window.
         ArtFrame.RenderTransform = new TransformGroup
         {
@@ -513,7 +513,7 @@ public partial class MainWindow : Window
             return;
 
         // Bounds are relative to the items panel, which the padding offsets and scrolling never
-        // moves — so this target stays correct even while an earlier glide is still running.
+        // moves, so this target stays correct even while an earlier glide is still running.
         var lineCentre = _lyricsEdgePadding + container.Bounds.Top + container.Bounds.Height / 2;
         var maxOffset = Math.Max(0, LyricsScroller.Extent.Height - viewport);
         _lyricsAnimator.SetScrollTarget(Math.Clamp(lineCentre - viewport / 2, 0, maxOffset));

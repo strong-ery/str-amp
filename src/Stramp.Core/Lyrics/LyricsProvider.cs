@@ -20,7 +20,7 @@ public sealed class LyricsProvider : IDisposable
         _client = client ?? new LrcLibClient();
     }
 
-    /// <param name="allowOnline">False keeps the lookup entirely local — no request is made.</param>
+    /// <param name="allowOnline">False keeps the lookup entirely local: no request is made.</param>
     /// <param name="forceRefresh">Discards what LRCLIB said last time and asks it again.</param>
     public async Task<LyricsResult> GetAsync(
         Song song,

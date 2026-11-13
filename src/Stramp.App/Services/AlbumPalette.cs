@@ -59,7 +59,7 @@ public static class AlbumPalette
         }
 
         if (totalVivid < 1.0)
-            return null; // essentially greyscale artwork — leave the theme alone
+            return null; // essentially greyscale artwork, leave the theme alone
 
         var primaryBucket = IndexOfMax(weights);
         var primaryHue = hueSums[primaryBucket] / weights[primaryBucket];

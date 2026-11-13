@@ -144,7 +144,7 @@ public static class ThemeService
 
     /// <summary>
     /// FluentTheme paints sliders, focus rings and selection with the OS accent color (which is
-    /// why an untouched build shows the user's Windows accent — red, here). Overriding the system
+    /// why an untouched build shows the user's Windows accent, red, here). Overriding the system
     /// accent palette plus the slider-specific brushes keeps built-in controls on our theme.
     /// </summary>
     private static void ApplyBuiltInControlAccents(Application app, Color primary)
