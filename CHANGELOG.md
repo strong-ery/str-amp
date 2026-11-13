@@ -1,24 +1,14 @@
 # Changelog
 
-All notable changes to stramp will be documented here.
+All notable changes to str-amp go here!
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [0.2.0] — 2026
+## [1.0.3] — 2026
 
-### Complete Rewrite
-- redid everything.
-
-## [0.1.0] — 2025
-
-### Added
-- Initial release
-- GTK4 / libadwaita UI with album art, track info, progress bar
-- Shuffle playback with reshuffle support
-- Virtualised library list (handles large collections)
-- "Up Next" queue sidebar
-- Scrubbing / seeking
-- Waybar integration (`--waybar`)
-- ID3 tag reading for title, artist, album art (via mutagen)
-- Filename fallback: `Artist - Title` convention
-- Async art loading with LRU cache
+## Changed:
+- Cleaned up the codebase a fair bit.
+- Gave the repo the same treatment.
+- Deleted the legacy python app.
+- Split classes and methods to follow a 256/64 split.
+- Wrote a proper readme.
