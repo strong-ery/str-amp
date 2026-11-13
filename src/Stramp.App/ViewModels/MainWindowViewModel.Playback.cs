@@ -106,7 +106,10 @@ public partial class MainWindowViewModel
         AccrueListeningTime();
         lock (_listeningStatsLock)
         {
-            _listeningHistory.RecordTrackPlay(_queue.Current);
+            // A fresh start of this track, whether it's a new song or a track-mode loop
+            // replaying the same one: either way, it needs its own run at the play threshold.
+            _currentTrackListenedSeconds = 0;
+            _currentTrackPlayRecorded = false;
         }
         _pendingPlaybackPath = null;
         try
