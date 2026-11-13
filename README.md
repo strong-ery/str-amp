@@ -19,7 +19,7 @@ Written in C#, with an Avalonia UI backend, lighter than Spotify, open source, f
 - Discord integration
 - Listening stats (all time and month by month)
 - Optimizations to allow for libraries with tens of thousands of songs
-- A truly random seed-based shuffle algorithm to allow for seamless re-opening (you end up right where you left off.)
+- A truly random seed-based shuffle algorithm to allow for seamless re-opening (you end up where you left off.)
 - Media keys support
 - Taskbar hover controls
 - Waveform progress bar support (inspired by [playback-waveform-bar](https://github.com/Konsl/spicetify-extensions/tree/main/playback-bar-waveform) by Konsl)
