@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace Stramp.Integrations.Windows;
@@ -20,7 +19,7 @@ public static class WindowsShortcutService
         if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(directory))
             return !enabled;
 
-        var targetPath = GetExecutablePath();
+        var targetPath = WindowsProcessPaths.GetExecutablePath();
         if (targetPath is null)
             return false;
 
@@ -95,21 +94,6 @@ public static class WindowsShortcutService
             ReleaseComObject(shortcutObject);
             ReleaseComObject(shell);
         }
-    }
-
-    private static string? GetExecutablePath()
-    {
-        var processPath = Environment.ProcessPath;
-        if (!string.IsNullOrWhiteSpace(processPath) &&
-            !string.Equals(Path.GetFileName(processPath), "dotnet.exe", StringComparison.OrdinalIgnoreCase) &&
-            File.Exists(processPath))
-            return Path.GetFullPath(processPath);
-
-        var entryLocation = Assembly.GetEntryAssembly()?.Location;
-        if (string.IsNullOrWhiteSpace(entryLocation))
-            return null;
-        var appHost = Path.ChangeExtension(entryLocation, ".exe");
-        return File.Exists(appHost) ? Path.GetFullPath(appHost) : null;
     }
 
     private static void ReleaseComObject(object? instance)

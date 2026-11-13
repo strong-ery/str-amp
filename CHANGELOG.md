@@ -11,9 +11,12 @@ Hello Everyone! We are excited to share the first official release of **str-amp*
 - Added a listening stats panel ( `stramp -> View Stats` )
 - Added smooth scrolling to all panels
 - An auto-updater service
+- An install process/setup wizard
 
 ### Changed:
 - The listening stats service now only counts a "play" as `timeListened > 33%` per song.
+- Improved toasts
+- No longer builds into hundreds of DLL's
 
 ### Tidying:
 - Cleaned up the codebase a fair bit.

@@ -6,12 +6,31 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Stramp.ico</ApplicationIcon>
+    <Product>str-amp</Product>
+    <Company>Dylan Strong, Aiden Adzich, and Contributors</Company>
+    <Authors>Dylan Strong, Aiden Adzich, and Contributors</Authors>
+    <Copyright>Copyright © 2025 Dylan Strong and Aiden Adzich</Copyright>
   </PropertyGroup>
+
+  <!--
+    The self-contained/single-file settings that make a release a single exe live ONLY in
+    publish.ps1's command line (as -p: overrides), never here. A `Condition="...Configuration...
+    == 'Release'"` PropertyGroup looks like it would be publish-only but isn't: `dotnet build -c
+    Release` and `dotnet run -c Release` pick it up too, producing a self-contained BUILD (every
+    runtime DLL loose on disk, createdump.exe and all) without the single-file step that was the
+    entire point, since that step only runs during an actual publish. Keeping these out of the
+    csproj entirely is what actually scopes them to publish.ps1's `dotnet publish` invocation.
+  -->
 
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
     <None Update="Assets\Stramp.ico"
+          CopyToOutputDirectory="PreserveNewest"
+          CopyToPublishDirectory="PreserveNewest" />
+
+    <!-- Shipped alongside the exe so the "what's new" popup can read it without a network call. -->
+    <None Include="..\..\CHANGELOG.md" Link="CHANGELOG.md"
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
