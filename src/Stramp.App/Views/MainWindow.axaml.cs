@@ -928,7 +928,10 @@ public partial class MainWindow : Window
             // cover the whole screen and flash native chrome on the way in. The custom title bar
             // just needs hiding, same as any other panel.
             TitleBar.IsVisible = false;
-            MainContentGrid.Margin = new Thickness(0);
+
+            // Zero all around left the transport bar sitting flush against the bottom edge of
+            // the screen with no breathing room; everything else can still go edge-to-edge.
+            MainContentGrid.Margin = new Thickness(0, 0, 0, 20);
 
             // BorderOnly's invisible resize-hit margin is still sized into the window at this
             // point even though there's nothing to resize while fullscreen, which is what was

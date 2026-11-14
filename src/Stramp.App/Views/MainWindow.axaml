@@ -479,14 +479,16 @@
                         </Grid>
                     </Border>
 
-                    <!-- Rows 1-2 together, so they can fade out as one unit when the mouse goes
-                         idle in fullscreen (see MainWindow.axaml.FullScreenControls.cs). -->
-                    <StackPanel x:Name="PlayerControlsPanel" Grid.Row="1" Grid.RowSpan="2">
-                    <StackPanel.Transitions>
-                        <Transitions>
-                            <DoubleTransition Property="Opacity" Duration="0:0:0.35" Easing="CubicEaseOut" />
-                        </Transitions>
-                    </StackPanel.Transitions>
+                    <!-- Rows 1-2 together, so they can shrink away as one unit when the mouse goes
+                         idle in fullscreen (see MainWindow.axaml.FullScreenControls.cs, which
+                         drives Opacity and the scale below together rather than via a plain
+                         XAML transition, so it sinks into the bottom edge instead of just fading
+                         out in place). -->
+                    <StackPanel x:Name="PlayerControlsPanel" Grid.Row="1" Grid.RowSpan="2"
+                                RenderTransformOrigin="0.5,1">
+                    <StackPanel.RenderTransform>
+                        <ScaleTransform ScaleY="1" />
+                    </StackPanel.RenderTransform>
                     <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
                         <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" VerticalAlignment="Center" Width="42" FontSize="12" Opacity="0.7" />
                         <Panel Grid.Column="1">
