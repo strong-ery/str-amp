@@ -36,6 +36,7 @@
     <Setter Property="CornerRadius" Value="7" />
     <Setter Property="Padding" Value="10,7" />
     <Setter Property="FontSize" Value="12" />
+    <Setter Property="Margin" Value="0" />
   </Style>
   <!-- The hover/selected highlight actually paints on the template's own Border#PART_LayoutRoot,
        not the ContentPresenter - leaving the ContentPresenter rule in place let the default
@@ -44,6 +45,9 @@
   <Style Selector="MenuItem.stramp-menu-item /template/ Border#PART_LayoutRoot">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="VerticalAlignment" Value="Stretch" />
+    <!-- Stretch alone does nothing against an explicit Height the base theme already set on this
+         border - clearing it back to auto is what actually lets it fill the row. -->
+    <Setter Property="Height" Value="NaN" />
     <Setter Property="Margin" Value="0" />
   </Style>
   <Style Selector="MenuItem.stramp-menu-item:pointerover /template/ Border#PART_LayoutRoot">
