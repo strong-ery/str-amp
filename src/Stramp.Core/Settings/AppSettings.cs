@@ -78,7 +78,7 @@ public sealed class AppSettings
     public string BackgroundColor { get; set; } = "#0E0E12";
 
     // Id of the visual theme the app layers over its palette; an unknown id falls back to the default look.
-    public string VisualTheme { get; set; } = "default";
+    public string VisualTheme { get; set; } = "dark";
 
     /// <summary>When on (the default), theme colors follow the current album art instead of the manual picks above.</summary>
     public bool DeriveColorsFromArt { get; set; } = true;

@@ -1074,7 +1074,7 @@
                                     </ComboBox.ItemTemplate>
                                 </ComboBox>
                                 <TextBlock Classes="field-hint"
-                                           Text="Aero adds translucent glass panels, Windows 7 style window buttons, a glossy green progress bar and a glass play button." />
+                                           Text="Dark and Light follow your colors below. Aero adds translucent glass panels, Windows 7 style window buttons, a glossy green progress bar and a glass play button." />
                                 <TextBlock Text="Album art color matching" Classes="field-label" Margin="0,4,0,0" />
                                 <ComboBox ItemsSource="{Binding Theme.ArtColorModes}"
                                           SelectedItem="{Binding Theme.ArtColorMode}"

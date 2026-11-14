@@ -2,17 +2,24 @@ using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Stramp.App.Theming;
 
 namespace Stramp.App.Services;
 
 /// <summary>Two accents plus an independently selected background color from album artwork.</summary>
+/// <remarks>
+/// Produced by <see cref="AlbumPalette"/>, whose accents are readable on a dark UI and whose background
+/// is dark. The theme adapts both for a light visual theme; the palette itself is never light.
+/// </remarks>
 public readonly record struct ArtPalette(Color Primary, Color Secondary, Color Background);
 
-/// <summary>
-/// Derives theme colors from album art: downsamples the cover, buckets pixels by hue weighted by
-/// how vivid they are, then picks the strongest hue plus a clearly different second one. Results
-/// are pushed into a saturation/lightness range that stays legible on a dark UI.
-/// </summary>
+/// <summary>Derives theme colors from album art.</summary>
+/// <remarks>
+/// Inferred mode downsamples the cover, buckets pixels by hue weighted by how vivid they are, then
+/// picks the strongest hue plus a clearly different second one. Direct mode searches inward from the
+/// cover's top and bottom for real color. Either way the accents are lifted to a luminance floor so
+/// they stay legible on a dark UI, and the background is kept dark.
+/// </remarks>
 public static class AlbumPalette
 {
     private const int InferredSampleSize = 28;
@@ -41,7 +48,7 @@ public static class AlbumPalette
             if (a < 8)
                 continue;
 
-            var (h, s, l) = ToHsl(r / 255, g / 255, b / 255);
+            var (h, s, l) = ColorMath.ToHsl(r / 255, g / 255, b / 255);
 
             // Ignore near-black, near-white and washed-out pixels: they carry no usable hue.
             if (s < 0.18 || l < 0.08 || l > 0.94)
@@ -82,8 +89,8 @@ public static class AlbumPalette
             ? hueSums[secondaryBucket] / weights[secondaryBucket]
             : (primaryHue + 48) % 360;
 
-        var primaryColor = FromHsl(primaryHue, 0.72, 0.63);
-        var secondaryColor = FromHsl(secondaryHue, 0.76, 0.66);
+        var primaryColor = ColorMath.FromHsl(primaryHue, 0.72, 0.63);
+        var secondaryColor = ColorMath.FromHsl(secondaryHue, 0.76, 0.66);
 
         if (secondaryBucket >= 0)
         {
@@ -142,51 +149,9 @@ public static class AlbumPalette
 
     private static ArtPalette EnsureReadableAccents(ArtPalette palette) => palette with
     {
-        Primary = EnsureMinimumLuminance(palette.Primary, MinimumAccentLuminance),
-        Secondary = EnsureMinimumLuminance(palette.Secondary, MinimumAccentLuminance),
+        Primary = ColorMath.WithMinimumLuminance(palette.Primary, MinimumAccentLuminance),
+        Secondary = ColorMath.WithMinimumLuminance(palette.Secondary, MinimumAccentLuminance),
     };
-
-    private static Color EnsureMinimumLuminance(Color color, double minimumLuminance)
-    {
-        if (RelativeLuminance(color) >= minimumLuminance)
-            return color;
-
-        var (hue, saturation, originalLightness) = ToHsl(
-            color.R / 255.0, color.G / 255.0, color.B / 255.0);
-        var low = originalLightness;
-        var high = 1.0;
-
-        // Find the smallest lightness increase that clears the floor. Binary search avoids
-        // over-brightening naturally dark cover colors while accounting for blue appearing
-        // darker than yellow at the same raw channel values.
-        for (var iteration = 0; iteration < 12; iteration++)
-        {
-            var candidateLightness = (low + high) / 2;
-            var candidate = FromHsl(hue, saturation, candidateLightness);
-            if (RelativeLuminance(candidate) < minimumLuminance)
-                low = candidateLightness;
-            else
-                high = candidateLightness;
-        }
-
-        var lifted = FromHsl(hue, saturation, high);
-        return Color.FromArgb(color.A, lifted.R, lifted.G, lifted.B);
-    }
-
-    private static double RelativeLuminance(Color color)
-    {
-        static double Linearize(byte channel)
-        {
-            var value = channel / 255.0;
-            return value <= 0.04045
-                ? value / 12.92
-                : Math.Pow((value + 0.055) / 1.055, 2.4);
-        }
-
-        return 0.2126 * Linearize(color.R) +
-               0.7152 * Linearize(color.G) +
-               0.0722 * Linearize(color.B);
-    }
 
     private static byte[]? SamplePixels(Bitmap source, int sampleSize)
     {
@@ -292,7 +257,7 @@ public static class AlbumPalette
                 !TryReadDirectPixel(pixels, i, out var r, out var g, out var b))
                 continue;
 
-            var (h, s, l) = ToHsl(r / 255.0, g / 255.0, b / 255.0);
+            var (h, s, l) = ColorMath.ToHsl(r / 255.0, g / 255.0, b / 255.0);
             if (!IsDirectColor(s, l))
                 continue;
 
@@ -361,7 +326,7 @@ public static class AlbumPalette
                 !TryReadDirectPixel(pixels, i, out var r, out var g, out var b))
                 continue;
 
-            var (h, s, l) = ToHsl(r / 255.0, g / 255.0, b / 255.0);
+            var (h, s, l) = ColorMath.ToHsl(r / 255.0, g / 255.0, b / 255.0);
             if (!IsDirectColor(s, l))
                 continue;
 
@@ -431,7 +396,7 @@ public static class AlbumPalette
         {
             if (!TryReadDirectPixel(pixels, i, out var r, out var g, out var b))
                 continue;
-            var (_, s, _) = ToHsl(r / 255.0, g / 255.0, b / 255.0);
+            var (_, s, _) = ColorMath.ToHsl(r / 255.0, g / 255.0, b / 255.0);
             var index = (r >> 4) << 8 | (g >> 4) << 4 | b >> 4;
             buckets[index].Add(r, g, b, s, PixelRow(i, sampleSize));
         }
@@ -471,10 +436,10 @@ public static class AlbumPalette
 
     private static Color ToBackgroundColor(Color seed)
     {
-        var (h, s, _) = ToHsl(seed.R / 255.0, seed.G / 255.0, seed.B / 255.0);
+        var (h, s, _) = ColorMath.ToHsl(seed.R / 255.0, seed.G / 255.0, seed.B / 255.0);
         if (s < 0.08)
             return Color.FromRgb(14, 15, 16);
-        return FromHsl(h, Math.Clamp(s * 0.65, 0.18, 0.42), 0.055);
+        return ColorMath.FromHsl(h, Math.Clamp(s * 0.65, 0.18, 0.42), 0.055);
     }
 
     private static bool IsDirectColor(double saturation, double lightness) =>
@@ -560,51 +525,5 @@ public static class AlbumPalette
                 best = i;
         }
         return best;
-    }
-
-    private static (double H, double S, double L) ToHsl(double r, double g, double b)
-    {
-        var max = Math.Max(r, Math.Max(g, b));
-        var min = Math.Min(r, Math.Min(g, b));
-        var l = (max + min) / 2;
-
-        if (Math.Abs(max - min) < 1e-6)
-            return (0, 0, l);
-
-        var d = max - min;
-        var s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-
-        double h;
-        if (Math.Abs(max - r) < 1e-6)
-            h = (g - b) / d + (g < b ? 6 : 0);
-        else if (Math.Abs(max - g) < 1e-6)
-            h = (b - r) / d + 2;
-        else
-            h = (r - g) / d + 4;
-
-        return (h * 60, s, l);
-    }
-
-    private static Color FromHsl(double h, double s, double l)
-    {
-        h = ((h % 360) + 360) % 360;
-        var c = (1 - Math.Abs(2 * l - 1)) * s;
-        var x = c * (1 - Math.Abs(h / 60 % 2 - 1));
-        var m = l - c / 2;
-
-        var (r, g, b) = h switch
-        {
-            < 60 => (c, x, 0.0),
-            < 120 => (x, c, 0.0),
-            < 180 => (0.0, c, x),
-            < 240 => (0.0, x, c),
-            < 300 => (x, 0.0, c),
-            _ => (c, 0.0, x),
-        };
-
-        return Color.FromRgb(
-            (byte)Math.Clamp((r + m) * 255, 0, 255),
-            (byte)Math.Clamp((g + m) * 255, 0, 255),
-            (byte)Math.Clamp((b + m) * 255, 0, 255));
     }
 }

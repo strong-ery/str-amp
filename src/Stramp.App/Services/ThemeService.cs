@@ -2,6 +2,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Stramp.App.Theming;
 using Stramp.Core.Settings;
@@ -15,7 +16,9 @@ namespace Stramp.App.Services;
 /// <remarks>
 /// Every themed brush in the app is looked up via DynamicResource, so applying again re-themes the
 /// running UI instantly. The palette comes from the manual picks in settings or from album art; the
-/// visual theme named in settings is activated and overrides whichever colors it pins.
+/// visual theme named in settings is activated and overrides whichever colors it pins. A light theme
+/// moves the background onto a near-white surface of the same hue and darkens accents only as far as
+/// reading them on that surface needs.
 /// Applying from any thread is allowed; the work is marshalled onto the UI thread.
 /// </remarks>
 public static class ThemeService
@@ -24,6 +27,9 @@ public static class ThemeService
     private static Color? _currentSecondary;
     private static Color? _currentBackground;
     private static ulong _currentAnimationId;
+
+    // Accent text on a light surface (luminance near 0.88) stays around 4.4:1 contrast at this ceiling.
+    private const double LightAccentMaximumLuminance = 0.16;
 
     public static void Apply(AppSettings settings)
     {
@@ -55,27 +61,32 @@ public static class ThemeService
             VisualThemeStyles.Activate(app, theme);
 
         background = theme.Background ?? background;
-        var sliderAccent = theme.SliderAccent;
+        if (theme.Variant == ThemeVariant.Light)
+        {
+            primary = ColorMath.WithMaximumLuminance(primary, LightAccentMaximumLuminance);
+            secondary = ColorMath.WithMaximumLuminance(secondary, LightAccentMaximumLuminance);
+            background = ToLightSurface(background);
+        }
 
         if (!_currentPrimary.HasValue || !_currentSecondary.HasValue || !_currentBackground.HasValue || !animate)
         {
             StopAnimation();
             UpdateCurrentColors(primary, secondary, background);
-            ApplyColorsDirect(primary, secondary, background, sliderAccent);
+            ApplyColorsDirect(primary, secondary, background, theme);
             return;
         }
 
         if (_currentPrimary == primary && _currentSecondary == secondary && _currentBackground == background)
         {
             // Colors can match while the slider accent changed with the theme.
-            ApplyColorsDirect(primary, secondary, background, sliderAccent);
+            ApplyColorsDirect(primary, secondary, background, theme);
             return;
         }
 
-        AnimateTo(primary, secondary, background, sliderAccent);
+        AnimateTo(primary, secondary, background, theme);
     }
 
-    private static void AnimateTo(Color primary, Color secondary, Color background, Color? sliderAccent)
+    private static void AnimateTo(Color primary, Color secondary, Color background, VisualTheme theme)
     {
         StopAnimation();
 
@@ -90,7 +101,7 @@ public static class ThemeService
         if (topLevel is null)
         {
             UpdateCurrentColors(primary, secondary, background);
-            ApplyColorsDirect(primary, secondary, background, sliderAccent);
+            ApplyColorsDirect(primary, secondary, background, theme);
             return;
         }
 
@@ -108,7 +119,7 @@ public static class ThemeService
             var currB = LerpColor(startBackground, background, easedT);
 
             UpdateCurrentColors(currP, currS, currB);
-            ApplyColorsDirect(currP, currS, currB, sliderAccent);
+            ApplyColorsDirect(currP, currS, currB, theme);
 
             if (t < 1.0)
                 topLevel.RequestAnimationFrame(Step);
@@ -138,7 +149,13 @@ public static class ThemeService
         return Color.FromArgb(a, r, g, b);
     }
 
-    private static void ApplyColorsDirect(Color primary, Color secondary, Color background, Color? sliderAccent)
+    private static Color ToLightSurface(Color background)
+    {
+        var (hue, saturation, _) = ColorMath.ToHsl(background.R / 255.0, background.G / 255.0, background.B / 255.0);
+        return ColorMath.FromHsl(hue, Math.Min(saturation, 0.35), 0.95);
+    }
+
+    private static void ApplyColorsDirect(Color primary, Color secondary, Color background, VisualTheme theme)
     {
         var app = Application.Current;
         if (app is null)
@@ -147,15 +164,17 @@ public static class ThemeService
         app.Resources["AppAccentBrush"] = new SolidColorBrush(primary);
         app.Resources["AppAccentBrushLight"] = new SolidColorBrush(Lighten(primary, 0.18));
         app.Resources["AppPlayPauseIconBrush"] = new SolidColorBrush(
-            RelativeLuminance(primary) >= 0.50 ? Colors.Black : Colors.White);
+            ColorMath.RelativeLuminance(primary) >= 0.50 ? Colors.Black : Colors.White);
         app.Resources["AppSecondaryAccentBrush"] = new SolidColorBrush(secondary);
         app.Resources["AppBackgroundBrush"] = new SolidColorBrush(background);
         app.Resources["AppSubtleBackgroundBrush"] = new SolidColorBrush(WithAlpha(primary, 0x20));
         app.Resources["AppPlaceholderBackgroundBrush"] = new SolidColorBrush(WithAlpha(primary, 0x14));
         app.Resources["AppHoverBrush"] = new SolidColorBrush(WithAlpha(primary, 0x16));
-        app.Resources["AppDialogBackgroundBrush"] = new SolidColorBrush(Lighten(background, 0.07));
+        // Raised surfaces sit a step toward white: barely on dark, most of the way on light.
+        var raise = theme.Variant == ThemeVariant.Light ? 0.7 : 0.07;
+        app.Resources["AppDialogBackgroundBrush"] = new SolidColorBrush(Lighten(background, raise));
 
-        ApplyBuiltInControlAccents(app, primary, sliderAccent ?? primary);
+        ApplyBuiltInControlAccents(app, primary, theme.SliderAccent ?? primary);
     }
 
     // FluentTheme paints sliders, focus rings and selection with the OS accent color. Overriding the
@@ -195,19 +214,4 @@ public static class ThemeService
         (byte)(c.B * (1 - amount)));
 
     private static Color WithAlpha(Color c, byte alpha) => Color.FromArgb(alpha, c.R, c.G, c.B);
-
-    private static double RelativeLuminance(Color color)
-    {
-        static double Linearize(byte channel)
-        {
-            var value = channel / 255.0;
-            return value <= 0.04045
-                ? value / 12.92
-                : Math.Pow((value + 0.055) / 1.055, 2.4);
-        }
-
-        return 0.2126 * Linearize(color.R) +
-               0.7152 * Linearize(color.G) +
-               0.0722 * Linearize(color.B);
-    }
 }
