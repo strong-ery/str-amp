@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Media;
 using Stramp.App.Services;
 
 namespace Stramp.App.Views;
@@ -17,6 +16,18 @@ public partial class MainWindow
     private readonly FadeCollapseAnimator _controlsAnimator = new();
     private double _controlsIdleSecondsRemaining = ControlsIdleHideDelaySeconds;
     private bool _areControlsHidden;
+    private double _playerControlsFullHeight;
+
+    /// <summary>
+    /// Tracks the panel's natural height whenever it's at its real (un-overridden) size, so
+    /// there's a real value to shrink from and grow back to - including across a resize or a
+    /// switch between the normal and compact control bar layouts while fullscreen is active.
+    /// </summary>
+    private void OnPlayerControlsSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (double.IsNaN(PlayerControlsPanel.Height))
+            _playerControlsFullHeight = e.NewSize.Height;
+    }
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {
@@ -41,10 +52,15 @@ public partial class MainWindow
                 SetControlsVisible(false);
         }
 
-        var (opacity, scaleY) = _controlsAnimator.Step(out _);
-        PlayerControlsPanel.Opacity = opacity;
-        if (PlayerControlsPanel.RenderTransform is ScaleTransform scale)
-            scale.ScaleY = scaleY;
+        // Skip once fully shown and settled: touching Height every frame here would immediately
+        // undo the NaN below and pin the panel to a stale cached height instead of letting
+        // OnPlayerControlsSizeChanged track its natural size again.
+        if (!_controlsAnimator.IsAnimating && _controlsAnimator.CurrentFraction >= 1)
+            return;
+
+        var fraction = _controlsAnimator.Step(out var finished);
+        PlayerControlsPanel.Opacity = fraction;
+        PlayerControlsPanel.Height = finished && fraction >= 1 ? double.NaN : _playerControlsFullHeight * fraction;
     }
 
     private void SetControlsVisible(bool visible)

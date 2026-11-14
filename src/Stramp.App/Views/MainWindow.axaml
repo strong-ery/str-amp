@@ -487,15 +487,16 @@
                     </Border>
 
                     <!-- Rows 1-2 together, so they can shrink away as one unit when the mouse goes
-                         idle in fullscreen (see MainWindow.axaml.FullScreenControls.cs, which
-                         drives Opacity and the scale below together rather than via a plain
-                         XAML transition, so it sinks into the bottom edge instead of just fading
-                         out in place). -->
+                         idle in fullscreen (see MainWindow.axaml.FullScreenControls.cs). Height is
+                         driven from code, not just Opacity: an Auto row only ever sizes to this
+                         panel's own desired size, so shrinking its real Height is what actually
+                         reclaims the space - the stage above grows into it - rather than leaving
+                         the row's full height reserved with nothing painted in it. ClipToBounds
+                         plus bottom alignment is what makes it recede into the bottom edge instead
+                         of just getting cropped from the top. -->
                     <StackPanel x:Name="PlayerControlsPanel" Grid.Row="1" Grid.RowSpan="2"
-                                RenderTransformOrigin="0.5,1">
-                    <StackPanel.RenderTransform>
-                        <ScaleTransform ScaleY="1" />
-                    </StackPanel.RenderTransform>
+                                VerticalAlignment="Bottom" ClipToBounds="True"
+                                SizeChanged="OnPlayerControlsSizeChanged">
                     <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
                         <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" VerticalAlignment="Center" Width="42" FontSize="12" Opacity="0.7" />
                         <Panel Grid.Column="1">
