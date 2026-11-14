@@ -5,6 +5,7 @@
         xmlns:app="using:Stramp.App"
         xmlns:controls="using:Stramp.App.Controls"
         xmlns:playback="using:Stramp.Core.Playback"
+        xmlns:theming="using:Stramp.App.Theming"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="980" d:DesignHeight="640"
@@ -82,7 +83,7 @@
     <Panel>
         <DockPanel>
             <!-- Custom title bar (all system chrome is off) -->
-            <Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="34" ColumnDefinitions="Auto,*,Auto" Background="Transparent">
+            <Grid x:Name="TitleBar" DockPanel.Dock="Top" Height="34" ColumnDefinitions="Auto,*,Auto">
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0" Spacing="12">
                     <Button Classes="top-menu-trigger" Content="stramp" VerticalAlignment="Center">
                         <Button.Flyout>
@@ -1062,7 +1063,19 @@
                             <TextBlock Text="THEME" Classes="section-header" Margin="0,6,0,0" />
 
                             <StackPanel Spacing="6">
-                                <TextBlock Text="Album art color matching" Classes="field-label" />
+                                <TextBlock Text="Style" Classes="field-label" />
+                                <ComboBox ItemsSource="{Binding Theme.Style.Options}"
+                                          SelectedItem="{Binding Theme.Style.Selected}"
+                                          HorizontalAlignment="Left" MinWidth="140">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="theming:VisualTheme">
+                                            <TextBlock Text="{Binding Name}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Classes="field-hint"
+                                           Text="Dark and Light follow your colors below. Aero adds translucent glass panels, Windows 7 style window buttons, a glossy green progress bar and a glass play button." />
+                                <TextBlock Text="Album art color matching" Classes="field-label" Margin="0,4,0,0" />
                                 <ComboBox ItemsSource="{Binding Theme.ArtColorModes}"
                                           SelectedItem="{Binding Theme.ArtColorMode}"
                                           HorizontalAlignment="Left" MinWidth="140" />
