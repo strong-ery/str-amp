@@ -43,6 +43,7 @@
        with the item's own rounded corners (the "double highlight, boxy look"). -->
   <Style Selector="MenuItem.stramp-menu-item /template/ Border#PART_LayoutRoot">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
     <Setter Property="Margin" Value="0" />
   </Style>
   <Style Selector="MenuItem.stramp-menu-item:pointerover /template/ Border#PART_LayoutRoot">
