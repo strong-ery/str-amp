@@ -801,7 +801,7 @@ public partial class MainWindow : Window
     /// width's own current value there (rather than just checking IsAbsolute) would have let a
     /// drag that lands exactly on 0 skip the clamp outright - the one case it exists to catch.
     /// </summary>
-    private const double SidePanelMinWidth = 213.0;
+    private const double SidePanelMinWidth = 275.0;
 
     private void OnLeftSplitterDragDelta(object? sender, VectorEventArgs e)
     {
