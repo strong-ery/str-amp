@@ -966,6 +966,11 @@ public partial class MainWindow : Window
             // just needs hiding, same as any other panel.
             TitleBar.IsVisible = false;
 
+            // Windows shows a small native tooltip with the window's Title near the top edge
+            // for any window without a visible caption - serves no purpose once there's nothing
+            // left up there to hover.
+            Title = string.Empty;
+
             // Edge-to-edge on every side now - the transport bar's old breathing room lives in
             // its own trailing spacer (see MainWindow.axaml) so it collapses away with the bar
             // instead of leaving a permanent gap once the bar has auto-hidden.
@@ -996,6 +1001,7 @@ public partial class MainWindow : Window
             _isImmersiveFullScreen = false;
 
             TitleBar.IsVisible = true;
+            Title = "stramp";
             MainContentGrid.Margin = new Thickness(16, 6, 16, 16);
             PlayerColumnGrid.Margin = new Thickness(10, 0);
             WindowDecorations = WindowDecorations.BorderOnly;
