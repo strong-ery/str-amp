@@ -8,11 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added:
 - Theming system (+ Light Theme, + Aero Theme)
-- Spotify Integration (Playlist Import)
+- Spotify integration (Playlist Import)
 
 ### Changed:
 - Fullscreen mode no longer extends past the screen bounds
 - Fullscreen mode now hides elements after X seconds (seamless fullscreen)
+- Improved stramp dropdown menu (follows theme better, no weird splitting)
+- Fixed various UI bugs (overlap, scaling issues, and reactive-resize for forced cramped states)
 
 ## [v2.0.0] — Nov. 13, 2026
 Hello Everyone! We are excited to share the first official release of **str-amp** v2.0.0!
