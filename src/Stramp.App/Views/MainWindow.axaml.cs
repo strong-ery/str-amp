@@ -988,7 +988,11 @@ public partial class MainWindow : Window
         if (_lastStageShortSide <= 0)
             return;
 
-        var baseArtSize = Math.Clamp(_lastStageShortSide * 0.26, 64, 260);
+        // The old 260px ceiling was sized for the default windowed stage; fullscreen with both
+        // side panels closed hands the stage several times that, and a cap that low left the art
+        // and title floating at a fixed small size in the middle of all that empty space. 420px
+        // keeps scaling sensibly up to large monitors instead of topping out almost immediately.
+        var baseArtSize = Math.Clamp(_lastStageShortSide * 0.26, 64, 420);
         var targetRingRadius = baseArtSize * 0.5 * 1.30 + 12;
         var isCircular = ViewModel?.Theme.CircularAlbumArt ?? true;
 
@@ -1005,6 +1009,13 @@ public partial class MainWindow : Window
             ArtFrame.Width = baseArtSize;
             ArtFrame.Height = baseArtSize;
         }
+
+        // Scales the title/artist with the art instead of leaving them at a fixed size: at the
+        // default ~166px art they land back on the original 320/20/13 numbers.
+        var scale = baseArtSize / 166.0;
+        NowPlayingTitleStack.MaxWidth = Math.Clamp(320 * scale, 220, 640);
+        NowPlayingTitleText.FontSize = Math.Clamp(20 * scale, 16, 34);
+        NowPlayingArtistText.FontSize = Math.Clamp(13 * scale, 12, 22);
     }
 
     private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
