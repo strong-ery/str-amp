@@ -977,7 +977,7 @@ public partial class MainWindow : Window
             // them. A small margin survives everywhere except the transport bar's bottom, whose
             // own breathing room lives in its trailing spacer (see MainWindow.axaml) so it
             // collapses away with the bar instead of leaving a gap once the bar auto-hides.
-            MainContentGrid.Margin = new Thickness(12);
+            MainContentGrid.Margin = new Thickness(FullScreenContentMarginPx);
 
             // BorderOnly's invisible resize-hit margin is still sized into the window at this
             // point even though there's nothing to resize while fullscreen, which is what was

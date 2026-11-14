@@ -16,6 +16,10 @@ public partial class MainWindow
     private const double ControlsIdleHideDelaySeconds = 2.5;
     private const double TitleLiftWhenHiddenPx = 40.0;
 
+    /// <summary>The margin fullscreen content keeps while the controls are shown - see
+    /// <see cref="UpdateImmersiveFullScreenState"/>. Collapses to 0 in lockstep with them below.</summary>
+    internal const double FullScreenContentMarginPx = 12.0;
+
     private readonly FadeCollapseAnimator _controlsAnimator = new();
     private double _controlsIdleSecondsRemaining = ControlsIdleHideDelaySeconds;
     private bool _areControlsHidden;
@@ -86,6 +90,12 @@ public partial class MainWindow
         // space it reserved) is gone.
         var titleLiftPx = 18 + (1 - fraction) * TitleLiftWhenHiddenPx;
         NowPlayingTitleStack.Margin = new Thickness(12, 0, 12, titleLiftPx);
+
+        // Shrinks the breathing room around the whole stage away too once idle, so a truly
+        // hands-off fullscreen goes all the way to the monitor's edges instead of stopping at
+        // the margin that's only there for when the corner buttons are reachable.
+        if (_isImmersiveFullScreen)
+            MainContentGrid.Margin = new Thickness(FullScreenContentMarginPx * fraction);
     }
 
     private void SetControlsVisible(bool visible)
