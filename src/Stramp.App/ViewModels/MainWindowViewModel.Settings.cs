@@ -105,7 +105,7 @@ public partial class MainWindowViewModel
             _discordPresence.Clear();
     }
 
-    /// <summary>Re-applies the theme from whichever source is currently active (artwork or manual picks).</summary>
+    // Re-applies the theme from whichever source is currently active: artwork or manual picks.
     private void ApplyTheme()
     {
         var palette = _settings.ArtColorMode switch
@@ -118,7 +118,7 @@ public partial class MainWindowViewModel
         };
 
         if (palette is { } artPalette)
-            ThemeService.ApplyFromArt(artPalette, animate: !_settings.DisableAnimations);
+            ThemeService.ApplyFromArt(artPalette, _settings);
         else
             ThemeService.Apply(_settings);
     }

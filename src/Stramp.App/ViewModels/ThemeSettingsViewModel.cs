@@ -1,6 +1,7 @@
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Stramp.App.Theming;
 using Stramp.Core.Playback;
 using Stramp.Core.Settings;
 
@@ -25,12 +26,14 @@ public sealed record ThemeSettingsCallbacks(
     Action<bool>? OnStartMenuShortcutChanged = null);
 
 /// <summary>Backs the in-app theme panel: manual color picks, presets, and album-art color mode.</summary>
+/// <remarks>
+/// Each setting it owns is written to the shared <see cref="AppSettings"/> as soon as it changes, and
+/// the owner is told through <see cref="ThemeSettingsCallbacks"/> when it must react. Colors are
+/// edited through three <see cref="ColorChannelEditor"/>s; the visual theme is chosen through
+/// <see cref="Style"/>.
+/// </remarks>
 public partial class ThemeSettingsViewModel : ViewModelBase
 {
-    private static readonly Color DefaultPrimary = Color.Parse("#7C5CFF");
-    private static readonly Color DefaultSecondary = Color.Parse("#FF5C93");
-    private static readonly Color DefaultBackground = Color.Parse("#0E0E12");
-
     private readonly AppSettings _settings;
     private readonly Action _onManualColorsChanged;
     private readonly Action _onNormalizationChanged;
@@ -49,12 +52,15 @@ public partial class ThemeSettingsViewModel : ViewModelBase
 
     public IReadOnlyList<ThemePreset> Presets { get; } =
     [
+        new("Aero", "#1E82D4", "#2ECC71", "#102B3E"),
         new("Nebula", "#7C5CFF", "#FF5C93", "#0E0E12"),
         new("Sunset", "#FF8A3D", "#FF3D77", "#140E12"),
         new("Mint", "#3DDC97", "#36C5F0", "#0A1310"),
         new("Ember", "#FF5252", "#FFB74D", "#140D0D"),
         new("Ice", "#5CC8FF", "#A78BFA", "#0B1016"),
     ];
+
+    public VisualThemePicker Style { get; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(UsesManualColors))]
@@ -81,6 +87,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         DiscordRichPresenceEnabled = settings.DiscordRichPresenceEnabled;
         DiscordClientId = settings.DiscordClientId ?? "";
 
+        Style = new VisualThemePicker(settings, _onManualColorsChanged);
         ArtColorMode = settings.ArtColorMode ??
             (settings.DeriveColorsFromArt ? AlbumArtColorMode.Inferred : AlbumArtColorMode.None);
         ShowRingVisualizer = settings.ShowRingVisualizer;
@@ -101,9 +108,10 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         EnsureDesktopShortcut = settings.EnsureDesktopShortcut;
         EnsureStartMenuShortcut = settings.EnsureStartMenuShortcut;
         ListeningStatsEnabled = settings.ListeningStatsEnabled;
-        Primary = new ColorChannelEditor(ParseOrDefault(settings.PrimaryAccentColor, DefaultPrimary), ApplyLive);
-        Secondary = new ColorChannelEditor(ParseOrDefault(settings.SecondaryAccentColor, DefaultSecondary), ApplyLive);
-        Background = new ColorChannelEditor(ParseOrDefault(settings.BackgroundColor, DefaultBackground), ApplyLive);
+        var palette = ManualPalette.From(settings);
+        Primary = new ColorChannelEditor(palette.Primary, ApplyLive);
+        Secondary = new ColorChannelEditor(palette.Secondary, ApplyLive);
+        Background = new ColorChannelEditor(palette.Background, ApplyLive);
     }
 
     public ThemeSettingsViewModel() : this(new AppSettings(), new ThemeSettingsCallbacks(() => { }))
@@ -147,9 +155,9 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     private void ResetToDefaults()
     {
         _suppressApply = true;
-        Primary.SetColor(DefaultPrimary);
-        Secondary.SetColor(DefaultSecondary);
-        Background.SetColor(DefaultBackground);
+        Primary.SetColor(ManualPalette.Default.Primary);
+        Secondary.SetColor(ManualPalette.Default.Secondary);
+        Background.SetColor(ManualPalette.Default.Background);
         _suppressApply = false;
         ArtColorMode = AlbumArtColorMode.Inferred;
         DisableAnimations = false;
@@ -157,16 +165,4 @@ public partial class ThemeSettingsViewModel : ViewModelBase
     }
 
     public void SaveToDisk() => SettingsService.Save(_settings);
-
-    private static Color ParseOrDefault(string value, Color fallback)
-    {
-        try
-        {
-            return Color.Parse(value);
-        }
-        catch
-        {
-            return fallback;
-        }
-    }
 }

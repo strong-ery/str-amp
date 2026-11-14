@@ -1,0 +1,274 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- The Aero visual theme: glass panels, Windows 7 window buttons and a glossy play orb. This sheet
+       stays loaded, so every selector is scoped to the window's theme-aero class. -->
+
+  <Styles.Resources>
+    <!-- Brushes more than one style uses: popup glass, the hovered-item highlight and text-field glass. -->
+    <LinearGradientBrush x:Key="AeroPopupBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#E5143A56" Offset="0.0" />
+      <GradientStop Color="#DC0F283C" Offset="0.6" />
+      <GradientStop Color="#D00B2032" Offset="1.0" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="AeroHighlightBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#60FFFFFF" Offset="0.0" />
+      <GradientStop Color="#402080D0" Offset="0.5" />
+      <GradientStop Color="#201050A0" Offset="1.0" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="AeroFieldBrush" StartPoint="0%,0%" EndPoint="0%,100%">
+      <GradientStop Color="#25FFFFFF" Offset="0.0" />
+      <GradientStop Color="#15204868" Offset="1.0" />
+    </LinearGradientBrush>
+  </Styles.Resources>
+
+  <!-- The window background is pinned translucent by the theme; blur shows the desktop through it. -->
+  <Style Selector=":is(Window).theme-aero">
+    <Setter Property="TransparencyLevelHint" Value="Blur, AcrylicBlur, None" />
+  </Style>
+
+  <!-- TitleBar Glass Header & Specular Text Glow -->
+  <Style Selector=":is(Window).theme-aero Grid#TitleBar">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#40FFFFFF" Offset="0.0" />
+        <GradientStop Color="#18FFFFFF" Offset="0.45" />
+        <GradientStop Color="#05FFFFFF" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+  <Style Selector=":is(Window).theme-aero Grid#TitleBar TextBlock">
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero TextBlock.section-header">
+    <Setter Property="Foreground" Value="#E0F0FF" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+
+  <!-- Windows 7 Aero Window Buttons (Minimize, Maximize, Close) -->
+  <Style Selector=":is(Window).theme-aero Button.window-button">
+    <Setter Property="CornerRadius" Value="0,0,6,6" />
+    <Setter Property="Margin" Value="2,0,2,0" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero Button.window-button:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AeroHighlightBrush}" />
+    <Setter Property="BorderBrush" Value="#8080C0FF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- Windows 7 Aero Red Close Button Glow -->
+  <Style Selector=":is(Window).theme-aero Button.window-button.close">
+    <Setter Property="Background" Value="#30CC2222" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero Button.window-button.close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#FF6868" Offset="0.0" />
+        <GradientStop Color="#E51D1D" Offset="0.45" />
+        <GradientStop Color="#B80A0A" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#FFA0A0" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero Button.window-button.close:pressed /template/ ContentPresenter">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#B80A0A" Offset="0.0" />
+        <GradientStop Color="#880505" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+
+  <!-- Translucent Aero Glass Cards & Panels -->
+  <Style Selector=":is(Window).theme-aero Border.now-playing-card">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#30FFFFFF" Offset="0.0" />
+        <GradientStop Color="#20306898" Offset="0.25" />
+        <GradientStop Color="#1A153A5A" Offset="0.75" />
+        <GradientStop Color="#100A2035" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#70FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BoxShadow" Value="0 10 28 0 #50000000" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero Border.art-frame">
+    <Setter Property="BorderBrush" Value="#80FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BoxShadow" Value="0 6 20 0 #40000000" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero Border.eq-panel">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#25FFFFFF" Offset="0.0" />
+        <GradientStop Color="#1D2A5078" Offset="0.5" />
+        <GradientStop Color="#15122840" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#60FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero Border.library-locations">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#25FFFFFF" Offset="0.0" />
+        <GradientStop Color="#1D2A5078" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#60FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero Border.dialog-card">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#F0183B55" Offset="0.0" />
+        <GradientStop Color="#E8102C42" Offset="0.6" />
+        <GradientStop Color="#E00B2032" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#90FFFFFF" />
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="BoxShadow" Value="0 20 56 0 #A0000000" />
+  </Style>
+
+  <!-- Aero Glass Buttons & Transport Controls -->
+  <Style Selector=":is(Window).theme-aero Button.transport">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#20FFFFFF" Offset="0.0" />
+        <GradientStop Color="#10FFFFFF" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#40FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero Button.transport:pointerover /template/ ContentPresenter">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#50FFFFFF" Offset="0.0" />
+        <GradientStop Color="#302080D0" Offset="0.5" />
+        <GradientStop Color="#201050A0" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#9080C0FF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- Windows 7 Aero Glass Media Play/Pause Orb -->
+  <Style Selector=":is(Window).theme-aero Button.play-pause">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#80FFFFFF" Offset="0.0" />
+        <GradientStop Color="#FF3FA0ED" Offset="0.15" />
+        <GradientStop Color="#FF1B7AD6" Offset="0.50" />
+        <GradientStop Color="#FF0B54A6" Offset="0.85" />
+        <GradientStop Color="#FF073A75" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#C0FFFFFF" />
+    <Setter Property="BorderThickness" Value="1.5" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero Button.play-pause:pointerover /template/ ContentPresenter">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+        <GradientStop Color="#B0FFFFFF" Offset="0.0" />
+        <GradientStop Color="#FF60B5F8" Offset="0.15" />
+        <GradientStop Color="#FF2C8BEA" Offset="0.50" />
+        <GradientStop Color="#FF1268C8" Offset="0.85" />
+        <GradientStop Color="#FF0D4B92" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#E0FFFFFF" />
+  </Style>
+
+  <!-- Windows 7 Aero Text Inputs -->
+  <Style Selector=":is(Window).theme-aero TextBox.stramp-input">
+    <Setter Property="Background" Value="{StaticResource AeroFieldBrush}" />
+    <Setter Property="BorderBrush" Value="#60FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector=":is(Window).theme-aero TextBox.stramp-input:focus">
+    <Setter Property="BorderBrush" Value="#9080C0FF" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero ComboBox.stramp-combo">
+    <Setter Property="Background" Value="{StaticResource AeroFieldBrush}" />
+    <Setter Property="BorderBrush" Value="#60FFFFFF" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <!-- Windows 7 Aero Queue Row Playing State -->
+  <Style Selector=":is(Window).theme-aero Border.queue-row.playing">
+    <Setter Property="Background">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+        <GradientStop Color="#401E82D4" Offset="0.0" />
+        <GradientStop Color="#201E82D4" Offset="0.7" />
+        <GradientStop Color="#051E82D4" Offset="1.0" />
+      </LinearGradientBrush>
+    </Setter>
+    <Setter Property="BorderBrush" Value="#FF60B6F2" />
+    <Setter Property="BorderThickness" Value="3,0,0,0" />
+  </Style>
+
+  <!-- Windows 7 Aero Liquid Glass Popups & Dropdown Menus -->
+  <Style Selector=":is(Window).theme-aero MenuFlyoutPresenter">
+    <Setter Property="Background" Value="{StaticResource AeroPopupBrush}" />
+    <Setter Property="BorderBrush" Value="#80FFFFFF" />
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero ContextMenu">
+    <Setter Property="Background" Value="{StaticResource AeroPopupBrush}" />
+    <Setter Property="BorderBrush" Value="#80FFFFFF" />
+    <Setter Property="BorderThickness" Value="1.5" />
+    <Setter Property="CornerRadius" Value="10" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero MenuItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="5" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{StaticResource AeroHighlightBrush}" />
+    <Setter Property="BorderBrush" Value="#8080C0FF" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero MenuItem:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{StaticResource AeroHighlightBrush}" />
+    <Setter Property="BorderBrush" Value="#8080C0FF" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero ComboBox:dropdownopen /template/ Border#PopupBorder">
+    <Setter Property="Background" Value="{StaticResource AeroPopupBrush}" />
+    <Setter Property="BorderBrush" Value="#80FFFFFF" />
+    <Setter Property="BorderThickness" Value="1.5" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero ComboBoxItem /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero ComboBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AeroHighlightBrush}" />
+    <Setter Property="BorderBrush" Value="#8080C0FF" />
+  </Style>
+
+  <Style Selector=":is(Window).theme-aero ComboBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AeroHighlightBrush}" />
+    <Setter Property="BorderBrush" Value="#8080C0FF" />
+  </Style>
+
+</Styles>

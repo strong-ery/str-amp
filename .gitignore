@@ -13,3 +13,4 @@ native/dfxbridge/build/
 
 # publish.ps1's output: the release zip gets attached to a GitHub release, not committed.
 publish/
+guidelines.md

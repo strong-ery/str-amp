@@ -9,6 +9,13 @@ public enum AlbumArtColorMode
     Direct,
 }
 
+/// <summary>Everything Stramp remembers between runs, saved as config.json.</summary>
+/// <remarks>
+/// A plain serializable bag: <see cref="SettingsService"/> reads and writes it, and every property's
+/// initializer is the value a fresh install starts with. A property missing from an older file keeps
+/// that initializer, so adding a setting never needs a migration unless the old default is wrong for
+/// existing users.
+/// </remarks>
 public sealed class AppSettings
 {
     /// <summary>
@@ -69,6 +76,9 @@ public sealed class AppSettings
     public string PrimaryAccentColor { get; set; } = "#7C5CFF";
     public string SecondaryAccentColor { get; set; } = "#FF5C93";
     public string BackgroundColor { get; set; } = "#0E0E12";
+
+    // Id of the visual theme the app layers over its palette; an unknown id falls back to the default look.
+    public string VisualTheme { get; set; } = "default";
 
     /// <summary>When on (the default), theme colors follow the current album art instead of the manual picks above.</summary>
     public bool DeriveColorsFromArt { get; set; } = true;
