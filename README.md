@@ -24,7 +24,7 @@ Written in C#, with an Avalonia UI backend, lighter than Spotify, open source, f
 - Taskbar hover controls
 - Waveform progress bar support (inspired by [playback-waveform-bar](https://github.com/Konsl/spicetify-extensions/tree/main/playback-bar-waveform) by Konsl)
 
-<img src="res/example1.png" alt="Example 1" width="475" /> <img src="res/example2.png" alt="Example 1" width="475" />
+<img src="res/example1.png" alt="Example 1" width="425" /> <img src="res/example2.png" alt="Example 1" width="425" />
 
 ---
 
