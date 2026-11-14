@@ -527,10 +527,13 @@
                                    TextAlignment="Right" FontSize="12" Opacity="0.7" />
                     </Grid>
 
-                    <!-- Normal Control Bar (Volume on the right side) when there is enough room -->
-                    <Grid ColumnDefinitions="*,*,*,*" Margin="0,16,0,0"
+                    <!-- Normal Control Bar (Volume on the right side) when there is enough room. Two
+                         even halves rather than four, with the volume row getting the whole right
+                         half instead of just one of four columns - that quarter wasn't remotely
+                         enough room for four icon buttons and a usable slider together. -->
+                    <Grid ColumnDefinitions="*,*" Margin="0,16,0,0"
                           IsVisible="{Binding !IsCompactControlBar}">
-                        <StackPanel Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
                             <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
                                     ToolTip.Tip="Shuffle">
                                 <PathIcon Data="{x:Static app:Icons.Shuffle}" Width="18" Height="18" />
@@ -559,7 +562,7 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid Grid.Column="3" ColumnDefinitions="Auto,Auto,Auto,Auto,*" VerticalAlignment="Center">
+                        <Grid Grid.Column="1" ColumnDefinitions="Auto,Auto,Auto,Auto,*" Margin="24,0,0,0" VerticalAlignment="Center">
                             <Button Grid.Column="0" Classes="transport"
                                     Width="28" Height="28" Padding="5" Margin="0,0,2,0"
                                     Command="{Binding OpenAddToPlaylistForCurrentSongCommand}"
