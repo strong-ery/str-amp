@@ -971,11 +971,13 @@ public partial class MainWindow : Window
             // left up there to hover.
             Title = string.Empty;
 
-            // Edge-to-edge on every side now - the transport bar's old breathing room lives in
-            // its own trailing spacer (see MainWindow.axaml) so it collapses away with the bar
-            // instead of leaving a permanent gap once the bar has auto-hidden.
-            MainContentGrid.Margin = new Thickness(0);
-            PlayerColumnGrid.Margin = new Thickness(0);
+            // Not literally edge-to-edge: the corner buttons can still reopen the library/up next
+            // panels while fullscreen, and with zero margin here their content (and the player
+            // column's own time labels) end up hugging the monitor's edge with nothing around
+            // them. A small margin survives everywhere except the transport bar's bottom, whose
+            // own breathing room lives in its trailing spacer (see MainWindow.axaml) so it
+            // collapses away with the bar instead of leaving a gap once the bar auto-hides.
+            MainContentGrid.Margin = new Thickness(12);
 
             // BorderOnly's invisible resize-hit margin is still sized into the window at this
             // point even though there's nothing to resize while fullscreen, which is what was
