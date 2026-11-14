@@ -68,5 +68,9 @@ public partial class MainWindow
         _areControlsHidden = !visible;
         PlayerControlsPanel.IsHitTestVisible = visible;
         _controlsAnimator.Start(visible);
+
+        // The cursor going idle-invisible alongside the controls is what actually sells "nothing
+        // is happening here right now", the same way a fullscreen video player does it.
+        Cursor = visible ? Cursor.Default : new Cursor(StandardCursorType.None);
     }
 }
