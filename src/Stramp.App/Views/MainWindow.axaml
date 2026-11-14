@@ -166,9 +166,13 @@
 
             <Grid x:Name="MainContentGrid" Margin="16,6,16,16">
                 <Grid.ColumnDefinitions>
+                    <!-- MinWidth stays 0 here (not 160) because the fully-closed state is also
+                         "Width=0" on this same column - a non-zero MinWidth would floor it back
+                         up to 160 even then. The 160 drag floor is enforced in the splitter's
+                         own drag handlers below instead. -->
                     <ColumnDefinition Width="280" MinWidth="0" MaxWidth="600" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" MinWidth="280" />
+                    <ColumnDefinition Width="*" MinWidth="300" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="280" MinWidth="0" MaxWidth="600" />
                 </Grid.ColumnDefinitions>
@@ -605,7 +609,7 @@
                     </Grid>
 
                     <!-- Compact Control Bar (Volume underneath media buttons) when room is constrained -->
-                    <StackPanel Spacing="8" Margin="0,12,0,0" HorizontalAlignment="Center"
+                    <StackPanel Spacing="8" Margin="0,12,0,0" HorizontalAlignment="Stretch"
                                 IsVisible="{Binding IsCompactControlBar}">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
                             <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
@@ -636,7 +640,10 @@
                             </Button>
                         </StackPanel>
 
-                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" Width="284" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <!-- Stretches instead of a fixed width so the volume slider (the "*" column) is what
+                             shrinks under pressure, rather than the whole row clipping/overlapping once the
+                             column gets narrower than this used to assume. -->
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*" Margin="12,0" HorizontalAlignment="Stretch" VerticalAlignment="Center">
                             <Button Grid.Column="0" Classes="transport"
                                     Width="28" Height="28" Padding="5" Margin="0,0,2,0"
                                     Command="{Binding OpenAddToPlaylistForCurrentSongCommand}"

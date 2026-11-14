@@ -329,9 +329,19 @@ public partial class MainWindow : Window
             _thumbnailToolbar?.SetPlaying(ViewModel?.IsPlaying ?? false);
             _mediaKeys.SetPlaybackState(ViewModel?.IsPlaying ?? false);
         }
-        else if (e.PropertyName is nameof(MainWindowViewModel.IsLibraryOpen) or
-                 nameof(MainWindowViewModel.IsUpNextOpen) or
-                 nameof(MainWindowViewModel.LeftPanelWidth) or
+        else if (e.PropertyName == nameof(MainWindowViewModel.IsLibraryOpen))
+        {
+            if (ViewModel is { IsLibraryOpen: true } vm)
+                GrowWindowIfPanelWouldSquishPlayer(growLeftward: true, vm);
+            UpdateColumnWidths(animate: true);
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.IsUpNextOpen))
+        {
+            if (ViewModel is { IsUpNextOpen: true } vm)
+                GrowWindowIfPanelWouldSquishPlayer(growLeftward: false, vm);
+            UpdateColumnWidths(animate: true);
+        }
+        else if (e.PropertyName is nameof(MainWindowViewModel.LeftPanelWidth) or
                  nameof(MainWindowViewModel.RightPanelWidth))
         {
             UpdateColumnWidths(animate: true);
@@ -619,11 +629,53 @@ public partial class MainWindow : Window
             ViewModel?.SeekToLyricCommand.Execute(line);
     }
 
+    /// <summary>Matches the player column's own MinWidth in MainWindow.axaml.</summary>
+    private const double PlayerColumnMinWidth = 300.0;
+
     private ColumnDefinition? LeftColumn =>
         MainContentGrid?.ColumnDefinitions.Count > 0 ? MainContentGrid.ColumnDefinitions[0] : null;
 
     private ColumnDefinition? RightColumn =>
         MainContentGrid?.ColumnDefinitions.Count > 4 ? MainContentGrid.ColumnDefinitions[4] : null;
+
+    /// <summary>
+    /// Opening a library/up-next panel can otherwise leave the player column squeezed below its
+    /// usable minimum - its controls overlapping, its volume slider reduced to nothing - if the
+    /// window itself isn't wide enough to fit everything that's now open. Rather than let that
+    /// happen, the window grows by whatever's short: from its left edge for the library panel,
+    /// its right edge for up next, so whatever was already on screen doesn't shift to make room.
+    /// </summary>
+    private void GrowWindowIfPanelWouldSquishPlayer(bool growLeftward, MainWindowViewModel vm)
+    {
+        if (WindowState != WindowState.Normal)
+            return;
+
+        const double splitterWidth = 8;
+
+        double leftRequested = vm.IsLibraryOpen ? Math.Max(160, vm.LeftPanelWidth) : 0;
+        double rightRequested = vm.IsUpNextOpen ? Math.Max(160, vm.RightPanelWidth) : 0;
+        double splittersTotal = (vm.IsLibraryOpen ? splitterWidth : 0) + (vm.IsUpNextOpen ? splitterWidth : 0);
+
+        double availableWidth = Bounds.Width > 0 ? Bounds.Width - 32 : Width - 32;
+        double needed = leftRequested + rightRequested + splittersTotal + PlayerColumnMinWidth;
+        double shortfall = needed - availableWidth;
+        if (shortfall <= 0)
+            return;
+
+        if ((Screens.ScreenFromWindow(this) ?? Screens.Primary) is not { } screen)
+            return;
+
+        double maxWidth = screen.WorkingArea.Width / screen.Scaling;
+        double newWidth = Math.Min(Width + shortfall, maxWidth);
+        double actualGrowth = newWidth - Width;
+        if (actualGrowth <= 0)
+            return;
+
+        if (growLeftward)
+            Position = new PixelPoint(Position.X - (int)Math.Round(actualGrowth * screen.Scaling), Position.Y);
+
+        Width = newWidth;
+    }
 
     private void UpdateColumnWidths(bool animate = true)
     {
@@ -631,7 +683,7 @@ public partial class MainWindow : Window
             return;
 
         var availableWidth = Bounds.Width > 0 ? Bounds.Width - 32 : Width - 32;
-        const double minCenterWidth = 260;
+        const double minCenterWidth = PlayerColumnMinWidth;
         const double splitterWidth = 8;
 
         double leftRequested = vm.IsLibraryOpen ? Math.Max(160, vm.LeftPanelWidth) : 0;
@@ -728,28 +780,56 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// The side columns' own MinWidth has to stay 0 (their fully-closed state is also
+    /// Width="0" on the same column), so GridSplitter itself has nothing stopping it from
+    /// dragging one down to nothing - this is the floor that's missing from the Grid, applied by
+    /// hand instead.
+    /// </summary>
+    private const double SidePanelDragMinWidth = 160.0;
+
     private void OnLeftSplitterDragDelta(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is { } vm && LeftColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
-            vm.LeftPanelWidth = w.Value;
+        if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+            return;
+
+        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        if (Math.Abs(clamped - w.Value) > 0.1)
+            col.Width = new GridLength(clamped);
+
+        vm.LeftPanelWidth = clamped;
     }
 
     private void OnLeftSplitterDragCompleted(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is { } vm && LeftColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
-            vm.LeftPanelWidth = w.Value;
+        if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+            return;
+
+        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        col.Width = new GridLength(clamped);
+        vm.LeftPanelWidth = clamped;
     }
 
     private void OnRightSplitterDragDelta(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is { } vm && RightColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
-            vm.RightPanelWidth = w.Value;
+        if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+            return;
+
+        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        if (Math.Abs(clamped - w.Value) > 0.1)
+            col.Width = new GridLength(clamped);
+
+        vm.RightPanelWidth = clamped;
     }
 
     private void OnRightSplitterDragCompleted(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is { } vm && RightColumn is { Width: { IsAbsolute: true, Value: > 0 } w })
-            vm.RightPanelWidth = w.Value;
+        if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+            return;
+
+        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        col.Width = new GridLength(clamped);
+        vm.RightPanelWidth = clamped;
     }
 
     private void OnWaveformReady() => WaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
