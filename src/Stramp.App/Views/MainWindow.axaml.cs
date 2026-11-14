@@ -930,6 +930,11 @@ public partial class MainWindow : Window
             TitleBar.IsVisible = false;
             MainContentGrid.Margin = new Thickness(0);
 
+            // BorderOnly's invisible resize-hit margin is still sized into the window at this
+            // point even though there's nothing to resize while fullscreen, which is what was
+            // pushing content a few pixels past the monitor edge on every side.
+            WindowDecorations = WindowDecorations.None;
+
             if (ViewModel is { } vm)
             {
                 _savedIsLibraryOpen = vm.IsLibraryOpen;
@@ -940,6 +945,9 @@ public partial class MainWindow : Window
             }
 
             UpdateColumnWidths(animate: false);
+
+            _controlsIdleSecondsRemaining = ControlsIdleHideDelaySeconds;
+            SetControlsVisible(true);
         }
         else if (!isFullScreen && _isImmersiveFullScreen)
         {
@@ -947,6 +955,7 @@ public partial class MainWindow : Window
 
             TitleBar.IsVisible = true;
             MainContentGrid.Margin = new Thickness(16, 6, 16, 16);
+            WindowDecorations = WindowDecorations.BorderOnly;
 
             if (ViewModel is { } vm)
             {
@@ -955,6 +964,7 @@ public partial class MainWindow : Window
             }
 
             UpdateColumnWidths(animate: false);
+            SetControlsVisible(true);
         }
     }
 
@@ -1317,6 +1327,7 @@ public partial class MainWindow : Window
         StepLyricsPanelAnimation();
         StepLyricsScroll(dt);
         StepSmoothScrolls(dt);
+        StepControlsIdleTimer(dt);
 
         var frame = vm.VisualizerFeed.GetFrame(vm.ProgressSeconds, SpectrumBins);
         if (frame is not null && vm.IsPlaying)
