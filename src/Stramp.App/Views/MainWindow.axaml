@@ -405,14 +405,17 @@
                                     </Border>
 
                                     <!-- The margin plus MaxWidth is what the title wraps against, so it keeps
-                                         inside the stage once the lyrics panel has taken half the card. -->
-                                    <StackPanel Spacing="4" VerticalAlignment="Bottom" HorizontalAlignment="Center"
-                                                MaxWidth="320" Margin="12,0,12,18">
-                                        <TextBlock Text="{Binding CurrentTitle}" FontSize="20" FontWeight="Bold"
-                                                   HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" />
-                                        <TextBlock Text="{Binding CurrentArtist}" FontSize="13" Opacity="0.7"
-                                                   HorizontalAlignment="Center" TextAlignment="Center"
-                                                   TextTrimming="CharacterEllipsis" />
+                                         inside the stage once the lyrics panel has taken half the card. Both
+                                         scale with the art/visualizer in code-behind, so a huge fullscreen
+                                         stage doesn't leave a small fixed-size title floating under it. -->
+                                    <StackPanel x:Name="NowPlayingTitleStack" Spacing="4" VerticalAlignment="Bottom"
+                                                HorizontalAlignment="Center" MaxWidth="320" Margin="12,0,12,18">
+                                        <TextBlock x:Name="NowPlayingTitleText" Text="{Binding CurrentTitle}"
+                                                   FontSize="20" FontWeight="Bold" HorizontalAlignment="Center"
+                                                   TextWrapping="Wrap" TextAlignment="Center" />
+                                        <TextBlock x:Name="NowPlayingArtistText" Text="{Binding CurrentArtist}"
+                                                   FontSize="13" Opacity="0.7" HorizontalAlignment="Center"
+                                                   TextAlignment="Center" TextTrimming="CharacterEllipsis" />
                                     </StackPanel>
                                 </Grid>
 
@@ -483,7 +486,17 @@
                         </Grid>
                     </Border>
 
-                    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
+                    <!-- Rows 1-2 together, so they can shrink away as one unit when the mouse goes
+                         idle in fullscreen (see MainWindow.axaml.FullScreenControls.cs, which
+                         drives Opacity and the scale below together rather than via a plain
+                         XAML transition, so it sinks into the bottom edge instead of just fading
+                         out in place). -->
+                    <StackPanel x:Name="PlayerControlsPanel" Grid.Row="1" Grid.RowSpan="2"
+                                RenderTransformOrigin="0.5,1">
+                    <StackPanel.RenderTransform>
+                        <ScaleTransform ScaleY="1" />
+                    </StackPanel.RenderTransform>
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
                         <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" VerticalAlignment="Center" Width="42" FontSize="12" Opacity="0.7" />
                         <Panel Grid.Column="1">
                             <controls:WaveformSeekBar x:Name="WaveformBar" Height="38"
@@ -500,7 +513,7 @@
                     </Grid>
 
                     <!-- Normal Control Bar (Volume on the right side) when there is enough room -->
-                    <Grid Grid.Row="2" ColumnDefinitions="*,*,*,*" Margin="0,16,0,0"
+                    <Grid ColumnDefinitions="*,*,*,*" Margin="0,16,0,0"
                           IsVisible="{Binding !IsCompactControlBar}">
                         <StackPanel Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
                             <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
@@ -581,7 +594,7 @@
                     </Grid>
 
                     <!-- Compact Control Bar (Volume underneath media buttons) when room is constrained -->
-                    <StackPanel Grid.Row="2" Spacing="8" Margin="0,12,0,0" HorizontalAlignment="Center"
+                    <StackPanel Spacing="8" Margin="0,12,0,0" HorizontalAlignment="Center"
                                 IsVisible="{Binding IsCompactControlBar}">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
                             <Button Classes="transport" Classes.active="{Binding Shuffled}" Command="{Binding ToggleShuffleCommand}"
@@ -659,6 +672,7 @@
                             <Slider x:Name="CompactVolumeSlider" Grid.Column="4" Minimum="0" Maximum="100" Value="{Binding Volume}"
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
+                    </StackPanel>
                     </StackPanel>
                 </Grid>
 

@@ -933,7 +933,15 @@ public partial class MainWindow : Window
             // cover the whole screen and flash native chrome on the way in. The custom title bar
             // just needs hiding, same as any other panel.
             TitleBar.IsVisible = false;
-            MainContentGrid.Margin = new Thickness(0);
+
+            // Zero all around left the transport bar sitting flush against the bottom edge of
+            // the screen with no breathing room; everything else can still go edge-to-edge.
+            MainContentGrid.Margin = new Thickness(0, 0, 0, 20);
+
+            // BorderOnly's invisible resize-hit margin is still sized into the window at this
+            // point even though there's nothing to resize while fullscreen, which is what was
+            // pushing content a few pixels past the monitor edge on every side.
+            WindowDecorations = WindowDecorations.None;
 
             if (ViewModel is { } vm)
             {
@@ -945,6 +953,9 @@ public partial class MainWindow : Window
             }
 
             UpdateColumnWidths(animate: false);
+
+            _controlsIdleSecondsRemaining = ControlsIdleHideDelaySeconds;
+            SetControlsVisible(true);
         }
         else if (!isFullScreen && _isImmersiveFullScreen)
         {
@@ -952,6 +963,7 @@ public partial class MainWindow : Window
 
             TitleBar.IsVisible = true;
             MainContentGrid.Margin = new Thickness(16, 6, 16, 16);
+            WindowDecorations = WindowDecorations.BorderOnly;
 
             if (ViewModel is { } vm)
             {
@@ -960,6 +972,7 @@ public partial class MainWindow : Window
             }
 
             UpdateColumnWidths(animate: false);
+            SetControlsVisible(true);
         }
     }
 
@@ -993,7 +1006,11 @@ public partial class MainWindow : Window
         if (_lastStageShortSide <= 0)
             return;
 
-        var baseArtSize = Math.Clamp(_lastStageShortSide * 0.26, 64, 260);
+        // The old 260px ceiling was sized for the default windowed stage; fullscreen with both
+        // side panels closed hands the stage several times that, and a cap that low left the art
+        // and title floating at a fixed small size in the middle of all that empty space. 420px
+        // keeps scaling sensibly up to large monitors instead of topping out almost immediately.
+        var baseArtSize = Math.Clamp(_lastStageShortSide * 0.26, 64, 420);
         var targetRingRadius = baseArtSize * 0.5 * 1.30 + 12;
         var isCircular = ViewModel?.Theme.CircularAlbumArt ?? true;
 
@@ -1010,6 +1027,13 @@ public partial class MainWindow : Window
             ArtFrame.Width = baseArtSize;
             ArtFrame.Height = baseArtSize;
         }
+
+        // Scales the title/artist with the art instead of leaving them at a fixed size: at the
+        // default ~166px art they land back on the original 320/20/13 numbers.
+        var scale = baseArtSize / 166.0;
+        NowPlayingTitleStack.MaxWidth = Math.Clamp(320 * scale, 220, 640);
+        NowPlayingTitleText.FontSize = Math.Clamp(20 * scale, 16, 34);
+        NowPlayingArtistText.FontSize = Math.Clamp(13 * scale, 12, 22);
     }
 
     private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
@@ -1337,6 +1361,7 @@ public partial class MainWindow : Window
         StepLyricsPanelAnimation();
         StepLyricsScroll(dt);
         StepSmoothScrolls(dt);
+        StepControlsIdleTimer(dt);
 
         var frame = vm.VisualizerFeed.GetFrame(vm.ProgressSeconds, SpectrumBins);
         if (frame is not null && vm.IsPlaying)
