@@ -1,8 +1,10 @@
 using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -80,6 +82,8 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        Opened += (_, _) => DisableNativeFullscreenPopover();
 
         // Transform the whole framed artwork, not the image inside the clipping frame:
         // transforming the inner image just slides the picture around behind a fixed window.
@@ -758,6 +762,34 @@ public partial class MainWindow : Window
     private bool _savedIsLibraryOpen;
     private bool _savedIsUpNextOpen;
     private bool _isImmersiveFullScreen;
+
+    /// <summary>
+    /// Avalonia's own window chrome (active because of ExtendClientAreaToDecorationsHint) draws
+    /// a built-in "fullscreen popover" on hover at the top edge - its own little titlebar with
+    /// its own close/restore buttons, meant as an escape hatch for apps with no other way out of
+    /// fullscreen. Stramp already has one (F11/Escape/the stramp menu). Neither the popover nor
+    /// the chrome object holding it (Window.TopLevelHost.Decorations) is public API, so this
+    /// reaches it the only way available - two non-public property reads - then clears it
+    /// through its own public, writable FullscreenPopover property. Pinned to Avalonia 12.1.2's
+    /// internal layout; worth re-checking on an Avalonia upgrade.
+    /// </summary>
+    private void DisableNativeFullscreenPopover()
+    {
+        const BindingFlags nonPublicInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+
+        var topLevelHost = typeof(Window).GetProperty("TopLevelHost", nonPublicInstance)?.GetValue(this);
+        if (topLevelHost is null)
+            return;
+
+        if (topLevelHost.GetType().GetProperty("Decorations", nonPublicInstance)?.GetValue(topLevelHost)
+            is not WindowDrawnDecorations decorations)
+        {
+            return;
+        }
+
+        if (decorations.Content is { } content)
+            content.FullscreenPopover = null;
+    }
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
