@@ -66,6 +66,7 @@ public partial class MainWindow : Window
 
     private bool _isDraggingSplitter;
     private readonly ColumnResizeAnimator _columnAnimator = new();
+    private readonly ColumnResizeAnimator _windowGrowAnimator = new();
     private readonly LyricsScrollAnimator _lyricsAnimator = new();
     private readonly SmoothScrollAnimator _lyricsManualScroll = new();
 
@@ -671,10 +672,22 @@ public partial class MainWindow : Window
         if (actualGrowth <= 0)
             return;
 
-        if (growLeftward)
-            Position = new PixelPoint(Position.X - (int)Math.Round(actualGrowth * screen.Scaling), Position.Y);
+        // Both tracked in DIPs (matching Width) so the two glide in step - Position is only
+        // converted to device pixels when a stepped frame is actually applied below.
+        double startX = Position.X / screen.Scaling;
+        double targetX = growLeftward ? startX - actualGrowth : startX;
+        _windowGrowAnimator.Start(Width, newWidth, startX, targetX);
+    }
 
-        Width = newWidth;
+    private void StepWindowGrowAnimation()
+    {
+        if (!_windowGrowAnimator.IsAnimating)
+            return;
+
+        var (width, xDip) = _windowGrowAnimator.Step(out _);
+        var scaling = (Screens.ScreenFromWindow(this) ?? Screens.Primary)?.Scaling ?? 1.0;
+        Position = new PixelPoint((int)Math.Round(xDip * scaling), Position.Y);
+        Width = width;
     }
 
     private void UpdateColumnWidths(bool animate = true)
@@ -1110,8 +1123,11 @@ public partial class MainWindow : Window
     /// <summary>Keeps the artwork and the ring around it proportional to the viewport.</summary>
     private void OnViewportSizeChanged(object? sender, SizeChangedEventArgs e)
     {
+        // 420 wasn't enough buffer - the normal bar's buttons-plus-volume-slider row needs more
+        // room than that to lay out without crowding/overlapping, so it was switching to compact
+        // well after things had already started to squish rather than before.
         if (ViewModel is { } vm)
-            vm.IsCompactControlBar = e.NewSize.Width < 420;
+            vm.IsCompactControlBar = e.NewSize.Width < 560;
     }
 
     /// <summary>
@@ -1485,6 +1501,7 @@ public partial class MainWindow : Window
         StepLyricsScroll(dt);
         StepSmoothScrolls(dt);
         StepControlsIdleTimer(dt);
+        StepWindowGrowAnimation();
 
         var frame = vm.VisualizerFeed.GetFrame(vm.ProgressSeconds, SpectrumBins);
         if (frame is not null && vm.IsPlaying)
