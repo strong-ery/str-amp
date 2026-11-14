@@ -754,10 +754,13 @@ public partial class MainWindow : Window
 
     // ── Window chrome ────────────────────────────────────────────────────────
 
-    private WindowState _previousWindowState = WindowState.Normal;
     private bool _savedIsLibraryOpen;
     private bool _savedIsUpNextOpen;
     private bool _isImmersiveFullScreen;
+    private WindowState _preFullScreenWindowState = WindowState.Normal;
+    private PixelPoint _preFullScreenPosition;
+    private double _preFullScreenWidth;
+    private double _preFullScreenHeight;
 
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -778,23 +781,67 @@ public partial class MainWindow : Window
 
     private void ToggleMaximized()
     {
-        if (WindowState == WindowState.FullScreen)
-            WindowState = WindowState.Maximized;
+        if (_isImmersiveFullScreen)
+            ExitPseudoFullScreen();
         else
             WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     }
 
     private void ToggleFullScreen()
     {
-        if (WindowState == WindowState.FullScreen)
-        {
-            WindowState = _previousWindowState == WindowState.FullScreen ? WindowState.Normal : _previousWindowState;
-        }
+        if (_isImmersiveFullScreen)
+            ExitPseudoFullScreen();
         else
+            EnterPseudoFullScreen();
+    }
+
+    /// <summary>
+    /// Sizes the window to exactly cover the monitor instead of using the real
+    /// WindowState.FullScreen - on Windows that state keeps the native caption underneath, which
+    /// is what DWM was peeking in from the top edge on hover (its own title bar and close
+    /// button, looking nothing like Stramp's). A borderless window just sized to the screen never
+    /// triggers that.
+    /// </summary>
+    private void EnterPseudoFullScreen()
+    {
+        if (_isImmersiveFullScreen)
+            return;
+
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (screen is null)
+            return;
+
+        _preFullScreenWindowState = WindowState;
+        _preFullScreenPosition = Position;
+        _preFullScreenWidth = Width;
+        _preFullScreenHeight = Height;
+
+        WindowState = WindowState.Normal;
+        Topmost = true;
+        Position = screen.Bounds.Position;
+        Width = screen.Bounds.Width / screen.Scaling;
+        Height = screen.Bounds.Height / screen.Scaling;
+
+        _isImmersiveFullScreen = true;
+        UpdateImmersiveFullScreenState();
+    }
+
+    private void ExitPseudoFullScreen()
+    {
+        if (!_isImmersiveFullScreen)
+            return;
+
+        Topmost = false;
+        WindowState = _preFullScreenWindowState;
+        if (_preFullScreenWindowState == WindowState.Normal)
         {
-            _previousWindowState = WindowState;
-            WindowState = WindowState.FullScreen;
+            Position = _preFullScreenPosition;
+            Width = _preFullScreenWidth;
+            Height = _preFullScreenHeight;
         }
+
+        _isImmersiveFullScreen = false;
+        UpdateImmersiveFullScreenState();
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -900,7 +947,7 @@ public partial class MainWindow : Window
             ViewModel.CancelConfirmDialogCommand.Execute(null);
             e.Handled = true;
         }
-        else if (WindowState == WindowState.FullScreen)
+        else if (_isImmersiveFullScreen)
         {
             ToggleFullScreen();
             e.Handled = true;
@@ -913,25 +960,21 @@ public partial class MainWindow : Window
         {
             var isMaximized = WindowState == WindowState.Maximized;
             MaximizeIcon.Data = isMaximized ? Icons.WindowRestore : Icons.WindowMaximize;
-            ResizeGrips.IsVisible = WindowState == WindowState.Normal;
-
-            UpdateImmersiveFullScreenState();
+            ResizeGrips.IsVisible = WindowState == WindowState.Normal && !_isImmersiveFullScreen;
         }
     }
 
+    /// <summary>
+    /// Applies (or reverts) the fullscreen chrome for whatever <see cref="_isImmersiveFullScreen"/>
+    /// is currently set to. Called exactly once from <see cref="EnterPseudoFullScreen"/> or
+    /// <see cref="ExitPseudoFullScreen"/> after that field has already been updated.
+    /// </summary>
     private void UpdateImmersiveFullScreenState()
     {
-        bool isFullScreen = WindowState == WindowState.FullScreen;
-        LyricsScroller.Classes.Set("immersive", isFullScreen);
+        LyricsScroller.Classes.Set("immersive", _isImmersiveFullScreen);
 
-        if (isFullScreen && !_isImmersiveFullScreen)
+        if (_isImmersiveFullScreen)
         {
-            _isImmersiveFullScreen = true;
-
-            // Leaving ExtendClientAreaToDecorationsHint alone: toggling it off here used to hand
-            // the window back to the OS for a frame, which is what made fullscreen both fail to
-            // cover the whole screen and flash native chrome on the way in. The custom title bar
-            // just needs hiding, same as any other panel.
             TitleBar.IsVisible = false;
 
             // Edge-to-edge on every side now - the transport bar's old breathing room lives in
@@ -939,10 +982,6 @@ public partial class MainWindow : Window
             // instead of leaving a permanent gap once the bar has auto-hidden.
             MainContentGrid.Margin = new Thickness(0);
             PlayerColumnGrid.Margin = new Thickness(0);
-
-            // BorderOnly's invisible resize-hit margin is still sized into the window at this
-            // point even though there's nothing to resize while fullscreen, which is what was
-            // pushing content a few pixels past the monitor edge on every side.
             WindowDecorations = WindowDecorations.None;
 
             if (ViewModel is { } vm)
@@ -959,10 +998,8 @@ public partial class MainWindow : Window
             _controlsIdleSecondsRemaining = ControlsIdleHideDelaySeconds;
             SetControlsVisible(true);
         }
-        else if (!isFullScreen && _isImmersiveFullScreen)
+        else
         {
-            _isImmersiveFullScreen = false;
-
             TitleBar.IsVisible = true;
             MainContentGrid.Margin = new Thickness(16, 6, 16, 16);
             PlayerColumnGrid.Margin = new Thickness(10, 0);
@@ -981,7 +1018,7 @@ public partial class MainWindow : Window
 
     private void OnResizePressed(object? sender, PointerPressedEventArgs e)
     {
-        if (WindowState != WindowState.Normal)
+        if (WindowState != WindowState.Normal || _isImmersiveFullScreen)
             return;
         if (sender is Control { Tag: string edgeName } && Enum.TryParse<WindowEdge>(edgeName, out var edge))
             BeginResizeDrag(edge, e);
