@@ -7,6 +7,16 @@
     <Setter Property="Foreground" Value="{DynamicResource AppIconBrush}" />
   </Style>
 
+  <!-- Avalonia's own window chrome (WindowDrawnDecorations, used under
+       ExtendClientAreaToDecorationsHint) draws its own hover title bar - with its own close and
+       restore buttons - at the top edge whenever the window is fullscreen. That's a built-in
+       escape hatch for apps with no other way out of fullscreen; Stramp already has one
+       (F11/Escape/the stramp menu), and the native one looks nothing like Stramp, so it's
+       suppressed outright. -->
+  <Style Selector="Window:fullscreen /template/ DockPanel">
+    <Setter Property="IsVisible" Value="False" />
+  </Style>
+
   <!-- Title-bar menu: compact trigger, elevated rounded popup, and Stramp hover states. -->
   <Style Selector="Button.top-menu-trigger">
     <Setter Property="Background" Value="Transparent" />
@@ -37,8 +47,20 @@
     <Setter Property="Padding" Value="10,7" />
     <Setter Property="FontSize" Value="12" />
   </Style>
-  <Style Selector="MenuItem.stramp-menu-item:pointerover /template/ ContentPresenter">
+  <!-- The hover/selected highlight actually paints on the template's own Border#PART_LayoutRoot,
+       not the ContentPresenter - leaving the ContentPresenter rule in place let the default
+       Fluent highlight on that border show through underneath it, squared off and out of step
+       with the item's own rounded corners (the "double highlight, boxy look"). -->
+  <Style Selector="MenuItem.stramp-menu-item:pointerover /template/ Border#PART_LayoutRoot">
     <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+    <Setter Property="CornerRadius" Value="7" />
+  </Style>
+  <Style Selector="MenuItem.stramp-menu-item:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+    <Setter Property="CornerRadius" Value="7" />
+  </Style>
+  <Style Selector="MenuItem.stramp-menu-item /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="MenuItem.stramp-menu-item PathIcon">
     <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
