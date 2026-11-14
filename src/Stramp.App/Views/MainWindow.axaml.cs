@@ -934,9 +934,11 @@ public partial class MainWindow : Window
             // just needs hiding, same as any other panel.
             TitleBar.IsVisible = false;
 
-            // Zero all around left the transport bar sitting flush against the bottom edge of
-            // the screen with no breathing room; everything else can still go edge-to-edge.
-            MainContentGrid.Margin = new Thickness(0, 0, 0, 20);
+            // Edge-to-edge on every side now - the transport bar's old breathing room lives in
+            // its own trailing spacer (see MainWindow.axaml) so it collapses away with the bar
+            // instead of leaving a permanent gap once the bar has auto-hidden.
+            MainContentGrid.Margin = new Thickness(0);
+            PlayerColumnGrid.Margin = new Thickness(0);
 
             // BorderOnly's invisible resize-hit margin is still sized into the window at this
             // point even though there's nothing to resize while fullscreen, which is what was
@@ -963,6 +965,7 @@ public partial class MainWindow : Window
 
             TitleBar.IsVisible = true;
             MainContentGrid.Margin = new Thickness(16, 6, 16, 16);
+            PlayerColumnGrid.Margin = new Thickness(10, 0);
             WindowDecorations = WindowDecorations.BorderOnly;
 
             if (ViewModel is { } vm)

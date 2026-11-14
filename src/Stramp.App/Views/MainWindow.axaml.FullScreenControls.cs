@@ -6,8 +6,9 @@ namespace Stramp.App.Views;
 
 /// <summary>
 /// Fullscreen-only niceties that don't belong in the main chrome-toggling logic: the transport
-/// controls shrink away after the mouse sits still for a few seconds and reappear the instant it
-/// moves, the way a fullscreen video player's controls do.
+/// controls, the lyrics header and the corner panel-toggle buttons all shrink/fade away together
+/// after the mouse sits still for a few seconds and reappear the instant it moves, the way a
+/// fullscreen video player's controls do.
 /// </summary>
 public partial class MainWindow
 {
@@ -17,6 +18,7 @@ public partial class MainWindow
     private double _controlsIdleSecondsRemaining = ControlsIdleHideDelaySeconds;
     private bool _areControlsHidden;
     private double _playerControlsFullHeight;
+    private double _lyricsHeaderFullHeight;
 
     /// <summary>
     /// Tracks the panel's natural height whenever it's at its real (un-overridden) size, so
@@ -27,6 +29,12 @@ public partial class MainWindow
     {
         if (double.IsNaN(PlayerControlsPanel.Height))
             _playerControlsFullHeight = e.NewSize.Height;
+    }
+
+    private void OnLyricsHeaderSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        if (double.IsNaN(LyricsHeaderRow.Height))
+            _lyricsHeaderFullHeight = e.NewSize.Height;
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -61,12 +69,23 @@ public partial class MainWindow
         var fraction = _controlsAnimator.Step(out var finished);
         PlayerControlsPanel.Opacity = fraction;
         PlayerControlsPanel.Height = finished && fraction >= 1 ? double.NaN : _playerControlsFullHeight * fraction;
+
+        // The lyrics header ("LYRICS" / source line) fades and collapses in lockstep with the
+        // transport bar, so the lyrics list grows up into the reclaimed space instead of that
+        // row staying reserved and clipping the first line.
+        LyricsHeaderRow.Opacity = fraction;
+        LyricsHeaderRow.Height = finished && fraction >= 1 ? double.NaN : _lyricsHeaderFullHeight * fraction;
+
+        OpenLibraryCornerButton.Opacity = fraction;
+        OpenUpNextCornerButton.Opacity = fraction;
     }
 
     private void SetControlsVisible(bool visible)
     {
         _areControlsHidden = !visible;
         PlayerControlsPanel.IsHitTestVisible = visible;
+        OpenLibraryCornerButton.IsHitTestVisible = visible;
+        OpenUpNextCornerButton.IsHitTestVisible = visible;
         _controlsAnimator.Start(visible);
 
         // The cursor going idle-invisible alongside the controls is what actually sells "nothing

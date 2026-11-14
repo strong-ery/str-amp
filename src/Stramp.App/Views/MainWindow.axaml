@@ -372,7 +372,7 @@
                 </GridSplitter>
 
                 <!-- Player -->
-                <Grid Grid.Column="2" RowDefinitions="*,Auto,Auto" Margin="10,0">
+                <Grid x:Name="PlayerColumnGrid" Grid.Column="2" RowDefinitions="*,Auto,Auto" Margin="10,0">
                     <Border x:Name="NowPlayingCard" Grid.Row="0" Classes="now-playing-card" ClipToBounds="True"
                             SizeChanged="OnViewportSizeChanged">
                         <Grid>
@@ -422,7 +422,12 @@
                                  <!-- Lyrics half -->
                                 <Grid Grid.Column="1" RowDefinitions="Auto,*" Margin="6,14,16,14" ClipToBounds="True"
                                       IsVisible="{Binding IsLyricsOpen}">
-                                    <Grid Grid.Row="0" Margin="0,0,0,6">
+                                    <!-- Collapses away with the transport bar in fullscreen (see
+                                         MainWindow.axaml.FullScreenControls.cs) so the lyrics list
+                                         grows up to fill the reclaimed space instead of leaving this
+                                         reserved and clipping the first line. -->
+                                    <Grid x:Name="LyricsHeaderRow" Grid.Row="0" Margin="0,0,0,6"
+                                          SizeChanged="OnLyricsHeaderSizeChanged">
                                         <StackPanel VerticalAlignment="Center">
                                             <TextBlock Text="LYRICS" Classes="section-header" Margin="0" />
                                             <!-- Says whether these came off disk or lrclib.net, and
@@ -469,14 +474,14 @@
 
                             <!-- Small corner buttons to reopen collapsed panels. Outside the split so they
                                  stay pinned to the card's corners rather than the stage's. -->
-                            <Button Classes="transport" Width="28" Height="28" Padding="5" Margin="10"
+                            <Button x:Name="OpenLibraryCornerButton" Classes="transport" Width="28" Height="28" Padding="5" Margin="10"
                                     HorizontalAlignment="Left" VerticalAlignment="Top"
                                     Command="{Binding ToggleLibraryOpenCommand}"
                                     IsVisible="{Binding !IsLibraryOpen}"
                                     ToolTip.Tip="Open library">
                                 <PathIcon Data="{x:Static app:Icons.PanelLeft}" Width="14" Height="14" Opacity="0.7" />
                             </Button>
-                            <Button Classes="transport" Width="28" Height="28" Padding="5" Margin="10"
+                            <Button x:Name="OpenUpNextCornerButton" Classes="transport" Width="28" Height="28" Padding="5" Margin="10"
                                     HorizontalAlignment="Right" VerticalAlignment="Top"
                                     Command="{Binding ToggleUpNextOpenCommand}"
                                     IsVisible="{Binding !IsUpNextOpen}"
@@ -679,6 +684,11 @@
                                     HorizontalAlignment="Stretch" VerticalAlignment="Center" />
                         </Grid>
                     </StackPanel>
+
+                    <!-- Breathing room below the buttons, kept as a real stack child rather than a
+                         margin so it's part of PlayerControlsPanel's own measured height and shrinks
+                         away with everything else instead of leaving a gap once the bar auto-hides. -->
+                    <Border Height="20" />
                     </StackPanel>
                 </Grid>
 
