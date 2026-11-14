@@ -653,8 +653,8 @@ public partial class MainWindow : Window
 
         const double splitterWidth = 8;
 
-        double leftRequested = vm.IsLibraryOpen ? Math.Max(160, vm.LeftPanelWidth) : 0;
-        double rightRequested = vm.IsUpNextOpen ? Math.Max(160, vm.RightPanelWidth) : 0;
+        double leftRequested = vm.IsLibraryOpen ? Math.Max(SidePanelMinWidth, vm.LeftPanelWidth) : 0;
+        double rightRequested = vm.IsUpNextOpen ? Math.Max(SidePanelMinWidth, vm.RightPanelWidth) : 0;
         double splittersTotal = (vm.IsLibraryOpen ? splitterWidth : 0) + (vm.IsUpNextOpen ? splitterWidth : 0);
 
         double availableWidth = Bounds.Width > 0 ? Bounds.Width - 32 : Width - 32;
@@ -699,8 +699,8 @@ public partial class MainWindow : Window
         const double minCenterWidth = PlayerColumnMinWidth;
         const double splitterWidth = 8;
 
-        double leftRequested = vm.IsLibraryOpen ? Math.Max(160, vm.LeftPanelWidth) : 0;
-        double rightRequested = vm.IsUpNextOpen ? Math.Max(160, vm.RightPanelWidth) : 0;
+        double leftRequested = vm.IsLibraryOpen ? Math.Max(SidePanelMinWidth, vm.LeftPanelWidth) : 0;
+        double rightRequested = vm.IsUpNextOpen ? Math.Max(SidePanelMinWidth, vm.RightPanelWidth) : 0;
 
         double splittersTotal = (vm.IsLibraryOpen ? splitterWidth : 0) + (vm.IsUpNextOpen ? splitterWidth : 0);
         double availableForSides = Math.Max(0, availableWidth - minCenterWidth - splittersTotal);
@@ -794,21 +794,21 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The side columns' own MinWidth has to stay 0 (their fully-closed state is also
-    /// Width="0" on the same column), so GridSplitter itself has nothing stopping it from
-    /// dragging one down to nothing - this is the floor that's missing from the Grid, applied by
-    /// hand instead. Matching against the width's own current value (rather than just checking
-    /// IsAbsolute) would have let a drag that lands exactly on 0 skip the clamp outright - the
-    /// one case this exists to catch.
+    /// The usable floor for an open library/up-next panel - also used as the Grid's own MinWidth
+    /// can't be (their fully-closed state is also Width="0" on that same column, so GridSplitter
+    /// has nothing else stopping it from dragging one down to nothing), which is why this is
+    /// applied by hand in the splitters' own drag handlers below instead. Matching against the
+    /// width's own current value there (rather than just checking IsAbsolute) would have let a
+    /// drag that lands exactly on 0 skip the clamp outright - the one case it exists to catch.
     /// </summary>
-    private const double SidePanelDragMinWidth = 160.0;
+    private const double SidePanelMinWidth = 213.0;
 
     private void OnLeftSplitterDragDelta(object? sender, VectorEventArgs e)
     {
         if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
-        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        var clamped = Math.Max(SidePanelMinWidth, w.Value);
         if (Math.Abs(clamped - w.Value) > 0.1)
             col.Width = new GridLength(clamped);
 
@@ -820,7 +820,7 @@ public partial class MainWindow : Window
         if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
-        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        var clamped = Math.Max(SidePanelMinWidth, w.Value);
         col.Width = new GridLength(clamped);
         vm.LeftPanelWidth = clamped;
     }
@@ -830,7 +830,7 @@ public partial class MainWindow : Window
         if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
-        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        var clamped = Math.Max(SidePanelMinWidth, w.Value);
         if (Math.Abs(clamped - w.Value) > 0.1)
             col.Width = new GridLength(clamped);
 
@@ -842,7 +842,7 @@ public partial class MainWindow : Window
         if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
-        var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
+        var clamped = Math.Max(SidePanelMinWidth, w.Value);
         col.Width = new GridLength(clamped);
         vm.RightPanelWidth = clamped;
     }
