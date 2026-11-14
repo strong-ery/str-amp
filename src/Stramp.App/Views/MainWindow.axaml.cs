@@ -923,7 +923,10 @@ public partial class MainWindow : Window
         {
             _isImmersiveFullScreen = true;
 
-            ExtendClientAreaToDecorationsHint = false;
+            // Leaving ExtendClientAreaToDecorationsHint alone: toggling it off here used to hand
+            // the window back to the OS for a frame, which is what made fullscreen both fail to
+            // cover the whole screen and flash native chrome on the way in. The custom title bar
+            // just needs hiding, same as any other panel.
             TitleBar.IsVisible = false;
             MainContentGrid.Margin = new Thickness(0);
 
@@ -942,7 +945,6 @@ public partial class MainWindow : Window
         {
             _isImmersiveFullScreen = false;
 
-            ExtendClientAreaToDecorationsHint = true;
             TitleBar.IsVisible = true;
             MainContentGrid.Margin = new Thickness(16, 6, 16, 16);
 
