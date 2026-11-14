@@ -95,7 +95,10 @@ public partial class MainWindow
         // hands-off fullscreen goes all the way to the monitor's edges instead of stopping at
         // the margin that's only there for when the corner buttons are reachable.
         if (_isImmersiveFullScreen)
+        {
             MainContentGrid.Margin = new Thickness(FullScreenContentMarginPx * fraction);
+            PlayerColumnGrid.Margin = new Thickness(10 * fraction, 0);
+        }
     }
 
     private void SetControlsVisible(bool visible)
