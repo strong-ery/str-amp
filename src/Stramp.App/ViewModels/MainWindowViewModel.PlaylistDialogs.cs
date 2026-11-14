@@ -183,30 +183,38 @@ public partial class MainWindowViewModel
             return;
         }
 
+        SaveNewPlaylist(name, []);
+        IsNewPlaylistDialogOpen = false;
+        StatusText = $"Created playlist '{name}'";
+    }
+
+    // Writes the playlist's .m3u8 to the playlists folder, stores it in settings (replacing one of the
+    // same name) and opens it in the library panel.
+    private void SaveNewPlaylist(string name, IReadOnlyList<Song> songs)
+    {
         var m3u8Path = DetermineM3u8Path(name);
         if (!string.IsNullOrEmpty(m3u8Path))
         {
             try
             {
-                PlaylistWriter.Write(m3u8Path, []);
+                PlaylistWriter.Write(m3u8Path, songs);
             }
-            catch
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                // The playlist still works from settings; it just has no file on disk.
                 m3u8Path = null;
             }
         }
 
+        _settings.Playlists.RemoveAll(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
         _settings.Playlists.Add(new SavedPlaylist
         {
             Name = name,
             FilePath = m3u8Path,
-            SongPaths = [],
+            SongPaths = songs.Select(s => s.Path).ToList(),
         });
         SettingsService.Save(_settings);
         PopulateSources();
-
-        IsNewPlaylistDialogOpen = false;
-        StatusText = $"Created playlist '{name}'";
 
         var created = LibrarySources.FirstOrDefault(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
         if (created is not null)

@@ -12,6 +12,7 @@ using Stramp.Core.Lyrics;
 using Stramp.Core.Models;
 using Stramp.Core.Playback;
 using Stramp.Core.Settings;
+using Stramp.Core.Spotify;
 using Stramp.Integrations.Windows;
 
 namespace Stramp.App.ViewModels;
@@ -306,6 +307,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public ThemeSettingsViewModel Theme { get; }
 
+    public SpotifyImportViewModel SpotifyImport { get; }
+
     public ListeningStatsViewModel Stats { get; } = new();
 
     public string ListeningHistoryFilePath => _listeningHistoryStore.FilePath;
@@ -364,6 +367,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             ApplyMonoOutputSetting, ApplySurroundSoundSetting, ApplyLrcLibSetting, ApplyLibraryMetadataCacheSetting,
             ApplyDesktopShortcutSetting, ApplyStartMenuShortcutSetting));
         Theme.InitializeEqualizer(player.DefaultEqualizerBands, ApplyEqualizer, ApplyEffects);
+        SpotifyImport = new SpotifyImportViewModel(settings, new SpotifyImportCallbacks(
+            () => _library, SaveNewPlaylist, message => StatusText = message, OpenSettings));
         ApplyEqualizer();
         ApplyEffects();
         ApplyMonoOutputSetting();

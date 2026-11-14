@@ -120,6 +120,13 @@
                                         <PathIcon Data="{x:Static app:Icons.Playlist}" Width="15" Height="15" />
                                     </MenuItem.Icon>
                                 </MenuItem>
+                                <MenuItem Header="Import Spotify Playlist…" Classes="stramp-menu-item"
+                                          Command="{Binding SpotifyImport.OpenCommand}"
+                                          IsVisible="{Binding SpotifyImport.IsEnabled}">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.Spotify}" Width="15" Height="15" Foreground="#1DB954" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <MenuItem Header="View Stats…" Classes="stramp-menu-item"
                                           Command="{Binding OpenStatsCommand}">
                                     <MenuItem.Icon>
@@ -1047,6 +1054,26 @@
                                            Text="Advanced: leave blank to use str-amp's built-in Discord app. Only set this to point at your own Discord Application (discord.com/developers/applications) instead." />
                             </StackPanel>
 
+                            <TextBlock Text="SPOTIFY" Classes="section-header" Margin="0,6,0,0" />
+
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding SpotifyImport.IsEnabled}"
+                                              OnContent="Spotify integration"
+                                              OffContent="Spotify integration" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Adds Import Spotify Playlist to the menu. Turning it off hides it and signs you out of Spotify." />
+                                <StackPanel Spacing="5" IsEnabled="{Binding SpotifyImport.IsEnabled}"
+                                            Opacity="{Binding SpotifyImport.IsEnabled, Converter={StaticResource EnabledOpacity}}">
+                                    <TextBox Text="{Binding SpotifyImport.ClientId}"
+                                             PlaceholderText="Client ID of your Spotify app" />
+                                    <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                               Text="Create an app in the Spotify developer dashboard, add http://127.0.0.1:8888/callback as its redirect URI, and paste its Client ID here. No client secret is needed. Spotify requires the app's owner to have Premium, and only the owner and accounts they add to the app can sign in." />
+                                    <Button Classes="playlist-action-btn" HorizontalAlignment="Left"
+                                            Content="Open Spotify developer dashboard"
+                                            Command="{Binding SpotifyImport.OpenDashboardCommand}" />
+                                </StackPanel>
+                            </StackPanel>
+
                             <TextBlock Text="WINDOWS" Classes="section-header" Margin="0,6,0,0" />
 
                             <StackPanel Spacing="10">
@@ -1737,11 +1764,92 @@
                                  KeyDown="OnStandaloneNewPlaylistKeyDown" />
                         <TextBlock Text="{Binding StandaloneNewPlaylistError}" Foreground="#FF5C5C" FontSize="11"
                                    IsVisible="{Binding StandaloneNewPlaylistError, Converter={StaticResource NullToBool}}" />
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                            <Button Grid.Column="0" Classes="playlist-action-btn" Content="From Spotify…"
+                                    Click="OnNewPlaylistFromSpotifyClicked" ToolTip.Tip="Import one of your Spotify playlists"
+                                    IsVisible="{Binding SpotifyImport.IsEnabled}" />
+                            <Button Grid.Column="2" Classes="playlist-action-btn" Content="Cancel"
+                                    Command="{Binding CloseNewPlaylistDialogCommand}" />
+                            <Button Grid.Column="3" Classes="playlist-action-btn primary" Content="Create Playlist"
+                                    Command="{Binding ConfirmStandaloneNewPlaylistCommand}" />
+                        </Grid>
+                    </StackPanel>
+                </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- In-app Import Spotify Playlist dialog -->
+        <Border x:Name="SpotifyImportScrim" Classes="dialog-scrim" IsVisible="{Binding SpotifyImport.IsOpen}"
+                PointerPressed="OnSpotifyImportScrimPressed">
+            <Border Classes="dialog-card" Width="460" MaxWidth="460" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <DockPanel Margin="22">
+                    <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="0,0,0,14">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{x:Static app:Icons.Spotify}" Width="18" Height="18" Foreground="#1DB954" VerticalAlignment="Center" />
+                                <TextBlock Text="Import Spotify Playlist" Classes="dialog-title" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="Build a playlist from the songs in your library that appear on one of your Spotify playlists"
+                                       FontSize="11" Opacity="0.55" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding SpotifyImport.CloseCommand}" ToolTip.Tip="Close">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="12" IsVisible="{Binding SpotifyImport.NeedsClientId}">
+                            <TextBlock Classes="field-hint" FontSize="12"
+                                       Text="Spotify import uses your own Spotify app. Add its Client ID in Settings under Spotify, then come back here to sign in." />
+                            <Button Classes="playlist-action-btn primary" HorizontalAlignment="Left" Content="Open Settings"
+                                    Command="{Binding SpotifyImport.OpenSettingsCommand}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="12" IsVisible="{Binding SpotifyImport.CanSignIn}">
+                            <TextBlock Classes="field-hint" FontSize="12"
+                                       Text="Sign in with your Spotify account to import one of your playlists. Your browser opens Spotify's sign-in page and comes back here." />
+                            <Button Classes="spotify-sign-in" HorizontalAlignment="Left"
+                                    Command="{Binding SpotifyImport.SignInCommand}" IsEnabled="{Binding SpotifyImport.IsIdle}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <PathIcon Data="{x:Static app:Icons.Spotify}" Width="16" Height="16" />
+                                    <TextBlock Text="Sign in with Spotify" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12" IsVisible="{Binding SpotifyImport.IsSignedIn}">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <TextBlock Grid.Column="0" Text="{Binding SpotifyImport.AccountText}" FontSize="12"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                <Button Grid.Column="1" Classes="playlist-action-btn" Content="Sign out"
+                                        Command="{Binding SpotifyImport.SignOutCommand}" IsEnabled="{Binding SpotifyImport.IsIdle}" />
+                            </Grid>
+                            <TextBox x:Name="SpotifyImportLinkTextBox"
+                                     Text="{Binding SpotifyImport.Link, Mode=TwoWay}"
+                                     PlaceholderText="Spotify playlist link (https://open.spotify.com/playlist/…)"
+                                     Classes="stramp-input" IsEnabled="{Binding SpotifyImport.IsIdle}"
+                                     KeyDown="OnSpotifyImportKeyDown" />
+                            <TextBox Text="{Binding SpotifyImport.PlaylistName, Mode=TwoWay}"
+                                     PlaceholderText="Playlist name (optional, uses the Spotify name)"
+                                     Classes="stramp-input" IsEnabled="{Binding SpotifyImport.IsIdle}"
+                                     KeyDown="OnSpotifyImportKeyDown" />
+                            <TextBlock Classes="field-hint"
+                                       Text="Spotify only shares the songs of playlists you own or collaborate on." />
+                        </StackPanel>
+
+                        <TextBlock Text="{Binding SpotifyImport.Progress}" Foreground="{DynamicResource AppAccentBrush}" FontSize="11"
+                                   TextWrapping="Wrap"
+                                   IsVisible="{Binding SpotifyImport.Progress, Converter={StaticResource NullToBool}}" />
+                        <TextBlock Text="{Binding SpotifyImport.Error}" Foreground="#FF5C5C" FontSize="11" TextWrapping="Wrap"
+                                   IsVisible="{Binding SpotifyImport.Error, Converter={StaticResource NullToBool}}" />
+
                         <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
                             <Button Grid.Column="1" Classes="playlist-action-btn" Content="Cancel"
-                                    Command="{Binding CloseNewPlaylistDialogCommand}" />
-                            <Button Grid.Column="2" Classes="playlist-action-btn primary" Content="Create Playlist"
-                                    Command="{Binding ConfirmStandaloneNewPlaylistCommand}" />
+                                    Command="{Binding SpotifyImport.CloseCommand}" />
+                            <Button Grid.Column="2" Classes="playlist-action-btn primary" Content="Import Playlist"
+                                    Command="{Binding SpotifyImport.ImportCommand}"
+                                    IsVisible="{Binding SpotifyImport.IsSignedIn}" IsEnabled="{Binding SpotifyImport.CanImport}" />
                         </Grid>
                     </StackPanel>
                 </DockPanel>

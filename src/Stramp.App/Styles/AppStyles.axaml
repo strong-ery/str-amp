@@ -603,6 +603,24 @@
     <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
   </Style>
 
+  <!-- Spotify's own green, which its branding asks sign-in buttons to use in every theme. -->
+  <Style Selector="Button.spotify-sign-in">
+    <Setter Property="Background" Value="#1DB954" />
+    <Setter Property="Foreground" Value="Black" />
+    <Setter Property="CornerRadius" Value="20" />
+    <Setter Property="Padding" Value="18,9" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.spotify-sign-in PathIcon">
+    <Setter Property="Foreground" Value="Black" />
+  </Style>
+  <Style Selector="Button.spotify-sign-in:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#1ED760" />
+    <Setter Property="Foreground" Value="Black" />
+  </Style>
+
   <Style Selector="Border.playlist-picker-row">
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="Padding" Value="8,7" />

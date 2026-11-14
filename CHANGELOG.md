@@ -4,6 +4,14 @@ All notable changes to str-amp go here!
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [v2.0.1] — Nov. 13, 2026
+
+### Added:
+- Theming system
+- - Light Theme
+- - Aero Theme
+- Spotify Integration (Playlist Import)
+
 ## [v2.0.0] — Nov. 13, 2026
 Hello Everyone! We are excited to share the first official release of **str-amp** v2.0.0!
 

@@ -45,6 +45,8 @@ public static class Icons
     public static readonly Geometry Back = Geometry.Parse("M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z");
     public static readonly Geometry Playlist = Geometry.Parse(
         "M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18a3 3 0 101 2.82V8h3V6h-4z");
+    public static readonly Geometry Spotify = Geometry.Parse(
+        "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.59 14.42c-.18.3-.56.4-.86.21-2.36-1.44-5.33-1.77-8.83-.97-.34.08-.68-.14-.76-.48-.08-.34.14-.68.48-.76 3.83-.88 7.13-.5 9.76 1.13.3.19.4.57.21.87zm1.22-2.72c-.23.37-.71.49-1.08.26-2.7-1.66-6.82-2.14-10.02-1.17-.42.13-.86-.11-.98-.53-.13-.42.11-.86.53-.98 3.66-1.11 8.21-.58 11.29 1.32.37.23.49.71.26 1.08zm.13-2.84c-3.24-1.92-8.59-2.1-11.68-1.16-.5.15-1.03-.13-1.18-.63-.15-.5.13-1.03.63-1.18 3.56-1.08 9.48-.87 13.21 1.34.45.27.6.86.33 1.31-.27.44-.86.6-1.31.32z");
     public static readonly Geometry PlaylistAdd = Geometry.Parse(
         "M14 10H2v2h12v-2zm0-4H2v2h12V6zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zM2 16h8v-2H2v2z");
     public static readonly Geometry Check = Geometry.Parse(

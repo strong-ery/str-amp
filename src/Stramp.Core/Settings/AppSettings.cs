@@ -102,6 +102,12 @@ public sealed class AppSettings
     /// Only needed to point at a different Discord Application, e.g. for local testing.</summary>
     public string? DiscordClientId { get; set; }
 
+    // Shows Spotify playlist import in the menus; turning it off also signs out of Spotify.
+    public bool SpotifyIntegrationEnabled { get; set; } = true;
+
+    // Client ID of the user's own Spotify app. Sign-in uses PKCE, so no client secret is stored.
+    public string? SpotifyClientId { get; set; }
+
     /// <summary>Applies cached per-track loudness gain during playback without modifying files.</summary>
     public bool AudioNormalizationEnabled { get; set; }
     public AudioNormalizationLevel AudioNormalizationLevel { get; set; } = AudioNormalizationLevel.Normal;

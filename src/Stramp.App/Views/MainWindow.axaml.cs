@@ -865,6 +865,11 @@ public partial class MainWindow : Window
             ViewModel.CloseAddToPlaylistCommand.Execute(null);
             e.Handled = true;
         }
+        else if (ViewModel?.SpotifyImport.IsOpen == true)
+        {
+            ViewModel.SpotifyImport.CloseCommand.Execute(null);
+            e.Handled = true;
+        }
         else if (ViewModel?.IsNewPlaylistDialogOpen == true)
         {
             ViewModel.CloseNewPlaylistDialogCommand.Execute(null);
@@ -1060,6 +1065,32 @@ public partial class MainWindow : Window
         else if (e.Key == Key.Escape)
         {
             ViewModel?.CancelCreateNewPlaylistInDialogCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
+    private void OnNewPlaylistFromSpotifyClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        ViewModel?.CloseNewPlaylistDialogCommand.Execute(null);
+        ViewModel?.SpotifyImport.OpenCommand.Execute(null);
+    }
+
+    private void OnSpotifyImportScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, SpotifyImportScrim))
+            ViewModel?.SpotifyImport.CloseCommand.Execute(null);
+    }
+
+    private void OnSpotifyImportKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            ViewModel?.SpotifyImport.ImportCommand.Execute(null);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            ViewModel?.SpotifyImport.CloseCommand.Execute(null);
             e.Handled = true;
         }
     }
