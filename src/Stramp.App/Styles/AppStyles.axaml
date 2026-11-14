@@ -31,6 +31,15 @@
   <Style Selector="MenuFlyoutPresenter.stramp-menu-flyout /template/ Border">
     <Setter Property="BoxShadow" Value="0 12 32 0 #70000000" />
   </Style>
+  <!-- Separators here were still on the base Fluent theme's default margin, which is wider than
+       the one already used (and approved) for right-click menus - that's what was reading as a
+       gap specifically around whichever item sits next to a separator or the flyout's own edge. -->
+  <Style Selector="MenuFlyoutPresenter.stramp-menu-flyout Separator">
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="6,4" />
+    <Setter Property="Opacity" Value="0.7" />
+  </Style>
   <Style Selector="MenuItem.stramp-menu-item">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="CornerRadius" Value="7" />
