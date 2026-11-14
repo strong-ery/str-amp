@@ -65,6 +65,7 @@ public partial class MainWindow : Window
     private bool _isDraggingSplitter;
     private readonly ColumnResizeAnimator _columnAnimator = new();
     private readonly LyricsScrollAnimator _lyricsAnimator = new();
+    private readonly SmoothScrollAnimator _lyricsManualScroll = new();
 
     private bool _isFrameLoopRunning;
     private TimeSpan? _lastFrameTimestamp;
@@ -533,6 +534,15 @@ public partial class MainWindow : Window
         if (IsPanelAnimating)
             return;
 
+        // A wheel glide in flight owns the offset this frame; the auto-scroll only gets a turn
+        // once it has settled, same as it already waits out the manual-scroll pause below.
+        var manualOffset = _lyricsManualScroll.Step(dt, LyricsScroller.Offset.Y);
+        if (manualOffset is { } manual)
+        {
+            LyricsScroller.Offset = LyricsScroller.Offset.WithY(manual);
+            return;
+        }
+
         // Scrolling by hand takes over; the panel only takes itself back once the user has stopped.
         if (_lyricsAnimator.TickManualPause(dt))
             ScrollActiveLyricIntoView();
@@ -542,11 +552,18 @@ public partial class MainWindow : Window
             LyricsScroller.Offset = LyricsScroller.Offset.WithY(offset);
     }
 
-    /// <summary>A scroll by hand parks the auto-scroll, so the two never fight over the panel.</summary>
+    /// <summary>
+    /// A scroll by hand parks the auto-scroll, so the two never fight over the panel, and glides
+    /// instead of jumping per notch, same as every other scroll surface in the app.
+    /// </summary>
     private void OnLyricsWheelChanged(object? sender, PointerWheelEventArgs e)
     {
+        e.Handled = true;
         _lyricsAnimator.BeginManualScrollPause(LyricsManualScrollDurationSeconds);
         _lyricsAnimator.ClearScrollTarget();
+
+        var maxOffset = LyricsScroller.Extent.Height - LyricsScroller.Viewport.Height;
+        _lyricsManualScroll.HandleWheel(e.Delta.Y, LyricsScroller.Offset.Y, maxOffset);
     }
 
     private void OnVolumeWheelChanged(object? sender, PointerWheelEventArgs e)
