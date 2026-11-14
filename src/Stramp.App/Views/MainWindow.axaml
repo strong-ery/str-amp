@@ -497,7 +497,12 @@
                     <StackPanel x:Name="PlayerControlsPanel" Grid.Row="1" Grid.RowSpan="2"
                                 VerticalAlignment="Bottom" ClipToBounds="True"
                                 SizeChanged="OnPlayerControlsSizeChanged">
-                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,14,0,0">
+                    <!-- Top margin has to clear WaveformSeekBar's hover/scrub timestamp badge,
+                         which floats above its own bounds (see DrawTimestampBadge) - 14px used to
+                         be enough only because PlayerControlsPanel had nothing clipping it; now
+                         that it does (for the auto-hide collapse), too little margin here clips
+                         the top of the badge instead of just leaving it floating in open space. -->
+                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,28,0,0">
                         <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" VerticalAlignment="Center" Width="42" FontSize="12" Opacity="0.7" />
                         <Panel Grid.Column="1">
                             <controls:WaveformSeekBar x:Name="WaveformBar" Height="38"
