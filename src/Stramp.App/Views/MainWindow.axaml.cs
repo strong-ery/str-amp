@@ -797,13 +797,15 @@ public partial class MainWindow : Window
     /// The side columns' own MinWidth has to stay 0 (their fully-closed state is also
     /// Width="0" on the same column), so GridSplitter itself has nothing stopping it from
     /// dragging one down to nothing - this is the floor that's missing from the Grid, applied by
-    /// hand instead.
+    /// hand instead. Matching against the width's own current value (rather than just checking
+    /// IsAbsolute) would have let a drag that lands exactly on 0 skip the clamp outright - the
+    /// one case this exists to catch.
     /// </summary>
     private const double SidePanelDragMinWidth = 160.0;
 
     private void OnLeftSplitterDragDelta(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+        if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
         var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
@@ -815,7 +817,7 @@ public partial class MainWindow : Window
 
     private void OnLeftSplitterDragCompleted(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+        if (ViewModel is not { } vm || LeftColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
         var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
@@ -825,7 +827,7 @@ public partial class MainWindow : Window
 
     private void OnRightSplitterDragDelta(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+        if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
         var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
@@ -837,7 +839,7 @@ public partial class MainWindow : Window
 
     private void OnRightSplitterDragCompleted(object? sender, VectorEventArgs e)
     {
-        if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true, Value: > 0 } w } col)
+        if (ViewModel is not { } vm || RightColumn is not { Width: { IsAbsolute: true } w } col)
             return;
 
         var clamped = Math.Max(SidePanelDragMinWidth, w.Value);
