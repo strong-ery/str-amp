@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Stramp.App.Services;
@@ -13,6 +14,7 @@ namespace Stramp.App.Views;
 public partial class MainWindow
 {
     private const double ControlsIdleHideDelaySeconds = 2.5;
+    private const double TitleLiftWhenHiddenPx = 40.0;
 
     private readonly FadeCollapseAnimator _controlsAnimator = new();
     private double _controlsIdleSecondsRemaining = ControlsIdleHideDelaySeconds;
@@ -78,6 +80,12 @@ public partial class MainWindow
 
         OpenLibraryCornerButton.Opacity = fraction;
         OpenUpNextCornerButton.Opacity = fraction;
+
+        // Lifts the title/artist text as the transport bar collapses, so it settles somewhere
+        // above the very bottom edge instead of ending up flush against it once the bar (and the
+        // space it reserved) is gone.
+        var titleLiftPx = 18 + (1 - fraction) * TitleLiftWhenHiddenPx;
+        NowPlayingTitleStack.Margin = new Thickness(12, 0, 12, titleLiftPx);
     }
 
     private void SetControlsVisible(bool visible)
