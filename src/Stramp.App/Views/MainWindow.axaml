@@ -3,6 +3,7 @@
         xmlns:vm="using:Stramp.App.ViewModels"
         xmlns:conv="using:Stramp.App.Converters"
         xmlns:app="using:Stramp.App"
+        xmlns:ctl="using:Stramp.App.Controls"
         xmlns:controls="using:Stramp.App.Controls"
         xmlns:playback="using:Stramp.Core.Playback"
         xmlns:theming="using:Stramp.App.Theming"
@@ -1613,7 +1614,7 @@
                             Command="{Binding CloseWhatsNewCommand}" HorizontalAlignment="Left" Margin="0,14,0,0" />
 
                     <ScrollViewer>
-                        <TextBlock Text="{Binding WhatsNewNotes}" TextWrapping="Wrap" FontSize="12" Opacity="0.85" />
+                        <ctl:MarkdownView Markdown="{Binding WhatsNewNotes}" FontSize="12" Opacity="0.85" />
                     </ScrollViewer>
                 </DockPanel>
             </Border>
@@ -1652,7 +1653,7 @@
                     </StackPanel>
 
                     <ScrollViewer>
-                        <TextBlock Text="{Binding UpdateReleaseNotes}" TextWrapping="Wrap" FontSize="12" Opacity="0.85" />
+                        <ctl:MarkdownView Markdown="{Binding UpdateReleaseNotes}" FontSize="12" Opacity="0.85" />
                     </ScrollViewer>
                 </DockPanel>
             </Border>
