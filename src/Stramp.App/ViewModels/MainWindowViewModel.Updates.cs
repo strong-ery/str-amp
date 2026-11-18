@@ -60,7 +60,7 @@ public partial class MainWindowViewModel
 
         _pendingUpdate = update;
         UpdateVersion = update.Version;
-        UpdateReleaseNotes = update.ReleaseNotes ?? "";
+        UpdateReleaseNotes = ReleaseNotesText.ToPlain(update.ReleaseNotes);
         IsUpdateAvailable = true;
     }
 
