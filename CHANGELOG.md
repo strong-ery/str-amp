@@ -8,11 +8,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 Many improvements!
 
 ### Added:
+- A .lrc editor for songs that don't have lyrics on LRCLIB (or if you want to sync them!)
 - Theming system (+ Light Theme, + Aero Theme)
 - Spotify integration (Playlist Import)
 - Status toasts
 - Warning when ffmpeg isn't present (used for filetypes incompatible with WASAPI)
 - Lightweight markdown renderer for release notes. ( Like these ones :D ) - Issue 7
+- Playlist icons + the supporting features
 
 ### Changed:
 - Fullscreen mode no longer extends past the screen bounds
@@ -21,6 +23,7 @@ Many improvements!
 - Fixed various UI bugs (overlap, scaling issues, and reactive-resize for forced cramped states)
 - Made audio normalization atomic (cannot start loud) - Bug 6
 - Improved playlist's and their associated UI/UX
+- Improved song delete popup UI
 
 ## [v2.0.0] — Nov. 13, 2026
 Hello Everyone! We are excited to share the first official release of **str-amp** v2.0.0!
