@@ -752,4 +752,82 @@
     <Setter Property="Padding" Value="6,4" />
   </Style>
 
+  <!-- The quiet Edit link in the lyrics header: faint text until hovered -->
+  <Style Selector="Button.lyrics-edit-btn">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Opacity" Value="0.4" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.lyrics-edit-btn /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.lyrics-edit-btn:pointerover">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.lyrics-edit-btn:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+
+  <!-- Lyrics editor: one line of the timing step -->
+  <Style Selector="Border.editor-line">
+    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.editor-line:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+  <Style Selector="Border.editor-line.cursor">
+    <Setter Property="Background" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+  </Style>
+  <Style Selector="Border.editor-line.now">
+    <Setter Property="Background" Value="{DynamicResource AppHoverBrush}" />
+  </Style>
+  <Style Selector="Border.editor-line.now TextBlock.editor-text">
+    <Setter Property="Foreground" Value="{DynamicResource AppAccentBrush}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <!-- The vertical bar at a line's left edge: bright for the line playing, faint for the next to stamp -->
+  <Style Selector="Border.editor-bar">
+    <Setter Property="Width" Value="3" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Border.editor-line.cursor Border.editor-bar">
+    <Setter Property="Opacity" Value="0.4" />
+  </Style>
+  <Style Selector="Border.editor-line.now Border.editor-bar">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="TextBlock.editor-time">
+    <Setter Property="FontFamily" Value="Consolas,Menlo,monospace" />
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Opacity" Value="0.45" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.editor-line.stamped TextBlock.editor-time">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
 </Styles>

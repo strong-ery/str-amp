@@ -11,6 +11,9 @@ public partial class LyricLineRow(LyricLine line) : ObservableObject
 {
     public double? TimeSeconds { get; } = line.TimeSeconds;
 
+    /// <summary>The words as written, with no placeholder for gaps. The editor starts from these.</summary>
+    public string RawText { get; } = line.Text;
+
     /// <summary>A timed line with no words is an instrumental gap, a note keeps the pacing visible.</summary>
     public string DisplayText { get; } =
         line.TimeSeconds is not null && string.IsNullOrWhiteSpace(line.Text) ? "♪" : line.Text;

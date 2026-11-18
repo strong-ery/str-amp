@@ -6,6 +6,9 @@ public enum LyricsOrigin
     /// <summary>Nothing found anywhere.</summary>
     None,
 
+    /// <summary>Lyrics the user wrote or timed in STRAMP itself.</summary>
+    UserFile,
+
     /// <summary>An .lrc sitting beside the track.</summary>
     LocalFile,
 

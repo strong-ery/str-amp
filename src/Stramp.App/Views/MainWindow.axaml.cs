@@ -102,6 +102,7 @@ public partial class MainWindow : Window
         ProgressSlider.AddHandler(PointerCaptureLostEvent, OnProgressCaptureLost,
             RoutingStrategies.Tunnel | RoutingStrategies.Bubble, handledEventsToo: true);
 
+        AddHandler(KeyDownEvent, OnEditorTunnelKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         LyricsScroller.AddHandler(PointerWheelChangedEvent, OnLyricsWheelChanged,
             RoutingStrategies.Tunnel, handledEventsToo: true);
 
@@ -112,6 +113,8 @@ public partial class MainWindow : Window
 
         AttachSmoothScrollHandlers();
 
+        EditorWaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
+        EditorWaveformBar.ScrubCompleted += fraction => ViewModel?.CompleteScrub(fraction);
         WaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
         WaveformBar.ScrubCompleted += fraction => ViewModel?.CompleteScrub(fraction);
 
@@ -350,6 +353,23 @@ public partial class MainWindow : Window
         else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsOpen))
         {
             UpdateLyricsSplit(animate: true);
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsEditorOpen)
+                 && ViewModel?.IsLyricsEditorOpen == true)
+        {
+            // The waveform may have finished before the editor existed.
+            EditorWaveformBar.SetWaveform(ViewModel.VisualizerFeed.Waveform);
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.EditorPlayingLine))
+        {
+            var line = ViewModel?.EditorPlayingLine;
+            Dispatcher.UIThread.Post(() => ScrollEditorLineIntoView(line), DispatcherPriority.Background);
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.EditorCursor))
+        {
+            var cursor = ViewModel is { } vm && vm.EditorCursor < vm.EditorLines.Count
+                ? vm.EditorLines[vm.EditorCursor] : null;
+            Dispatcher.UIThread.Post(() => ScrollEditorLineIntoView(cursor), DispatcherPriority.Background);
         }
         else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsSynced))
         {
@@ -624,6 +644,12 @@ public partial class MainWindow : Window
         LyricsScroller.Classes.Set("scrollbar-near", visible);
 
     /// <summary>Clicking a timed line jumps playback to it; unsynced lines carry no time to jump to.</summary>
+    private void OnEditorLineTapped(object? sender, TappedEventArgs e)
+    {
+        if ((e.Source as StyledElement)?.DataContext is LyricEditorLine line)
+            ViewModel?.SelectEditorLine(line);
+    }
+
     private void OnLyricTapped(object? sender, TappedEventArgs e)
     {
         if ((e.Source as StyledElement)?.DataContext is LyricLineRow line)
@@ -847,7 +873,22 @@ public partial class MainWindow : Window
         vm.RightPanelWidth = clamped;
     }
 
-    private void OnWaveformReady() => WaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
+    private void OnWaveformReady()
+    {
+        WaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
+        EditorWaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
+    }
+
+    /// <summary>Keeps a line of the editor's list in view as it becomes the one to watch.</summary>
+    private void ScrollEditorLineIntoView(LyricEditorLine? line)
+    {
+        if (line is null || ViewModel is null)
+            return;
+
+        var index = ViewModel.EditorLines.IndexOf(line);
+        if (index >= 0 && LyricsEditorItems.ContainerFromIndex(index) is Control container)
+            container.BringIntoView();
+    }
 
     private MainWindowViewModel? ViewModel => DataContext as MainWindowViewModel;
 
@@ -924,6 +965,24 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Tap-to-sync keys, taken on the way down so a focused button can't swallow Space.</summary>
+    private void OnEditorTunnelKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (ViewModel?.IsLyricsEditorOpen != true || !ViewModel.IsEditorSyncStep
+            || e.Key is not (Key.Space or Key.Enter or Key.Back or Key.G or Key.Delete)
+            || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
+            return;
+
+        switch (e.Key)
+        {
+            case Key.Back: ViewModel.StepBackLine(); break;
+            case Key.G: ViewModel.AddEditorGap(); break;
+            case Key.Delete: ViewModel.DeleteEditorLine(); break;
+            default: ViewModel.StampNextLine(); break;
+        }
+        e.Handled = true;
+    }
+
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -985,6 +1044,11 @@ public partial class MainWindow : Window
         if (ViewModel?.IsSetupWizardOpen == true)
         {
             // Nothing to dismiss to: the wizard only leaves via its own Finish button.
+            e.Handled = true;
+        }
+        else if (ViewModel?.IsLyricsEditorOpen == true)
+        {
+            ViewModel.CloseLyricsEditorCommand.Execute(null);
             e.Handled = true;
         }
         else if (ViewModel?.IsCoverEditorOpen == true)

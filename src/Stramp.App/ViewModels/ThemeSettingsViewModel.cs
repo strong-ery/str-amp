@@ -104,6 +104,7 @@ public partial class ThemeSettingsViewModel : ViewModelBase
         MonoAudio = settings.MonoAudioEnabled;
         SurroundSound = settings.SurroundSoundEnabled;
         LrcLibLookup = settings.LrcLibLookupEnabled;
+        LyricsEditorEnabled = settings.LyricsEditorEnabled;
         CacheLibraryMetadata = settings.CacheLibraryMetadata;
         EnsureDesktopShortcut = settings.EnsureDesktopShortcut;
         EnsureStartMenuShortcut = settings.EnsureStartMenuShortcut;

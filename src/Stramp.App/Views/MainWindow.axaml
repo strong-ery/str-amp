@@ -525,13 +525,28 @@
                                                        TextTrimming="CharacterEllipsis"
                                                        IsVisible="{Binding HasLyrics}" />
                                         </StackPanel>
+                                        <Panel HorizontalAlignment="Right" VerticalAlignment="Center"
+                                               IsVisible="{Binding Theme.LyricsEditorEnabled}">
+                                            <Button Classes="lyrics-edit-btn" Content="Edit"
+                                                    Command="{Binding OpenLyricsEditorCommand}"
+                                                    IsVisible="{Binding HasLyrics}"
+                                                    ToolTip.Tip="Edit or re-time these lyrics" />
+                                        </Panel>
                                     </Grid>
 
-                                    <TextBlock Grid.Row="1" Text="{Binding LyricsStatusText}"
-                                               IsVisible="{Binding !HasLyrics}"
-                                               FontSize="12" Opacity="0.45" MaxWidth="220"
-                                               TextWrapping="Wrap" TextAlignment="Center"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <StackPanel Grid.Row="1" Spacing="12" IsVisible="{Binding !HasLyrics}"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding LyricsStatusText}"
+                                                   FontSize="12" Opacity="0.45" MaxWidth="220"
+                                                   TextWrapping="Wrap" TextAlignment="Center" />
+                                        <Panel IsVisible="{Binding Theme.LyricsEditorEnabled}">
+                                            <Button Classes="playlist-action-btn primary"
+                                                    Content="{Binding LyricsEditButtonText}"
+                                                    HorizontalAlignment="Center"
+                                                    Command="{Binding OpenLyricsEditorCommand}"
+                                                    IsVisible="{Binding !IsLyricsLoading}" />
+                                        </Panel>
+                                    </StackPanel>
 
                                     <!-- Unsynced files get the same list, minus the highlight and the seeking. -->
                                     <ScrollViewer x:Name="LyricsScroller" Grid.Row="1" Classes="lyrics-scroll"
@@ -1162,6 +1177,14 @@
                                               OffContent="Look up lyrics on LRCLIB" />
                                 <TextBlock Classes="field-hint" TextWrapping="Wrap"
                                            Text="An .lrc file sitting next to the track is always used first. When there isn't one, the playing track's title, artist, album and length are sent to lrclib.net to search for synced lyrics. Results are cached, so each track is only ever looked up once." />
+                            </StackPanel>
+
+                            <StackPanel Spacing="5">
+                                <ToggleSwitch IsChecked="{Binding Theme.LyricsEditorEnabled}"
+                                              OnContent="Show the lyrics editor"
+                                              OffContent="Show the lyrics editor" />
+                                <TextBlock Classes="field-hint" TextWrapping="Wrap"
+                                           Text="Adds an Edit button to the lyrics panel (and Write lyrics when a track has none) for writing, timing and publishing your own lyrics. Turn it off to hide them." />
                             </StackPanel>
 
                             <TextBlock Text="DISCORD" Classes="section-header" Margin="0,6,0,0" />
@@ -1900,6 +1923,182 @@
                         </Grid>
                     </StackPanel>
                 </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- Lyrics editor: write the words, tap them into time, optionally publish to lrclib.net -->
+        <Border x:Name="LyricsEditorScrim" Classes="dialog-scrim" IsVisible="{Binding IsLyricsEditorOpen}">
+            <Border Classes="dialog-card" Width="560" MaxWidth="560" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Margin="22" Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <TextBlock Text="Lyrics" Classes="dialog-title" />
+                            <TextBlock Text="{Binding LyricsEditorTitle}" FontSize="11" Opacity="0.55"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding CloseLyricsEditorCommand}" ToolTip.Tip="Close">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Step 1: the words -->
+                    <StackPanel Spacing="10" IsVisible="{Binding IsEditorWriteStep}">
+                        <ToggleSwitch IsChecked="{Binding EditorInstrumental}"
+                                      OnContent="This track is instrumental (no lyrics)"
+                                      OffContent="This track is instrumental (no lyrics)" />
+                        <TextBox Classes="stramp-input" x:Name="LyricsEditorTextBox"
+                                 IsEnabled="{Binding IsEditorTextEditable}"
+                                 Text="{Binding LyricsEditorText}"
+                                 AcceptsReturn="True" TextWrapping="Wrap"
+                                 Height="340" MinHeight="340" FontSize="14" Padding="12,10"
+                                 VerticalContentAlignment="Top"
+                                 PlaceholderText="Paste or type the lyrics, one line per line." />
+                        <TextBlock Classes="field-hint" FontSize="11"
+                                   Text="Next you'll play the song and tap each line as it starts." />
+                        <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto" ColumnSpacing="8">
+                            <Button Grid.Column="0" Classes="playlist-action-btn" Content="Remove my lyrics"
+                                    Command="{Binding RemoveUserLyricsCommand}"
+                                    IsVisible="{Binding EditorHasSavedCopy}" />
+                            <Button Grid.Column="2" Classes="playlist-action-btn" Content="Publish…"
+                                    Command="{Binding EditorGoToPublishCommand}"
+                                    IsVisible="{Binding EditorInstrumental}" />
+                            <Button Grid.Column="3" Classes="playlist-action-btn"
+                                    Content="Save"
+                                    Command="{Binding SaveUserLyricsCommand}" />
+                            <Button Grid.Column="4" Classes="playlist-action-btn primary" Content="Next: time it"
+                                    Command="{Binding EditorGoToSyncCommand}"
+                                    IsEnabled="{Binding IsEditorTextEditable}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Step 2: tap to sync -->
+                    <StackPanel Spacing="10" IsVisible="{Binding IsEditorSyncStep}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
+                            <Button Grid.Column="0" Classes="transport play-pause" Width="36" Height="36" Padding="9"
+                                    Command="{Binding EditorToggleStartPlaybackCommand}" ToolTip.Tip="Play / pause">
+                                <Panel>
+                                    <PathIcon Data="{x:Static app:Icons.Play}" Width="16" Height="16"
+                                              IsVisible="{Binding !IsPlaying}" />
+                                    <PathIcon Data="{x:Static app:Icons.Pause}" Width="16" Height="16"
+                                              IsVisible="{Binding IsPlaying}" />
+                                </Panel>
+                            </Button>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                <TextBlock Text="Press Space or Enter as each line starts" FontSize="12" />
+                                <TextBlock Classes="field-hint" FontSize="11"
+                                           Text="Backspace undoes · G adds a ♪ gap · click a line to select and jump to it" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="2" Text="{Binding EditorSyncSummary}" FontSize="11" Opacity="0.55"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+
+                        <!-- Timeline: same waveform scrubber as the player, so any moment is a click away.
+                             The top margin clears the hover timestamp badge. -->
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,22,0,0">
+                            <TextBlock Grid.Column="0" Text="{Binding ElapsedText}" VerticalAlignment="Center"
+                                       Width="42" FontSize="12" Opacity="0.7" />
+                            <controls:WaveformSeekBar x:Name="EditorWaveformBar" Grid.Column="1" Height="38"
+                                Progress="{Binding ProgressFraction}"
+                                Duration="{Binding DurationSeconds}"
+                                PlayedBrush="{DynamicResource AppAccentBrush}"
+                                RemainingBrush="{DynamicResource AppIconBrush}" />
+                            <TextBlock Grid.Column="2" Text="{Binding TotalText}" VerticalAlignment="Center"
+                                       Width="42" TextAlignment="Right" FontSize="12" Opacity="0.7" />
+                        </Grid>
+
+                        <ScrollViewer x:Name="LyricsEditorScroller" Height="260" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="LyricsEditorItems" ItemsSource="{Binding EditorLines}"
+                                          Tapped="OnEditorLineTapped">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:LyricEditorLine">
+                                        <Border Classes="editor-line"
+                                                Classes.cursor="{Binding IsCursor}"
+                                                Classes.now="{Binding IsPlayingNow}"
+                                                Classes.stamped="{Binding IsStamped}">
+                                            <Grid ColumnDefinitions="Auto,78,*">
+                                                <Border Grid.Column="0" Classes="editor-bar" />
+                                                <TextBlock Grid.Column="1" Classes="editor-time" Text="{Binding TimeText}" />
+                                                <TextBlock Grid.Column="2" Classes="editor-text" Text="{Binding DisplayText}"
+                                                           FontSize="14" TextWrapping="Wrap" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" ColumnSpacing="6">
+                            <TextBlock Grid.Column="0" Text="Selected line" FontSize="11" Opacity="0.6"
+                                       VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
+                                <Button Classes="playlist-action-btn" Content="−0.1s"
+                                        Command="{Binding NudgeEditorLineCommand}" CommandParameter="-" />
+                                <Button Classes="playlist-action-btn" Content="+0.1s"
+                                        Command="{Binding NudgeEditorLineCommand}" CommandParameter="+" />
+                            </StackPanel>
+                            <TextBlock Grid.Column="3" Text="All lines" FontSize="11" Opacity="0.6"
+                                       VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="4">
+                                <Button Classes="playlist-action-btn" Content="−0.1s"
+                                        Command="{Binding NudgeAllEditorLinesCommand}" CommandParameter="-" />
+                                <Button Classes="playlist-action-btn" Content="+0.1s"
+                                        Command="{Binding NudgeAllEditorLinesCommand}" CommandParameter="+" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Classes="playlist-action-btn" Content="♪ Add gap here"
+                                    Command="{Binding AddEditorGapCommand}"
+                                    ToolTip.Tip="Mark an instrumental break at the current moment (G)" />
+                            <Button Classes="playlist-action-btn" Content="Delete line"
+                                    Command="{Binding DeleteEditorLineCommand}"
+                                    IsEnabled="{Binding EditorSelectedLine, Converter={StaticResource NullToBool}}"
+                                    ToolTip.Tip="Remove the selected line or gap (Delete)" />
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto,Auto" ColumnSpacing="8">
+                            <Button Grid.Column="0" Classes="playlist-action-btn" Content="Edit words"
+                                    Command="{Binding EditorBackToWriteCommand}" />
+                            <Button Grid.Column="1" Classes="playlist-action-btn" Content="Clear times"
+                                    Command="{Binding ClearEditorTimesCommand}" />
+                            <Button Grid.Column="2" Classes="playlist-action-btn" Content="Remove mine"
+                                    Command="{Binding RemoveUserLyricsCommand}"
+                                    IsVisible="{Binding EditorHasSavedCopy}" />
+                            <Button Grid.Column="4" Classes="playlist-action-btn" Content="Publish…"
+                                    Command="{Binding EditorGoToPublishCommand}" />
+                            <Button Grid.Column="5" Classes="playlist-action-btn primary" Content="Save"
+                                    Command="{Binding SaveUserLyricsCommand}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- Step 3: publish -->
+                    <StackPanel Spacing="10" IsVisible="{Binding IsEditorPublishStep}">
+                        <TextBlock TextWrapping="Wrap" FontSize="12" Opacity="0.7"
+                                   Text="This adds your lyrics to lrclib.net, where anyone can use them. Check the details match the song exactly, since that is how they get found." />
+                        <TextBlock Text="Title" Classes="field-hint" />
+                        <TextBox Classes="stramp-input" Text="{Binding PublishTrackName}" />
+                        <TextBlock Text="Artist" Classes="field-hint" />
+                        <TextBox Classes="stramp-input" Text="{Binding PublishArtistName}" />
+                        <TextBlock Text="Album" Classes="field-hint" />
+                        <TextBox Classes="stramp-input" Text="{Binding PublishAlbumName}" />
+                        <TextBlock Text="Duration (seconds)" Classes="field-hint" />
+                        <TextBox Classes="stramp-input" Text="{Binding PublishDurationText}" />
+                        <ToggleSwitch Content="Publish with timing (synced)" IsChecked="{Binding PublishSynced}"
+                                      IsEnabled="{Binding EditorHasTimes}" />
+                        <TextBlock Text="{Binding PublishStatusText}" FontSize="12" Opacity="0.8"
+                                   TextWrapping="Wrap" IsVisible="{Binding HasPublishStatus}" />
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                            <Button Grid.Column="1" Classes="playlist-action-btn" Content="Back"
+                                    Command="{Binding EditorBackFromPublishCommand}" />
+                            <Button Grid.Column="2" Classes="playlist-action-btn primary" Content="Publish to lrclib.net"
+                                    Command="{Binding PublishToLrcLibCommand}"
+                                    IsEnabled="{Binding CanPublish}" />
+                        </Grid>
+                    </StackPanel>
+                </StackPanel>
             </Border>
         </Border>
 

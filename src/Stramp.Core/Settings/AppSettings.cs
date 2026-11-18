@@ -63,6 +63,9 @@ public sealed class AppSettings
     /// length to that service; turning it off keeps lyrics to .lrc files already on disk.
     /// </summary>
     public bool LrcLibLookupEnabled { get; set; } = true;
+
+    /// <summary>Shows the buttons that open the lyrics editor. Off hides them for people who never want it.</summary>
+    public bool LyricsEditorEnabled { get; set; } = true;
     public double LeftPanelWidth { get; set; } = 280;
     public double RightPanelWidth { get; set; } = 280;
     public List<string> RemovedSongPaths { get; set; } = [];

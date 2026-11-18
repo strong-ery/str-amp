@@ -1,3 +1,4 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stramp.Core.Lyrics;
 using Stramp.Core.Models;
@@ -71,6 +72,7 @@ public partial class MainWindowViewModel
         if (!result.HasLines)
         {
             ResetLyrics(StatusFor(result.Origin, searchesOnline));
+            LyricsIsInstrumental = result.Origin == LyricsOrigin.Instrumental;
             return;
         }
 
@@ -99,14 +101,23 @@ public partial class MainWindowViewModel
         var kind = synced ? "synced" : "unsynced";
         return origin switch
         {
+            LyricsOrigin.UserFile => $"Your lyrics · {kind}",
             LyricsOrigin.LocalFile => $"Local .lrc · {kind}",
             LyricsOrigin.LrcLib or LyricsOrigin.Cache => $"lrclib.net · {kind}",
             _ => "",
         };
     }
 
+    /// <summary>The track is marked (by the user or LRCLIB) as having no words.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LyricsEditButtonText))]
+    public partial bool LyricsIsInstrumental { get; set; }
+
+    public string LyricsEditButtonText => LyricsIsInstrumental ? "Edit" : "Write lyrics…";
+
     private void ResetLyrics(string status)
     {
+        LyricsIsInstrumental = false;
         LyricLines.Clear();
         _activeLyricIndex = -1;
         ActiveLyricLine = null;

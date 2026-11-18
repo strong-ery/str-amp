@@ -32,6 +32,7 @@ public partial class MainWindowViewModel
             ElapsedText = FormatTime(value);
 
         UpdateActiveLyric();
+        UpdateEditorPlayingLine();
     }
 
     public void EndSeek(double seconds)

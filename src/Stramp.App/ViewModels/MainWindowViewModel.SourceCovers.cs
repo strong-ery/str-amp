@@ -38,11 +38,30 @@ public partial class MainWindowViewModel
             return;
         }
 
-        _ = BuildSourceCoverAsync(source, candidates, key);
+        _ = BuildSourceCoverAsync(source, candidates, key, attempt: 0);
+    }
+
+    /// <summary>Right after launch the art provider may not be ready, so a collage that comes up
+    /// empty is tried again shortly instead of waiting for the user to reopen the playlist.</summary>
+    private async Task RetryCollageLaterAsync(LibrarySourceRow source, int attempt)
+    {
+        source.CoverRequested = false;
+        if (attempt >= 4)
+            return;
+
+        await Task.Delay(TimeSpan.FromSeconds(1.5));
+        if (_disposed || source.Cover is not null || source.CoverRequested
+            || !LibrarySources.Contains(source))
+            return;
+
+        source.CoverRequested = true;
+        var candidates = source.CoverCandidatePaths();
+        if (candidates.Count > 0)
+            await BuildSourceCoverAsync(source, candidates, string.Join('|', candidates), attempt + 1);
     }
 
     private async Task BuildSourceCoverAsync(
-        LibrarySourceRow source, IReadOnlyList<string> candidates, string key)
+        LibrarySourceRow source, IReadOnlyList<string> candidates, string key, int attempt)
     {
         // Thumbnails are only cached while "pinned" for a visible row, so each is requested here
         // like a row would, drawn into the collage, then released. The collage is its own bitmap
@@ -64,7 +83,7 @@ public partial class MainWindowViewModel
             // that it never changes: leave it blank and try again the next time it is shown.
             if (!allDone.IsCompletedSuccessfully)
             {
-                source.CoverRequested = false;
+                _ = RetryCollageLaterAsync(source, attempt);
                 return;
             }
 
@@ -74,6 +93,13 @@ public partial class MainWindowViewModel
                 .ToList();
 
             var collage = ComposeCollage(covers);
+            if (collage is null)
+            {
+                // Nothing loaded yet: don't remember the blank, try again.
+                _ = RetryCollageLaterAsync(source, attempt);
+                return;
+            }
+
             _coverCache[key] = collage;
             source.Cover = collage;
         }

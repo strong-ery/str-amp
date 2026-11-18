@@ -9,6 +9,7 @@ namespace Stramp.Core.Lyrics;
 public sealed class LyricsProvider : IDisposable
 {
     private readonly LyricsCache _cache;
+    private readonly UserLyricsStore _user = new();
     private readonly LrcLibClient _client;
     private readonly bool _ownsClient;
     private bool _disposed;
@@ -28,6 +29,12 @@ public sealed class LyricsProvider : IDisposable
         bool forceRefresh = false,
         CancellationToken ct = default)
     {
+        if (_user.IsInstrumental(song.Path))
+            return new LyricsResult(LyricsDocument.Empty, LyricsOrigin.Instrumental);
+
+        if (_user.Read(song.Path) is { } mine && LrcParser.Parse(mine) is { HasLines: true } mineDoc)
+            return new LyricsResult(mineDoc, LyricsOrigin.UserFile);
+
         var local = await Task.Run(() => LyricsLoader.Load(song.Path), ct);
         if (local.HasLines)
             return new LyricsResult(local, LyricsOrigin.LocalFile);

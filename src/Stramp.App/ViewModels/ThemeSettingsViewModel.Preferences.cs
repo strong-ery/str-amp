@@ -51,6 +51,16 @@ public partial class ThemeSettingsViewModel
     [ObservableProperty]
     public partial bool LrcLibLookup { get; set; }
 
+    /// <summary>Whether the Edit / Write lyrics buttons are shown.</summary>
+    [ObservableProperty]
+    public partial bool LyricsEditorEnabled { get; set; } = true;
+
+    partial void OnLyricsEditorEnabledChanged(bool value)
+    {
+        _settings.LyricsEditorEnabled = value;
+        SettingsService.Save(_settings);
+    }
+
     [ObservableProperty]
     public partial bool CacheLibraryMetadata { get; set; }
 
