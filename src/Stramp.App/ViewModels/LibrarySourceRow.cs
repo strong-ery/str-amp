@@ -60,6 +60,10 @@ public sealed partial class LibrarySourceRow(
 
     internal bool CoverRequested { get; set; }
 
+    /// <summary>True when <see cref="Cover"/> is a picture the user chose, not the automatic collage.</summary>
+    [ObservableProperty]
+    public partial bool HasCustomCover { get; set; }
+
     /// <summary>True while this is the source the queue came from and audio is playing, so its
     /// Play buttons show Pause and pause it instead of starting it over.</summary>
     [ObservableProperty]

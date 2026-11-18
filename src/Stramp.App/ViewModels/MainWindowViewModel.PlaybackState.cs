@@ -26,6 +26,8 @@ public partial class MainWindowViewModel
         CurrentSourceName = namedSource?.Name ??
             (string.IsNullOrWhiteSpace(state.SourceName) ? "All Songs" : state.SourceName);
         IsBrowsingSources = state.IsBrowsingSources;
+        // The header's row was resolved before the saved source was known, so load its cover now.
+        LoadSourceCover(CurrentSourceRow);
         UpdateSortOptionsForCurrentSource(state.SortOption);
         UpdateDisplayedSongs();
         SnapshotPlaybackSource();

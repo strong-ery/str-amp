@@ -225,6 +225,32 @@
     <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
   </Style>
 
+  <!-- Camera overlay on a playlist's cover: invisible until the cover is hovered or focused. -->
+  <Style Selector="Button.cover-edit">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Background" Value="#99000000" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="Button.cover-edit:pointerover, Button.cover-edit:focus-visible">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.cover-edit PathIcon">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
   <Style Selector="TextBlock.section-header">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />

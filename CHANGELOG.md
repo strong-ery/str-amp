@@ -20,6 +20,7 @@ Many improvements!
 - Improved stramp dropdown menu (follows theme better, no weird splitting)
 - Fixed various UI bugs (overlap, scaling issues, and reactive-resize for forced cramped states)
 - Made audio normalization atomic (cannot start loud) - Bug 6
+- Improved playlist's and their associated UI/UX
 
 ## [v2.0.0] — Nov. 13, 2026
 Hello Everyone! We are excited to share the first official release of **str-amp** v2.0.0!

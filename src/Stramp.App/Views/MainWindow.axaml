@@ -213,6 +213,30 @@
                                     <Image Source="{Binding CurrentSourceRow.Cover}" Stretch="UniformToFill"
                                            RenderOptions.BitmapInterpolationMode="HighQuality"
                                            IsVisible="{Binding CurrentSourceRow.Cover, Converter={StaticResource NullToBool}}" />
+                                    <!-- No cover yet: the camera goes straight to the picker. With one, it opens
+                                         Replace / Remove instead (see OnChangeCoverClicked). -->
+                                    <Button Classes="cover-edit" Click="OnChangeCoverClicked"
+                                            IsVisible="{Binding IsViewingPlaylist}"
+                                            ToolTip.Tip="Change cover">
+                                        <FlyoutBase.AttachedFlyout>
+                                            <MenuFlyout Placement="BottomEdgeAlignedLeft"
+                                                        FlyoutPresenterClasses="stramp-menu-flyout">
+                                                <MenuItem Header="Replace cover…" Classes="stramp-menu-item"
+                                                          Click="OnReplaceCoverClicked">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="{x:Static app:Icons.Camera}" Width="15" Height="15" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                                <MenuItem Header="Remove cover" Classes="stramp-menu-item"
+                                                          Command="{Binding RemoveCustomCoverCommand}">
+                                                    <MenuItem.Icon>
+                                                        <PathIcon Data="{x:Static app:Icons.Delete}" Width="15" Height="15" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </MenuFlyout>
+                                        </FlyoutBase.AttachedFlyout>
+                                        <PathIcon Data="{x:Static app:Icons.Camera}" Width="22" Height="22" />
+                                    </Button>
                                 </Grid>
                             </Border>
                             <TextBlock Grid.Column="1" Text="{Binding CurrentSourceRow.SummaryText}"
@@ -1876,6 +1900,65 @@
                         </Grid>
                     </StackPanel>
                 </DockPanel>
+            </Border>
+        </Border>
+
+        <!-- Playlist cover editor: crop, zoom and rotate a picked image before it is saved -->
+        <Border x:Name="CoverEditorScrim" Classes="dialog-scrim" IsVisible="{Binding IsCoverEditorOpen}"
+                PointerPressed="OnCoverEditorScrimPressed">
+            <Border Classes="dialog-card" Width="420" MaxWidth="420" Margin="16"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Margin="22" Spacing="14">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <PathIcon Data="{x:Static app:Icons.Camera}" Width="18" Height="18"
+                                          Foreground="{DynamicResource AppAccentBrush}" VerticalAlignment="Center" />
+                                <TextBlock Text="Playlist cover" Classes="dialog-title" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding CoverEditorPlaylistName}" FontSize="11" Opacity="0.55"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding CloseCoverEditorCommand}" ToolTip.Tip="Close">
+                            <PathIcon Data="{x:Static app:Icons.WindowClose}" Width="11" Height="11" />
+                        </Button>
+                    </Grid>
+
+                    <Border Classes="art-frame" Width="376" Height="376" CornerRadius="10"
+                            HorizontalAlignment="Center">
+                        <controls:ImageCropControl x:Name="CoverCropControl"
+                                                   Background="{DynamicResource AppPlaceholderBackgroundBrush}"
+                                                   Source="{Binding CoverEditorSource}"
+                                                   Zoom="{Binding CoverEditorZoom, Mode=TwoWay}"
+                                                   Rotation="{Binding CoverEditorRotation, Mode=TwoWay}" />
+                    </Border>
+
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="6">
+                        <TextBlock Grid.Column="0" Text="Zoom" FontSize="11" Opacity="0.6" VerticalAlignment="Center" />
+                        <Slider Grid.Column="1" Minimum="1" Maximum="4" Value="{Binding CoverEditorZoom, Mode=TwoWay}"
+                                VerticalAlignment="Center" />
+                        <Button Grid.Column="2" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding RotateCoverLeftCommand}" ToolTip.Tip="Rotate left">
+                            <PathIcon Data="{x:Static app:Icons.RotateLeft}" Width="16" Height="16" />
+                        </Button>
+                        <Button Grid.Column="3" Classes="transport" Width="30" Height="30" Padding="6"
+                                Command="{Binding RotateCoverRightCommand}" ToolTip.Tip="Rotate right">
+                            <PathIcon Data="{x:Static app:Icons.RotateRight}" Width="16" Height="16" />
+                        </Button>
+                    </Grid>
+                    <TextBlock Classes="field-hint" FontSize="11" HorizontalAlignment="Center"
+                               Text="Drag to reposition · scroll or use the slider to zoom" />
+
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8" Margin="0,4,0,0">
+                        <Button Grid.Column="1" Classes="playlist-action-btn" Content="Choose another…"
+                                Click="OnCoverEditorChooseAnotherClicked" />
+                        <Button Grid.Column="2" Classes="playlist-action-btn" Content="Cancel"
+                                Command="{Binding CloseCoverEditorCommand}" />
+                        <Button Grid.Column="3" Classes="playlist-action-btn primary" Content="Save"
+                                Click="OnCoverEditorSaveClicked" />
+                    </Grid>
+                </StackPanel>
             </Border>
         </Border>
 

@@ -1,3 +1,4 @@
+using Stramp.App.Services;
 using CommunityToolkit.Mvvm.Input;
 using Stramp.Core.Library;
 using Stramp.Core.Models;
@@ -131,6 +132,8 @@ public partial class MainWindowViewModel
         }
 
         SettingsService.Save(_settings);
+        PlaylistCoverStore.Delete(name);
+        _customCovers.Remove(name);
 
         if (string.Equals(CurrentSourceName, name, StringComparison.OrdinalIgnoreCase))
         {

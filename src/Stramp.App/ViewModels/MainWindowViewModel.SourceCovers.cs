@@ -18,6 +18,15 @@ public partial class MainWindowViewModel
             return;
 
         source.CoverRequested = true;
+        if (source.IsPlaylist && TryApplyCustomCover(source))
+            return;
+
+        StartCollage(source);
+    }
+
+    /// <summary>Builds the automatic collage (or takes it from the cache).</summary>
+    private void StartCollage(LibrarySourceRow source)
+    {
         var candidates = source.CoverCandidatePaths();
         if (candidates.Count == 0)
             return;

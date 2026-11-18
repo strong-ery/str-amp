@@ -112,11 +112,13 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     /// <summary>True while the library panel shows the source menu rather than a song list.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LibraryHeaderText))]
+    [NotifyPropertyChangedFor(nameof(IsViewingPlaylist))]
     public partial bool IsBrowsingSources { get; set; } = true;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LibraryHeaderText))]
     [NotifyPropertyChangedFor(nameof(CurrentSourceRow))]
+    [NotifyPropertyChangedFor(nameof(IsViewingPlaylist))]
     public partial string CurrentSourceName { get; set; } = "All Songs";
 
     public string LibraryHeaderText =>

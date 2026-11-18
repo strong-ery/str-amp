@@ -987,6 +987,11 @@ public partial class MainWindow : Window
             // Nothing to dismiss to: the wizard only leaves via its own Finish button.
             e.Handled = true;
         }
+        else if (ViewModel?.IsCoverEditorOpen == true)
+        {
+            ViewModel.CloseCoverEditorCommand.Execute(null);
+            e.Handled = true;
+        }
         else if (ViewModel?.IsAddToPlaylistOpen == true)
         {
             ViewModel.CloseAddToPlaylistCommand.Execute(null);
@@ -1238,6 +1243,75 @@ public partial class MainWindow : Window
     {
         ViewModel?.CloseNewPlaylistDialogCommand.Execute(null);
         ViewModel?.SpotifyImport.OpenCommand.Execute(null);
+    }
+
+    // ── Playlist covers ──────────────────────────────────────────────────────
+
+    /// <summary>Asks for an image and opens it in the crop dialog. Null when cancelled or unreadable
+    /// (an unreadable one is reported to the user here).</summary>
+    private async Task<Avalonia.Media.Imaging.Bitmap?> PickCoverImageAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Choose a playlist cover",
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType("Images")
+                {
+                    Patterns = PlaylistCoverStore.SupportedPatterns,
+                    MimeTypes = ["image/png", "image/jpeg", "image/webp", "image/bmp", "image/gif", "image/x-icon"],
+                },
+            ],
+        });
+
+        var path = files.Count > 0 ? files[0].TryGetLocalPath() : null;
+        if (path is null)
+            return null;
+
+        var picture = await Task.Run(() => PlaylistCoverStore.LoadForEditing(path));
+        if (picture is null && ViewModel is not null)
+            ViewModel.StatusText = $"Couldn't open '{Path.GetFileName(path)}' as an image.";
+        return picture;
+    }
+
+    private async void OnChangeCoverClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        // A playlist that already has a custom cover offers Replace / Remove first.
+        if (ViewModel?.CurrentSourceRow is { HasCustomCover: true } && sender is Control anchor)
+        {
+            Avalonia.Controls.Primitives.FlyoutBase.ShowAttachedFlyout(anchor);
+            return;
+        }
+
+        await ChooseCoverAsync();
+    }
+
+    private async void OnReplaceCoverClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        await ChooseCoverAsync();
+
+    private async Task ChooseCoverAsync()
+    {
+        if (await PickCoverImageAsync() is { } picture)
+            ViewModel?.OpenCoverEditor(picture);
+    }
+
+    private async void OnCoverEditorChooseAnotherClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (await PickCoverImageAsync() is { } picture)
+            ViewModel?.ReplaceCoverEditorSource(picture);
+    }
+
+    private void OnCoverEditorSaveClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (CoverCropControl.RenderCrop(PlaylistCoverStore.SavedSize) is { } cropped)
+            ViewModel?.SaveCoverFromEditor(cropped);
+    }
+
+    private void OnCoverEditorScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, CoverEditorScrim))
+            ViewModel?.CloseCoverEditorCommand.Execute(null);
     }
 
     private void OnSpotifyImportScrimPressed(object? sender, PointerPressedEventArgs e)
