@@ -28,6 +28,10 @@ Written in C#, with an Avalonia UI backend, lighter than Spotify, open source, f
 
 ---
 
+### Requirements:
+
+**[ffmpeg](https://ffmpeg.org/download.html)** on your `PATH` is needed for `.ogg` / `.opus` playback, audio normalization, and the waveform. Everything else plays without it.
+
 ### Disclaimer:
 
 **str-amp** will never share any usage data with anybody, and it only ever needs network access to check for updates / ask to install them for you.

@@ -113,7 +113,10 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             lock (_gate)
             {
                 _normalizationGainDb = Math.Clamp(value, -60, 24);
-                _normalizer?.SetGainDb(_normalizationGainDb);
+                // Only ramp while audio is actually flowing. Otherwise (paused, stopped) the new
+                // gain has to be in force from the first sample, not slide in from the old one.
+                _normalizer?.SetGainDb(_normalizationGainDb,
+                    immediate: _output?.PlaybackState != PlaybackState.Playing);
             }
         }
     }
@@ -357,7 +360,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             // Fallback for other formats unsupported by Windows Media Foundation (e.g. .ogg, .opus)
             // or unusual files if ffmpeg is available.
             var tempWav = Path.Combine(Path.GetTempPath(), $"stramp_playback_{Guid.NewGuid():N}.wav");
-            if (TryDecodeWithFfmpeg(path, tempWav))
+            if (TryDecodeWithFfmpeg(path, tempWav, out var ffmpegMissing))
             {
                 try
                 {
@@ -371,12 +374,17 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
                 }
             }
 
+            if (ffmpegMissing)
+                throw new InvalidOperationException(
+                    "this format needs ffmpeg, which wasn't found. Install ffmpeg and make sure it's on your PATH.", ex);
+
             throw;
         }
     }
 
-    private static bool TryDecodeWithFfmpeg(string sourcePath, string targetWavPath)
+    private static bool TryDecodeWithFfmpeg(string sourcePath, string targetWavPath, out bool ffmpegMissing)
     {
+        ffmpegMissing = false;
         try
         {
             var psi = new System.Diagnostics.ProcessStartInfo
@@ -405,6 +413,12 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             }
 
             return process.ExitCode == 0 && File.Exists(targetWavPath) && new FileInfo(targetWavPath).Length > 0;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // Process.Start throws this when the executable can't be found.
+            ffmpegMissing = true;
+            return false;
         }
         catch
         {
@@ -678,6 +692,7 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
         private readonly float _smoothingFactor;
         private float _currentGain;
         private float _targetGain;
+        private int _snapToTarget;
 
         public WaveFormat WaveFormat => _source.WaveFormat;
 
@@ -689,13 +704,20 @@ public sealed class WasapiMediaPlayer : IMediaPlayer
             _smoothingFactor = 1 - MathF.Exp(-1 / (0.02f * WaveFormat.SampleRate));
         }
 
-        public void SetGainDb(double gainDb) =>
+        /// <param name="immediate">Skip the ramp: the next sample read already has the new gain.</param>
+        public void SetGainDb(double gainDb, bool immediate = false)
+        {
             Volatile.Write(ref _targetGain, DbToLinear(gainDb));
+            if (immediate)
+                Volatile.Write(ref _snapToTarget, 1);
+        }
 
         public int Read(Span<float> buffer)
         {
             var read = _source.Read(buffer);
             var target = Volatile.Read(ref _targetGain);
+            if (Interlocked.Exchange(ref _snapToTarget, 0) == 1)
+                _currentGain = target;
             var channels = WaveFormat.Channels;
 
             for (var frame = 0; frame < read; frame += channels)
