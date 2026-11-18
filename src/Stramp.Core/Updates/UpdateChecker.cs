@@ -15,7 +15,7 @@ public sealed class UpdateChecker(GitHubReleaseClient? client = null) : IDisposa
     /// failed (no network, GitHub unreachable) — any of which should leave the user unbothered
     /// rather than surfaced as an error.
     /// </summary>
-    public async Task<UpdateInfo?> CheckAsync(CancellationToken ct = default)
+    public async Task<UpdateInfo?> CheckAsync(CancellationToken ct = default, bool throwOnFailure = false)
     {
         GitHubRelease? release;
         try
@@ -24,6 +24,10 @@ public sealed class UpdateChecker(GitHubReleaseClient? client = null) : IDisposa
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
+            // A button press wants to know the lookup failed; the quiet launch check does not.
+            if (throwOnFailure)
+                throw;
+
             return null;
         }
 

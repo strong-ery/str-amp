@@ -135,6 +135,12 @@
                                     </MenuItem.Icon>
                                 </MenuItem>
                                 <Separator Margin="7,4" />
+                                <MenuItem Header="Check for Updates" Classes="stramp-menu-item"
+                                          Command="{Binding CheckForUpdatesNowCommand}">
+                                    <MenuItem.Icon>
+                                        <PathIcon Data="{x:Static app:Icons.Refresh}" Width="15" Height="15" />
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <MenuItem Header="Settings…" Classes="stramp-menu-item"
                                           Command="{Binding OpenSettingsCommand}">
                                     <MenuItem.Icon>

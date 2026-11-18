@@ -64,6 +64,47 @@ public partial class MainWindowViewModel
         IsUpdateAvailable = true;
     }
 
+    [ObservableProperty]
+    public partial bool IsCheckingForUpdates { get; set; }
+
+    /// <summary>The menu's "Check for Updates": asks GitHub right now, ignoring the 24-hour wait and any
+    /// version that was skipped (asking by hand means the user wants to hear about it).</summary>
+    [RelayCommand]
+    private async Task CheckForUpdatesNowAsync()
+    {
+        if (IsCheckingForUpdates)
+            return;
+
+        IsCheckingForUpdates = true;
+        StatusText = "Checking for updates…";
+        try
+        {
+            var update = await _updateChecker.CheckAsync(throwOnFailure: true);
+            _settings.LastUpdateCheckUtc = DateTime.UtcNow;
+            SettingsService.Save(_settings);
+
+            if (update is null)
+            {
+                StatusText = $"You're up to date (str-amp {AppVersion.Current}).";
+                return;
+            }
+
+            _pendingUpdate = update;
+            UpdateVersion = update.Version;
+            UpdateReleaseNotes = ReleaseNotesText.ToPlain(update.ReleaseNotes);
+            IsUpdateAvailable = true;
+            StatusText = "";
+        }
+        catch
+        {
+            StatusText = "Couldn't reach GitHub. Check your connection and try again.";
+        }
+        finally
+        {
+            IsCheckingForUpdates = false;
+        }
+    }
+
     [RelayCommand]
     private void DismissUpdate() => IsUpdateAvailable = false;
 
