@@ -5,16 +5,21 @@ All notable changes to str-amp go here!
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [v2.0.1] — Nov. 13, 2026 to ???
+Many improvements!
 
 ### Added:
 - Theming system (+ Light Theme, + Aero Theme)
 - Spotify integration (Playlist Import)
+- Status toasts
+- Warning when ffmpeg isn't present (used for filetypes incompatible with WASAPI)
+- Lightweight markdown renderer for release notes. ( Like these ones :D ) - Issue 7
 
 ### Changed:
 - Fullscreen mode no longer extends past the screen bounds
 - Fullscreen mode now hides elements after X seconds (seamless fullscreen)
 - Improved stramp dropdown menu (follows theme better, no weird splitting)
 - Fixed various UI bugs (overlap, scaling issues, and reactive-resize for forced cramped states)
+- Made audio normalization atomic (cannot start loud) - Bug 6
 
 ## [v2.0.0] — Nov. 13, 2026
 Hello Everyone! We are excited to share the first official release of **str-amp** v2.0.0!
