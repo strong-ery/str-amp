@@ -45,7 +45,37 @@ public sealed class UserLyricsStore(string? directory = null)
     {
         TryDelete(PathFor(audioPath));
         TryDelete(PathFor(audioPath, ".instrumental"));
+        DeleteDraft(audioPath);
     }
+
+    /// <summary>An editing session in progress (not yet saved), so closing the editor never loses work.</summary>
+    public string? ReadDraft(string audioPath)
+    {
+        try
+        {
+            var path = PathFor(audioPath, ".draft");
+            return File.Exists(path) ? File.ReadAllText(path) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public void WriteDraft(string audioPath, string json)
+    {
+        try
+        {
+            Directory.CreateDirectory(_directory);
+            File.WriteAllText(PathFor(audioPath, ".draft"), json, new UTF8Encoding(false));
+        }
+        catch
+        {
+            // A draft is a convenience; failing to keep one must never interrupt editing.
+        }
+    }
+
+    public void DeleteDraft(string audioPath) => TryDelete(PathFor(audioPath, ".draft"));
 
     private static void TryDelete(string path)
     {

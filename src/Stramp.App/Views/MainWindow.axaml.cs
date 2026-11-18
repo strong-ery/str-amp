@@ -113,8 +113,6 @@ public partial class MainWindow : Window
 
         AttachSmoothScrollHandlers();
 
-        EditorWaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
-        EditorWaveformBar.ScrubCompleted += fraction => ViewModel?.CompleteScrub(fraction);
         WaveformBar.Scrubbing += fraction => ViewModel?.ScrubTo(fraction);
         WaveformBar.ScrubCompleted += fraction => ViewModel?.CompleteScrub(fraction);
 
@@ -128,7 +126,9 @@ public partial class MainWindow : Window
             {
                 if (ViewModel is { } vm)
                     vm.Volume = volume;
-            });
+            },
+            // The lyrics editor uses Space and the arrow keys itself.
+            () => ViewModel is { IsLyricsEditorOpen: true, IsEditorSyncStep: true });
 
         LeftSplitter.DragStarted += (_, _) => _isDraggingSplitter = true;
         LeftSplitter.DragDelta += OnLeftSplitterDragDelta;
@@ -354,22 +354,17 @@ public partial class MainWindow : Window
         {
             UpdateLyricsSplit(animate: true);
         }
-        else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsEditorOpen)
-                 && ViewModel?.IsLyricsEditorOpen == true)
-        {
-            // The waveform may have finished before the editor existed.
-            EditorWaveformBar.SetWaveform(ViewModel.VisualizerFeed.Waveform);
-        }
         else if (e.PropertyName == nameof(MainWindowViewModel.EditorPlayingLine))
         {
+            // Follow the song while reviewing, but never yank the list away from a line still waiting for its time.
             var line = ViewModel?.EditorPlayingLine;
-            Dispatcher.UIThread.Post(() => ScrollEditorLineIntoView(line), DispatcherPriority.Background);
+            if (ViewModel?.EditorSelectedLine is not { IsStamped: false })
+                Dispatcher.UIThread.Post(() => ScrollEditorLineIntoView(line), DispatcherPriority.Background);
         }
-        else if (e.PropertyName == nameof(MainWindowViewModel.EditorCursor))
+        else if (e.PropertyName == nameof(MainWindowViewModel.EditorSelectedLine))
         {
-            var cursor = ViewModel is { } vm && vm.EditorCursor < vm.EditorLines.Count
-                ? vm.EditorLines[vm.EditorCursor] : null;
-            Dispatcher.UIThread.Post(() => ScrollEditorLineIntoView(cursor), DispatcherPriority.Background);
+            var selected = ViewModel?.EditorSelectedLine;
+            Dispatcher.UIThread.Post(() => ScrollEditorLineIntoView(selected), DispatcherPriority.Background);
         }
         else if (e.PropertyName == nameof(MainWindowViewModel.IsLyricsSynced))
         {
@@ -646,8 +641,98 @@ public partial class MainWindow : Window
     /// <summary>Clicking a timed line jumps playback to it; unsynced lines carry no time to jump to.</summary>
     private void OnEditorLineTapped(object? sender, TappedEventArgs e)
     {
+        // Clicks inside an open edit box are for the box, not for selecting the line.
+        if (e.Source is Visual source && (source is TextBox || source.FindAncestorOfType<TextBox>() is not null))
+            return;
+
         if ((e.Source as StyledElement)?.DataContext is LyricEditorLine line)
             ViewModel?.SelectEditorLine(line);
+    }
+
+    /// <summary>Double-click the time to retime a line, anywhere else on it to rewrite its words.</summary>
+    private void OnEditorLineDoubleTapped(object? sender, TappedEventArgs e)
+    {
+        if (e.Source is not Visual source || source is TextBox || source.FindAncestorOfType<TextBox>() is not null)
+            return;
+        if ((source as StyledElement)?.DataContext is not LyricEditorLine line)
+            return;
+
+        var onTime = source is TextBlock { Classes: var classes } && classes.Contains("editor-time");
+        ViewModel?.BeginEditingLine(line, onTime);
+
+        e.Handled = true;
+        FocusEditorEntry(line);
+    }
+
+    /// <summary>Puts the cursor in a line's open edit box once it has been laid out.</summary>
+    private void FocusEditorEntry(LyricEditorLine line) =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            var box = LyricsEditorItems.GetVisualDescendants()
+                .OfType<TextBox>()
+                .FirstOrDefault(candidate => candidate.IsVisible && ReferenceEquals(candidate.DataContext, line));
+            if (box is null)
+                return;
+            box.Focus();
+            box.SelectAll();
+        }, DispatcherPriority.Background);
+
+    private void OnAddEditorLineClicked(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is { } vm)
+            FocusEditorEntry(vm.AddEditorLine());
+    }
+
+    /// <summary>The small − / + on a hovered line: Tag carries the step in seconds.</summary>
+    private void OnLineNudgeClicked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: LyricEditorLine line, Tag: string step }
+            && double.TryParse(step, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+            ViewModel?.NudgeEditorLine(line, seconds);
+    }
+
+    private void OnLineBreakClicked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: LyricEditorLine line } && ViewModel is { } vm)
+        {
+            vm.EditorSelectedLine = line;
+            vm.AddEditorGap();
+        }
+    }
+
+    private void OnLineDeleteClicked(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: LyricEditorLine line })
+            ViewModel?.DeleteEditorLine(line);
+    }
+
+    private void OnEditorEntryKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox { DataContext: LyricEditorLine line })
+            return;
+
+        if (e.Key == Key.Enter)
+        {
+            line.CommitEdit();
+            ViewModel?.EditorLineEdited(line);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            line.CancelEdit();
+            ViewModel?.EditorLineEdited(line);
+            e.Handled = true;
+        }
+    }
+
+    private void OnEditorEntryLostFocus(object? sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox { DataContext: LyricEditorLine line } && (line.IsEditingText || line.IsEditingTime))
+        {
+            line.CommitEdit();
+            ViewModel?.EditorLineEdited(line);
+        }
     }
 
     private void OnLyricTapped(object? sender, TappedEventArgs e)
@@ -876,7 +961,6 @@ public partial class MainWindow : Window
     private void OnWaveformReady()
     {
         WaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
-        EditorWaveformBar.SetWaveform(ViewModel?.VisualizerFeed.Waveform);
     }
 
     /// <summary>Keeps a line of the editor's list in view as it becomes the one to watch.</summary>
@@ -965,21 +1049,48 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Tap-to-sync keys, taken on the way down so a focused button can't swallow Space.</summary>
+    /// <summary>
+    /// The editor's keys, taken on the way down so a focused button or list can't swallow them.
+    /// Typing in a text box is left alone.
+    /// </summary>
     private void OnEditorTunnelKeyDown(object? sender, KeyEventArgs e)
     {
-        if (ViewModel?.IsLyricsEditorOpen != true || !ViewModel.IsEditorSyncStep
-            || e.Key is not (Key.Space or Key.Enter or Key.Back or Key.G or Key.Delete)
+        if (ViewModel is not { IsLyricsEditorOpen: true, IsEditorSyncStep: true } vm
             || TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox)
             return;
 
+        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt))
+            return;
+
+        if (ctrl)
+        {
+            if (e.Key == Key.Z && !shift)
+                vm.UndoEditor();
+            else if (e.Key == Key.Y || (e.Key == Key.Z && shift))
+                vm.RedoEditor();
+            else
+                return;
+
+            e.Handled = true;
+            return;
+        }
+
         switch (e.Key)
         {
-            case Key.Back: ViewModel.StepBackLine(); break;
-            case Key.G: ViewModel.AddEditorGap(); break;
-            case Key.Delete: ViewModel.DeleteEditorLine(); break;
-            default: ViewModel.StampNextLine(); break;
+            case Key.Space: vm.PlayPauseCommand.Execute(null); break;
+            case Key.Up: vm.MoveEditorSelection(-1); break;
+            case Key.Down: vm.MoveEditorSelection(1); break;
+            case Key.Left: vm.NudgeSelectedBy(-1, shift); break;
+            case Key.Right: vm.NudgeSelectedBy(1, shift); break;
+            case Key.Back or Key.Delete: vm.DeleteEditorLine(); break;
+            case Key.Enter: FocusEditorEntry(vm.AddEditorLine()); break;
+            case Key.B: vm.AddEditorGap(); break;
+            case Key.T: vm.StampSelectedLine(); break;
+            default: return;
         }
+
         e.Handled = true;
     }
 

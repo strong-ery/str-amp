@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stramp.Core.Lyrics;
@@ -11,22 +13,176 @@ public partial class MainWindowViewModel
     private const double TapLeadSeconds = 0.12;
 
     private const double NudgeSeconds = 0.1;
+    private const double BigNudgeSeconds = 1.0;
+    private const int MaxUndoSteps = 100;
 
     private readonly UserLyricsStore _userLyrics = new();
     private Song? _editorSong;
     private CancellationTokenSource? _publishCts;
 
+    // ── Undo / redo and the autosaved draft ─────────────────────────────────
+
+    private sealed record EditorSnapshot(bool Instrumental, List<(string Text, double? Time)> Lines, int Selected)
+    {
+        public bool SameContentAs(EditorSnapshot other) =>
+            Instrumental == other.Instrumental && Lines.SequenceEqual(other.Lines);
+    }
+
+    private sealed record DraftLine(string Text, double? Time);
+
+    private sealed record EditorDraft(bool Instrumental, List<DraftLine> Lines);
+
+    private readonly List<EditorSnapshot> _undoStack = [];
+    private readonly List<EditorSnapshot> _redoStack = [];
+    private CancellationTokenSource? _draftSaveCts;
+    private bool _editorDirty;
+
+    public bool CanUndoEditor => _undoStack.Count > 0;
+    public bool CanRedoEditor => _redoStack.Count > 0;
+
+    private EditorSnapshot CaptureEditor() => new(
+        EditorInstrumental,
+        EditorLines.Select(line => (line.Text, line.TimeSeconds)).ToList(),
+        EditorSelectedLine is { } selected ? EditorLines.IndexOf(selected) : -1);
+
+    private void RestoreEditor(EditorSnapshot snapshot)
+    {
+        EditorInstrumental = snapshot.Instrumental;
+        EditorLines.Clear();
+        foreach (var (text, time) in snapshot.Lines)
+            EditorLines.Add(new LyricEditorLine(text, time));
+
+        EditorSelectedLine = snapshot.Selected >= 0 && snapshot.Selected < EditorLines.Count
+            ? EditorLines[snapshot.Selected]
+            : null;
+        RefreshEditorSummary();
+    }
+
+    /// <summary>Call just before any change to the lines, so it can be undone.</summary>
+    private void PushUndo()
+    {
+        _undoStack.Add(CaptureEditor());
+        if (_undoStack.Count > MaxUndoSteps)
+            _undoStack.RemoveAt(0);
+        _redoStack.Clear();
+        MarkEditorDirty();
+        NotifyUndoState();
+    }
+
+    /// <summary>An edit that ended up changing nothing (cancelled, or an empty new line) leaves no step behind.</summary>
+    private void DropUndoIfNoOp()
+    {
+        if (_undoStack.Count > 0 && _undoStack[^1].SameContentAs(CaptureEditor()))
+        {
+            _undoStack.RemoveAt(_undoStack.Count - 1);
+            NotifyUndoState();
+        }
+    }
+
+    private void NotifyUndoState()
+    {
+        OnPropertyChanged(nameof(CanUndoEditor));
+        OnPropertyChanged(nameof(CanRedoEditor));
+    }
+
+    [RelayCommand]
+    public void UndoEditor()
+    {
+        if (_undoStack.Count == 0)
+            return;
+
+        _redoStack.Add(CaptureEditor());
+        var snapshot = _undoStack[^1];
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+        RestoreEditor(snapshot);
+        MarkEditorDirty();
+        NotifyUndoState();
+    }
+
+    [RelayCommand]
+    public void RedoEditor()
+    {
+        if (_redoStack.Count == 0)
+            return;
+
+        _undoStack.Add(CaptureEditor());
+        var snapshot = _redoStack[^1];
+        _redoStack.RemoveAt(_redoStack.Count - 1);
+        RestoreEditor(snapshot);
+        MarkEditorDirty();
+        NotifyUndoState();
+    }
+
+    /// <summary>Saves the working copy a moment after the last change, so nothing is lost if the editor is closed.</summary>
+    private void MarkEditorDirty()
+    {
+        _editorDirty = true;
+        _draftSaveCts?.Cancel();
+        var cts = _draftSaveCts = new CancellationTokenSource();
+        _ = SaveDraftLaterAsync(cts.Token);
+    }
+
+    private async Task SaveDraftLaterAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(700), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        FlushEditorDraft();
+    }
+
+    private void FlushEditorDraft()
+    {
+        _draftSaveCts?.Cancel();
+        if (!_editorDirty || _editorSong is not { } song)
+            return;
+
+        _editorDirty = false;
+        var draft = new EditorDraft(
+            EditorInstrumental,
+            EditorLines.Select(line => new DraftLine(line.Text, line.TimeSeconds)).ToList());
+        _userLyrics.WriteDraft(song.Path, JsonSerializer.Serialize(draft));
+    }
+
+    private bool TryLoadDraft(Song song)
+    {
+        if (_userLyrics.ReadDraft(song.Path) is not { } json)
+            return false;
+
+        try
+        {
+            var draft = JsonSerializer.Deserialize<EditorDraft>(json);
+            if (draft is null)
+                return false;
+
+            EditorLines.Clear();
+            foreach (var line in draft.Lines)
+                EditorLines.Add(new LyricEditorLine(line.Text, line.Time));
+            EditorInstrumental = draft.Instrumental;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // ── State ───────────────────────────────────────────────────────────────
+
     [ObservableProperty]
     public partial bool IsLyricsEditorOpen { get; set; }
 
-    /// <summary>0 write the words, 1 time them, 2 publish.</summary>
+    /// <summary>1 edit words and timing, 2 publish.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsEditorWriteStep))]
     [NotifyPropertyChangedFor(nameof(IsEditorSyncStep))]
     [NotifyPropertyChangedFor(nameof(IsEditorPublishStep))]
     public partial int LyricsEditorStep { get; set; }
 
-    public bool IsEditorWriteStep => LyricsEditorStep == 0;
     public bool IsEditorSyncStep => LyricsEditorStep == 1;
     public bool IsEditorPublishStep => LyricsEditorStep == 2;
 
@@ -38,24 +194,38 @@ public partial class MainWindowViewModel
     [NotifyPropertyChangedFor(nameof(IsEditorTextEditable))]
     public partial bool EditorInstrumental { get; set; }
 
+    partial void OnEditorInstrumentalChanged(bool value) => MarkEditorDirty();
+
     public bool IsEditorTextEditable => !EditorInstrumental;
 
     /// <summary>True when the user already has their own copy saved, which can then be removed.</summary>
     [ObservableProperty]
     public partial bool EditorHasSavedCopy { get; set; }
 
-    /// <summary>The raw words, one line each, edited in the first step.</summary>
+    /// <summary>The editor opened on unsaved work from an earlier session.</summary>
     [ObservableProperty]
-    public partial string LyricsEditorText { get; set; } = "";
+    public partial bool EditorRestoredDraft { get; set; }
+
+    /// <summary>Pasted words waiting to become lines, shown only while there are none.</summary>
+    [ObservableProperty]
+    public partial string EditorPasteText { get; set; } = "";
+
+    public bool EditorHasLines => EditorLines.Count > 0;
+    public bool EditorIsEmpty => EditorLines.Count == 0;
 
     public ObservableCollection<LyricEditorLine> EditorLines { get; } = [];
 
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(EditorSyncSummary))]
-    public partial int EditorCursor { get; set; }
-
+    /// <summary>The line that keys act on. Stamping fills it in and moves on to the next.</summary>
     [ObservableProperty]
     public partial LyricEditorLine? EditorSelectedLine { get; set; }
+
+    partial void OnEditorSelectedLineChanged(LyricEditorLine? oldValue, LyricEditorLine? newValue)
+    {
+        if (oldValue is not null)
+            oldValue.IsSelected = false;
+        if (newValue is not null)
+            newValue.IsSelected = true;
+    }
 
     /// <summary>The line the song is on, so the list can scroll to keep it in view.</summary>
     [ObservableProperty]
@@ -96,151 +266,209 @@ public partial class MainWindowViewModel
         get
         {
             var stamped = EditorLines.Count(line => line.IsStamped);
-            return $"{stamped} of {EditorLines.Count} lines timed";
+            return $"{stamped} of {EditorLines.Count} timed";
         }
     }
 
-    /// <summary>Opens the editor on the playing track, starting from whatever lyrics it already shows.</summary>
+    // ── Opening and closing ─────────────────────────────────────────────────
+
+    /// <summary>The Edit / Write lyrics button in the lyrics panel: edits the playing track.</summary>
     [RelayCommand]
-    private void OpenLyricsEditor()
+    private async Task OpenLyricsEditor()
     {
-        if (_queue.Current is not { } song)
-            return;
+        if (_queue.Current is { } song)
+            await OpenLyricsEditorFor(song);
+    }
 
-        _editorSong = song;
-        LyricsEditorTitle = $"{song.Artist} – {song.Title}";
+    /// <summary>Right-click "Edit lyrics…" on a song in the library or queue.</summary>
+    [RelayCommand]
+    private async Task EditLyricsForSong(SongRow? row)
+    {
+        if (row is not null)
+            await OpenLyricsEditorFor(row.Song);
+    }
 
-        EditorLines.Clear();
-        EditorInstrumental = LyricsIsInstrumental;
-        EditorHasSavedCopy = _userLyrics.Exists(song.Path);
-
-        // Timed gaps (instrumental breaks) are kept; blank lines in plain text are just spacing.
-        var words = new List<string>();
-        foreach (var row in LyricLines)
+    /// <summary>Opens the editor on any track, starting from unsaved work if there is some, else the lyrics it has.</summary>
+    private async Task OpenLyricsEditorFor(Song song)
+    {
+        LyricsResult result;
+        try
         {
-            if (string.IsNullOrWhiteSpace(row.RawText) && row.TimeSeconds is null)
-            {
-                words.Add("");
-                continue;
-            }
-            EditorLines.Add(new LyricEditorLine(row.RawText, row.TimeSeconds));
-            words.Add(row.RawText);
+            result = await _lyricsProvider.GetAsync(song, Theme.LrcLibLookup);
+        }
+        catch
+        {
+            result = LyricsResult.Empty;
         }
 
-        LyricsEditorText = string.Join('\n', words).Trim('\n');
+        _draftSaveCts?.Cancel();
+        _editorSong = song;
+        LyricsEditorTitle = $"{song.Artist} – {song.Title}";
+        EditorHasSavedCopy = _userLyrics.Exists(song.Path);
+
+        EditorRestoredDraft = TryLoadDraft(song);
+        if (!EditorRestoredDraft)
+        {
+            EditorLines.Clear();
+            EditorInstrumental = result.Origin == LyricsOrigin.Instrumental;
+            foreach (var line in result.Document.Lines)
+            {
+                // Plain-text spacing is dropped; timed gaps (instrumental breaks) are kept.
+                if (string.IsNullOrWhiteSpace(line.Text) && line.TimeSeconds is null)
+                    continue;
+                EditorLines.Add(new LyricEditorLine(line.Text, line.TimeSeconds));
+            }
+        }
+
+        _undoStack.Clear();
+        _redoStack.Clear();
+        _editorDirty = false;
+        NotifyUndoState();
+
+        EditorPasteText = "";
         PublishStatusText = "";
         PublishTrackName = song.Title;
         PublishArtistName = song.Artist;
         PublishAlbumName = song.Album;
-        PublishDurationText = Math.Round(song.Duration.TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        PublishDurationText = Math.Round(song.Duration.TotalSeconds).ToString(CultureInfo.InvariantCulture);
 
-        LyricsEditorStep = EditorLines.Count > 0 && !EditorInstrumental ? 1 : 0;
-        if (LyricsEditorStep == 1)
-            ResetEditorCursor();
+        LyricsEditorStep = 1;
+        SelectFirstUnstamped();
+        if (!EditorInstrumental)
+            EnsureEditorSongPlaying();
 
         IsLyricsEditorOpen = true;
+    }
+
+    /// <summary>Drops the unsaved draft and reopens on what is actually saved.</summary>
+    [RelayCommand]
+    private async Task RevertEditorDraft()
+    {
+        if (_editorSong is not { } song)
+            return;
+
+        _draftSaveCts?.Cancel();
+        _userLyrics.DeleteDraft(song.Path);
+        await OpenLyricsEditorFor(song);
+    }
+
+    /// <summary>Timing needs the song playing, so a track edited from the list is started first.</summary>
+    private void EnsureEditorSongPlaying()
+    {
+        if (_editorSong is not { } song || _queue.Current?.Path == song.Path)
+            return;
+
+        SnapshotPlaybackSource();
+        IReadOnlyList<Song> source = SortedPlaybackSongs.ToList();
+        if (!source.Any(candidate => candidate.Path == song.Path))
+            source = [song];
+        _queue.PlayFromLibrary(song, source, Shuffled);
+        StartNormalizationWarmup();
+        LoadCurrent();
     }
 
     [RelayCommand]
     private void CloseLyricsEditor()
     {
         _publishCts?.Cancel();
+        FlushEditorDraft();
         IsLyricsEditorOpen = false;
     }
 
-    [RelayCommand]
-    private void EditorBackToWrite()
-    {
-        // Keep what has been typed in the write step in step with the timed lines.
-        LyricsEditorText = string.Join('\n', EditorLines.Select(line => line.Text)).Trim('\n');
-        LyricsEditorStep = 0;
-    }
+    // ── Selection ───────────────────────────────────────────────────────────
 
-    /// <summary>Moves from the words to the timing, keeping the stamps of lines whose words didn't change.</summary>
-    [RelayCommand]
-    private void EditorGoToSync()
-    {
-        var previous = new Dictionary<string, Queue<double?>>();
-        foreach (var line in EditorLines)
-        {
-            if (!previous.TryGetValue(line.Text, out var times))
-                previous[line.Text] = times = new Queue<double?>();
-            times.Enqueue(line.TimeSeconds);
-        }
-
-        var words = LyricsEditorText.Split('\n').Select(text => text.Trim()).ToList();
-
-        EditorLines.Clear();
-        foreach (var text in words)
-        {
-            double? time = null;
-            if (previous.TryGetValue(text, out var times) && times.Count > 0)
-                time = times.Dequeue();
-
-            // A blank line only survives as a timed instrumental gap; otherwise it is spacing.
-            if (text.Length == 0 && time is null)
-                continue;
-            EditorLines.Add(new LyricEditorLine(text, time));
-        }
-
-        LyricsEditorStep = 1;
-        ResetEditorCursor();
-    }
-
-    /// <summary>Puts the cursor on the first line still waiting for a time.</summary>
-    private void ResetEditorCursor()
+    private void SelectFirstUnstamped()
     {
         var first = EditorLines.ToList().FindIndex(line => !line.IsStamped);
-        SetEditorCursor(first < 0 ? EditorLines.Count : first);
-        OnPropertyChanged(nameof(EditorSyncSummary));
-        OnPropertyChanged(nameof(EditorHasTimes));
-    }
-
-    private void SetEditorCursor(int index)
-    {
-        EditorCursor = Math.Clamp(index, 0, EditorLines.Count);
-        for (var i = 0; i < EditorLines.Count; i++)
-            EditorLines[i].IsCursor = i == EditorCursor;
-    }
-
-    /// <summary>Space or Enter: the next line just started. Stamps it and moves on.</summary>
-    public void StampNextLine()
-    {
-        if (!IsEditorSyncStep || EditorCursor >= EditorLines.Count)
-            return;
-
-        EditorLines[EditorCursor].TimeSeconds = Math.Max(0, ProgressSeconds - TapLeadSeconds);
-        SetEditorCursor(EditorCursor + 1);
+        EditorSelectedLine = EditorLines.Count == 0 ? null : EditorLines[first < 0 ? 0 : first];
         RefreshEditorSummary();
     }
 
-    /// <summary>Backspace: forget the last stamp and jump the song back to just before it, so it can be retaken.</summary>
-    public void StepBackLine()
+    /// <summary>Up / Down: moves the selection a line, jumping the song to it if it has a time.</summary>
+    public void MoveEditorSelection(int delta)
     {
-        if (!IsEditorSyncStep || EditorCursor <= 0)
+        if (EditorLines.Count == 0)
             return;
 
-        var index = EditorCursor - 1;
-        var target = EditorLines[index].TimeSeconds;
-        EditorLines[index].TimeSeconds = null;
-        SetEditorCursor(index);
-        if (target is { } seconds)
-            EndSeek(Math.Clamp(seconds - 2, 0, DurationSeconds));
-        RefreshEditorSummary();
+        var current = EditorSelectedLine is { } selected ? EditorLines.IndexOf(selected) : -1;
+        if (current < 0)
+            current = delta > 0 ? -1 : EditorLines.Count;
+
+        SelectEditorLine(EditorLines[Math.Clamp(current + delta, 0, EditorLines.Count - 1)]);
     }
 
-    /// <summary>Clicking a line plays from it if it has a time, and makes it the next to stamp.</summary>
-    public void SelectEditorLine(LyricEditorLine line)
+    /// <summary>Selects a line, and plays from just before it if it has a time.</summary>
+    public void SelectEditorLine(LyricEditorLine line, bool seek = true)
     {
         EditorSelectedLine = line;
-        if (line.TimeSeconds is { } seconds)
+        if (seek && line.TimeSeconds is { } seconds)
             EndSeek(Math.Clamp(seconds - 1, 0, DurationSeconds));
-        SetEditorCursor(EditorLines.IndexOf(line));
+    }
+
+    // ── Editing the lines ───────────────────────────────────────────────────
+
+    /// <summary>T: the selected line just started. Stamps it and moves on to the next.</summary>
+    public void StampSelectedLine()
+    {
+        if (!IsEditorSyncStep || EditorLines.Count == 0)
+            return;
+
+        // Stamping a paused song would give every line the same moment, so the first T just starts it.
+        if (!IsPlaying)
+        {
+            PlayPauseCommand.Execute(null);
+            return;
+        }
+
+        if (EditorSelectedLine is null)
+            SelectFirstUnstamped();
+
+        if (EditorSelectedLine is not { } line)
+            return;
+
+        PushUndo();
+        line.TimeSeconds = Math.Max(0, ProgressSeconds - TapLeadSeconds);
+
+        var index = EditorLines.IndexOf(line);
+        if (index + 1 < EditorLines.Count)
+            SelectEditorLine(EditorLines[index + 1], seek: false);
+        RefreshEditorSummary();
+    }
+
+    /// <summary>Turns pasted text into lines, one per non-blank row, after the existing ones.</summary>
+    [RelayCommand]
+    private void AddPastedLines()
+    {
+        var rows = EditorPasteText.Split('\n').Select(row => row.Trim()).Where(row => row.Length > 0).ToList();
+        if (rows.Count == 0)
+            return;
+
+        PushUndo();
+        foreach (var text in rows)
+            EditorLines.Add(new LyricEditorLine(text));
+
+        EditorPasteText = "";
+        SelectFirstUnstamped();
+    }
+
+    /// <summary>Inserts an empty line after the selected one (or at the end) for the view to start editing.</summary>
+    public LyricEditorLine AddEditorLine()
+    {
+        PushUndo();
+        var line = new LyricEditorLine("");
+        var at = EditorSelectedLine is { } selected && EditorLines.IndexOf(selected) is var i and >= 0
+            ? i + 1
+            : EditorLines.Count;
+        EditorLines.Insert(at, line);
+        EditorSelectedLine = line;
+        line.BeginEditText();
+        RefreshEditorSummary();
+        return line;
     }
 
     /// <summary>
-    /// Drops an instrumental gap (a ♪ line) at the song's current position, in time order, so a
-    /// break the words skip over can be marked as it plays. The next line to stamp stays put.
+    /// B: drops an instrumental break (a ♪ line) at the song's current position, in time order, so
+    /// a gap the words skip over can be marked as it plays.
     /// </summary>
     [RelayCommand]
     public void AddEditorGap()
@@ -248,57 +476,66 @@ public partial class MainWindowViewModel
         if (!IsEditorSyncStep)
             return;
 
+        PushUndo();
         var time = Math.Max(0, ProgressSeconds);
         var gap = new LyricEditorLine("", time);
 
-        var index = EditorCursor;
-        for (var i = 0; i < EditorLines.Count; i++)
+        var index = EditorSelectedLine is { } selected && EditorLines.IndexOf(selected) is var i and >= 0
+            ? i + 1
+            : EditorLines.Count;
+        for (var n = 0; n < EditorLines.Count; n++)
         {
-            if (EditorLines[i].TimeSeconds is { } existing && existing > time)
+            if (EditorLines[n].TimeSeconds is { } existing && existing > time)
             {
-                index = i;
+                index = n;
                 break;
             }
         }
 
-        index = Math.Clamp(index, 0, EditorLines.Count);
-        EditorLines.Insert(index, gap);
-        SetEditorCursor(index < EditorCursor || index == EditorCursor ? EditorCursor + 1 : EditorCursor);
+        EditorLines.Insert(Math.Clamp(index, 0, EditorLines.Count), gap);
         EditorSelectedLine = gap;
         RefreshEditorSummary();
     }
 
-    /// <summary>Removes the selected line (a gap, or a lyric line that doesn't belong).</summary>
-    [RelayCommand]
-    public void DeleteEditorLine()
+    /// <summary>Removes a line (a break, or a lyric line that doesn't belong). Selection stays at the same spot.</summary>
+    public void DeleteEditorLine(LyricEditorLine? line = null)
     {
-        if (EditorSelectedLine is not { } line)
+        line ??= EditorSelectedLine;
+        if (line is null)
             return;
 
         var index = EditorLines.IndexOf(line);
         if (index < 0)
             return;
 
+        PushUndo();
         EditorLines.RemoveAt(index);
-        EditorSelectedLine = null;
-        SetEditorCursor(index < EditorCursor ? EditorCursor - 1 : EditorCursor);
+        EditorSelectedLine = EditorLines.Count > 0 ? EditorLines[Math.Min(index, EditorLines.Count - 1)] : null;
         RefreshEditorSummary();
     }
 
-    [RelayCommand]
-    private void NudgeEditorLine(string? direction)
+    /// <summary>Moves a line's time, and lets you hear the result by playing from just before it.</summary>
+    public void NudgeEditorLine(LyricEditorLine? line, double seconds)
     {
-        if (EditorSelectedLine is not { TimeSeconds: { } time } line)
+        line ??= EditorSelectedLine;
+        if (line?.TimeSeconds is not { } time)
             return;
 
-        var delta = direction == "-" ? -NudgeSeconds : NudgeSeconds;
-        line.TimeSeconds = Math.Clamp(time + delta, 0, Math.Max(DurationSeconds, time + delta));
+        PushUndo();
+        var moved = Math.Clamp(time + seconds, 0, Math.Max(DurationSeconds, time + seconds));
+        line.TimeSeconds = moved;
+        EndSeek(Math.Clamp(moved - 1, 0, DurationSeconds));
     }
+
+    /// <summary>Left / Right: nudges the selected line; Shift makes it a bigger step.</summary>
+    public void NudgeSelectedBy(int direction, bool big) =>
+        NudgeEditorLine(EditorSelectedLine, direction * (big ? BigNudgeSeconds : NudgeSeconds));
 
     /// <summary>Shifts every stamped line, to fix a whole pass that was early or late.</summary>
     [RelayCommand]
     private void NudgeAllEditorLines(string? direction)
     {
+        PushUndo();
         var delta = direction == "-" ? -NudgeSeconds : NudgeSeconds;
         foreach (var line in EditorLines)
         {
@@ -310,19 +547,45 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private void ClearEditorTimes()
     {
+        PushUndo();
         foreach (var line in EditorLines)
             line.TimeSeconds = null;
-        SetEditorCursor(0);
-        RefreshEditorSummary();
+        SelectFirstUnstamped();
     }
 
-    [RelayCommand]
-    private void EditorToggleStartPlayback() => PlayPause();
+    /// <summary>Starts editing a line's words or time in place, as one undoable step.</summary>
+    public void BeginEditingLine(LyricEditorLine line, bool time)
+    {
+        PushUndo();
+        EditorSelectedLine = line;
+        if (time)
+            line.BeginEditTime();
+        else
+            line.BeginEditText();
+    }
+
+    /// <summary>Called after an in-place edit ends. A line left empty and untimed is just removed.</summary>
+    public void EditorLineEdited(LyricEditorLine line)
+    {
+        if (line.Text.Length == 0 && !line.IsStamped && EditorLines.IndexOf(line) is var index and >= 0)
+        {
+            EditorLines.RemoveAt(index);
+            if (ReferenceEquals(EditorSelectedLine, line))
+                EditorSelectedLine = EditorLines.Count > 0
+                    ? EditorLines[Math.Min(index, EditorLines.Count - 1)]
+                    : null;
+        }
+
+        DropUndoIfNoOp();
+        RefreshEditorSummary();
+    }
 
     private void RefreshEditorSummary()
     {
         OnPropertyChanged(nameof(EditorSyncSummary));
         OnPropertyChanged(nameof(EditorHasTimes));
+        OnPropertyChanged(nameof(EditorHasLines));
+        OnPropertyChanged(nameof(EditorIsEmpty));
     }
 
     /// <summary>Called as the song plays so the editor shows which line is on, like the panel does.</summary>
@@ -350,6 +613,8 @@ public partial class MainWindowViewModel
             EditorPlayingLine = playing;
     }
 
+    // ── Saving and publishing ───────────────────────────────────────────────
+
     /// <summary>Saves the lyrics as the user's own: timed if any line has a time, plain otherwise.</summary>
     [RelayCommand]
     private void SaveUserLyrics()
@@ -367,7 +632,7 @@ public partial class MainWindowViewModel
             else
             {
                 var lines = CurrentEditorLines();
-                if (lines.Count == 0 || lines.All(line => line.Text.Length == 0))
+                if (lines.Count == 0 || lines.All(line => line.Text.Length == 0 && line.TimeSeconds is null))
                 {
                     StatusText = "There are no lyrics to save yet.";
                     return;
@@ -385,6 +650,11 @@ public partial class MainWindowViewModel
             StatusText = $"Couldn't save the lyrics: {ex.Message}";
             return;
         }
+
+        // Saved, so the working draft has nothing more to protect.
+        _draftSaveCts?.Cancel();
+        _editorDirty = false;
+        _userLyrics.DeleteDraft(song.Path);
 
         CloseLyricsEditor();
         StatusText = EditorInstrumental ? "Marked as instrumental"
@@ -410,45 +680,28 @@ public partial class MainWindowViewModel
             return;
         }
 
+        _draftSaveCts?.Cancel();
+        _editorDirty = false;
         CloseLyricsEditor();
         StatusText = "Removed your lyrics";
         if (_queue.Current?.Path == song.Path)
             LoadLyrics(song);
     }
 
-    /// <summary>The edited lines in order. In the write step they come from the text box.</summary>
-    private List<LyricLine> CurrentEditorLines()
-    {
-        if (IsEditorWriteStep)
-        {
-            return LyricsEditorText
-                .Split('\n')
-                .Select(text => text.Trim())
-                .Select(text => new LyricLine(null, text))
-                .ToList();
-        }
-
-        return EditorLines.Select(line => new LyricLine(line.TimeSeconds, line.Text)).ToList();
-    }
+    /// <summary>The edited lines in order.</summary>
+    private List<LyricLine> CurrentEditorLines() =>
+        EditorLines.Select(line => new LyricLine(line.TimeSeconds, line.Text)).ToList();
 
     [RelayCommand]
     private void EditorGoToPublish()
     {
-        if (!EditorInstrumental)
-            SaveEditedTextIfWriting();
         PublishSynced = EditorHasTimes && !EditorInstrumental;
         PublishStatusText = "";
         LyricsEditorStep = 2;
     }
 
-    private void SaveEditedTextIfWriting()
-    {
-        if (IsEditorWriteStep)
-            EditorGoToSync();
-    }
-
     [RelayCommand]
-    private void EditorBackFromPublish() => LyricsEditorStep = EditorInstrumental ? 0 : 1;
+    private void EditorBackFromPublish() => LyricsEditorStep = 1;
 
     /// <summary>Uploads to lrclib.net. Only runs from the publish step, after the user confirmed the details.</summary>
     [RelayCommand]
@@ -472,8 +725,8 @@ public partial class MainWindowViewModel
         }
 
         if (string.IsNullOrWhiteSpace(PublishTrackName) || string.IsNullOrWhiteSpace(PublishArtistName)
-            || !double.TryParse(PublishDurationText, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var duration) || duration < 1)
+            || !double.TryParse(PublishDurationText, NumberStyles.Float,
+                CultureInfo.InvariantCulture, out var duration) || duration < 1)
         {
             PublishStatusText = "Title, artist and a duration in seconds are required.";
             return;

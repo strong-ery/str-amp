@@ -17,6 +17,7 @@ public sealed class MediaKeyController : IDisposable
     private readonly Action _previous;
     private readonly Func<double> _getVolume;
     private readonly Action<double> _setVolume;
+    private readonly Func<bool> _isSuppressed;
     private WindowsMediaKeys? _windowsMediaKeys;
     private bool _spaceIsDown;
 
@@ -26,8 +27,10 @@ public sealed class MediaKeyController : IDisposable
         Action next,
         Action previous,
         Func<double> getVolume,
-        Action<double> setVolume)
+        Action<double> setVolume,
+        Func<bool>? isSuppressed = null)
     {
+        _isSuppressed = isSuppressed ?? (() => false);
         _window = window;
         _playPause = playPause;
         _next = next;
@@ -72,6 +75,10 @@ public sealed class MediaKeyController : IDisposable
         if (IsTextEntryFocused())
             return;
 
+        // A screen that has its own use for these keys (the lyrics editor) takes them instead.
+        if (_isSuppressed())
+            return;
+
         // Modified arrows retain their normal control/text-editing meaning.
         if (e.KeyModifiers != KeyModifiers.None)
             return;
@@ -111,6 +118,12 @@ public sealed class MediaKeyController : IDisposable
     {
         if (e.Key != Key.Space)
             return;
+
+        if (_isSuppressed())
+        {
+            _spaceIsDown = false;
+            return;
+        }
 
         if (IsTextEntryFocused())
         {

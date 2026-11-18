@@ -73,6 +73,8 @@ public partial class MainWindowViewModel
         {
             ResetLyrics(StatusFor(result.Origin, searchesOnline));
             LyricsIsInstrumental = result.Origin == LyricsOrigin.Instrumental;
+            // Nothing to write or time on an instrumental; it is only reachable from the right-click menu.
+            LyricsCanEdit = !LyricsIsInstrumental;
             return;
         }
 
@@ -113,11 +115,16 @@ public partial class MainWindowViewModel
     [NotifyPropertyChangedFor(nameof(LyricsEditButtonText))]
     public partial bool LyricsIsInstrumental { get; set; }
 
+    /// <summary>False for a track LRCLIB says is instrumental: nothing to write or time.</summary>
+    [ObservableProperty]
+    public partial bool LyricsCanEdit { get; set; } = true;
+
     public string LyricsEditButtonText => LyricsIsInstrumental ? "Edit" : "Write lyrics…";
 
     private void ResetLyrics(string status)
     {
         LyricsIsInstrumental = false;
+        LyricsCanEdit = true;
         LyricLines.Clear();
         _activeLyricIndex = -1;
         ActiveLyricLine = null;
