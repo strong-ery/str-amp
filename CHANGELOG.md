@@ -4,7 +4,7 @@ All notable changes to str-amp go here!
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [v2.0.1] — Nov. 13, 2026 to ???
+## [v2.0.1] — Nov. 13, 2026 -> Nov. 18, 2026
 Many improvements!
 
 ### Added:
@@ -24,6 +24,7 @@ Many improvements!
 - Made audio normalization atomic (cannot start loud) - Bug 6
 - Improved playlist's and their associated UI/UX
 - Improved song delete popup UI
+- Improved many parts of the app to allow for libraries upwards and beyond 100,000 songs
 
 ## [v2.0.0] — Nov. 13, 2026
 Hello Everyone! We are excited to share the first official release of **str-amp** v2.0.0!
