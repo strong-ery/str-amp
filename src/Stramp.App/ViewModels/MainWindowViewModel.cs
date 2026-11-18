@@ -64,6 +64,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     /// <summary>Songs of the selected source (All Songs or a playlist): what the queue is built from.</summary>
     private List<Song> _activeSongs = [];
+
+    /// <summary>The source the queue was built from, kept apart from the one being browsed so
+    /// opening a playlist never disturbs what is playing (or what plays next).</summary>
+    private List<Song> _playbackSongs = [];
+    private string _playbackSourceName = "All Songs";
+    private LibrarySortOption _playbackSort = LibrarySortOption.Artist;
     private bool _isSeeking;
     private bool _isAdvancing;
 
@@ -94,6 +100,11 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     partial void OnSelectedSortOptionChanged(SortOptionRow? value)
     {
+        // Re-sorting the source that is also playing keeps its queue rebuilds in step.
+        if (value is not null && string.Equals(
+                CurrentSourceName, _playbackSourceName, StringComparison.OrdinalIgnoreCase))
+            _playbackSort = value.Option;
+
         UpdateDisplayedSongs();
         SavePlaybackState();
     }
@@ -105,6 +116,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LibraryHeaderText))]
+    [NotifyPropertyChangedFor(nameof(CurrentSourceRow))]
     public partial string CurrentSourceName { get; set; } = "All Songs";
 
     public string LibraryHeaderText =>

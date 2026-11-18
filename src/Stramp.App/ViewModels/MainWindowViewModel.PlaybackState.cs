@@ -28,6 +28,7 @@ public partial class MainWindowViewModel
         IsBrowsingSources = state.IsBrowsingSources;
         UpdateSortOptionsForCurrentSource(state.SortOption);
         UpdateDisplayedSongs();
+        SnapshotPlaybackSource();
 
         Shuffled = state.Shuffled;
         LoopMode = state.LoopMode;
@@ -46,7 +47,7 @@ public partial class MainWindowViewModel
         }
         else
         {
-            _queue.Build(SortedActiveSongs, Shuffled,
+            _queue.Build(SortedPlaybackSongs, Shuffled,
                 Shuffled && state.ShuffleSeed != 0 ? state.ShuffleSeed : null);
             var restoredPosition = !string.IsNullOrWhiteSpace(state.CurrentSongPath)
                 ? _queue.Songs.ToList().FindIndex(song => string.Equals(
@@ -101,21 +102,22 @@ public partial class MainWindowViewModel
         var currentPath = _queue.Current?.Path;
         var activeSourcePosition = currentPath is null
             ? 0
-            : SortedActiveSongs.ToList().FindIndex(song => string.Equals(
+            : SortedPlaybackSongs.ToList().FindIndex(song => string.Equals(
                 song.Path, currentPath, StringComparison.OrdinalIgnoreCase));
         var state = new SavedPlaybackState
         {
             LibraryPaths = [.. _libraryPaths],
             LibraryPath = LibraryPath,
-            SourceName = CurrentSourceName,
+            // What is saved is the playing source: on relaunch the queue and its source match.
+            SourceName = _playbackSourceName,
             IsBrowsingSources = IsBrowsingSources,
-            SortOption = SelectedSortOption?.Option.ToString(),
+            SortOption = _playbackSort.ToString(),
             // The full library is derived by scanning. Playlist paths are retained so an imported
             // or deleted playlist can still be restored as the active source.
             ActiveSongPaths = string.Equals(
-                CurrentSourceName, "All Songs", StringComparison.OrdinalIgnoreCase)
+                _playbackSourceName, "All Songs", StringComparison.OrdinalIgnoreCase)
                 ? []
-                : _activeSongs.Select(song => song.Path).ToList(),
+                : _playbackSongs.Select(song => song.Path).ToList(),
             ActiveSourcePosition = Math.Max(activeSourcePosition, 0),
             QueuePaths = _queue.Songs.Select(song => song.Path).ToList(),
             QueuePosition = _queue.Position,

@@ -85,6 +85,7 @@ public partial class MainWindowViewModel
 
         _library.RemoveAll(s => string.Equals(s.Path, song.Path, StringComparison.OrdinalIgnoreCase));
         _activeSongs.RemoveAll(s => string.Equals(s.Path, song.Path, StringComparison.OrdinalIgnoreCase));
+        _playbackSongs.RemoveAll(s => string.Equals(s.Path, song.Path, StringComparison.OrdinalIgnoreCase));
         _queue.RemoveAllMatching(song.Path);
         foreach (var playlist in _settings.Playlists)
             playlist.SongPaths.RemoveAll(p => string.Equals(p, song.Path, StringComparison.OrdinalIgnoreCase));

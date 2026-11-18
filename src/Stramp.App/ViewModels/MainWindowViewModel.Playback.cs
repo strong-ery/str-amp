@@ -9,7 +9,9 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private void PlaySong(SongRow row)
     {
-        _queue.PlayFromLibrary(row.Song, SortedActiveSongs, Shuffled);
+        // Picking a song from the browsed source makes that source the playing one.
+        SnapshotPlaybackSource();
+        _queue.PlayFromLibrary(row.Song, SortedPlaybackSongs, Shuffled);
         StartNormalizationWarmup();
         LoadCurrent();
     }
@@ -147,14 +149,14 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private void Next()
     {
-        if (_queue.Current is not null && !_activeSongs.Any(s => s.Path == _queue.Current.Path))
+        if (_queue.Current is not null && !_playbackSongs.Any(s => s.Path == _queue.Current.Path))
         {
-            _queue.Build(SortedActiveSongs, Shuffled);
+            _queue.Build(SortedPlaybackSongs, Shuffled);
             LoadCurrent();
         }
         else
         {
-            _queue.AdvanceOrRebuild(SortedActiveSongs, Shuffled);
+            _queue.AdvanceOrRebuild(SortedPlaybackSongs, Shuffled);
             LoadCurrent();
         }
     }
@@ -186,9 +188,9 @@ public partial class MainWindowViewModel
             Reshuffle();
         else
         {
-            if (_queue.Current is null || !_activeSongs.Any(s => s.Path == _queue.Current.Path))
+            if (_queue.Current is null || !_playbackSongs.Any(s => s.Path == _queue.Current.Path))
             {
-                _queue.Build(SortedActiveSongs, shuffled: false);
+                _queue.Build(SortedPlaybackSongs, shuffled: false);
                 if (IsPlaying)
                     LoadCurrent(autoPlay: true);
                 else
@@ -196,7 +198,7 @@ public partial class MainWindowViewModel
             }
             else
             {
-                _queue.RestoreOrderKeepingCurrent(SortedActiveSongs);
+                _queue.RestoreOrderKeepingCurrent(SortedPlaybackSongs);
             }
             RefreshQueueRows();
             StartNormalizationWarmup();
@@ -233,9 +235,9 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private void Reshuffle()
     {
-        if (_queue.Current is null || !_activeSongs.Any(s => s.Path == _queue.Current.Path))
+        if (_queue.Current is null || !_playbackSongs.Any(s => s.Path == _queue.Current.Path))
         {
-            _queue.Build(SortedActiveSongs, shuffled: true);
+            _queue.Build(SortedPlaybackSongs, shuffled: true);
             if (IsPlaying)
                 LoadCurrent(autoPlay: true);
             else
@@ -243,7 +245,7 @@ public partial class MainWindowViewModel
         }
         else
         {
-            _queue.ReshuffleKeepingCurrent(SortedActiveSongs);
+            _queue.ReshuffleKeepingCurrent(SortedPlaybackSongs);
         }
         RefreshQueueRows();
         StartNormalizationWarmup();

@@ -50,6 +50,7 @@ public partial class MainWindowViewModel
         {
             var resolvedSongs = PlaylistScanner.ResolveSongs(saved.SongPaths, _library);
             _activeSongs = [.. resolvedSongs];
+            SyncPlaybackSourceWithView();
             UpdateDisplayedSongs();
         }
 
@@ -101,6 +102,7 @@ public partial class MainWindowViewModel
         }
 
         _activeSongs.RemoveAll(s => string.Equals(s.Path, row.Song.Path, StringComparison.OrdinalIgnoreCase));
+        SyncPlaybackSourceWithView();
         UpdateDisplayedSongs();
         PopulateSources();
         StatusText = $"Removed '{row.Title}' from {playlistName}";

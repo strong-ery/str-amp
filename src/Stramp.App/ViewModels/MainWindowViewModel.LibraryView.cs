@@ -8,6 +8,8 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private void SelectSource(LibrarySourceRow source)
     {
+        // Opening a source only browses it: the queue and playback are left alone until the
+        // user presses Play (or picks a song), see StartSource.
         _activeSongs = [.. source.Songs];
         CurrentSourceName = source.Name;
         IsBrowsingSources = false;
@@ -15,23 +17,84 @@ public partial class MainWindowViewModel
         UpdateSortOptionsForCurrentSource();
         UpdateDisplayedSongs();
         OnPropertyChanged(nameof(IsViewingPlaylist));
-
-        if (_activeSongs.Count > 0)
-        {
-            if (IsPlaying && _queue.Current is { } currentSong)
-            {
-                _queue.PlayFromLibrary(currentSong, SortedActiveSongs, Shuffled);
-                RefreshQueueRows();
-            }
-            else
-            {
-                _queue.Build(SortedActiveSongs, Shuffled);
-                LoadCurrent(autoPlay: false);
-            }
-            StartNormalizationWarmup();
-        }
-
+        LoadSourceCover(source);
         SavePlaybackState(force: true);
+    }
+
+    /// <summary>The source row being browsed, looked up by name so it survives a rescan.</summary>
+    public LibrarySourceRow? CurrentSourceRow => LibrarySources.FirstOrDefault(source =>
+        string.Equals(source.Name, CurrentSourceName, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Plays the source being browsed from its top (or shuffled, per the shuffle toggle).</summary>
+    [RelayCommand]
+    private void PlayCurrentSource()
+    {
+        if (!TryTogglePlayingSource(CurrentSourceName))
+            StartSource(_activeSongs, CurrentSourceName, SelectedSortOption?.Option ?? LibrarySortOption.Artist);
+    }
+
+    /// <summary>Plays a source straight from the source menu without opening it.</summary>
+    [RelayCommand]
+    private void PlaySourceRow(LibrarySourceRow? source)
+    {
+        if (source is null || TryTogglePlayingSource(source.Name))
+            return;
+
+        StartSource(source.Songs, source.Name,
+            source.IsPlaylist ? LibrarySortOption.Playlist : LibrarySortOption.Artist);
+    }
+
+    /// <summary>On the source that is already playing, its Play button is just play/pause (and is
+    /// drawn as such); only other sources are started from the top.</summary>
+    private bool TryTogglePlayingSource(string name)
+    {
+        if (!_playerHasCurrentTrack ||
+            !string.Equals(name, _playbackSourceName, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        PlayPause();
+        return true;
+    }
+
+    /// <summary>Marks the source row that is currently playing so its buttons can show Pause.</summary>
+    private void UpdateSourcePlayingState()
+    {
+        foreach (var source in LibrarySources)
+            source.IsPlayingNow = IsPlaying &&
+                string.Equals(source.Name, _playbackSourceName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Makes `songs` the source the queue draws from and starts it from the top.</summary>
+    private void StartSource(IReadOnlyList<Song> songs, string name, LibrarySortOption sort)
+    {
+        if (songs.Count == 0)
+            return;
+
+        _playbackSongs = [.. songs];
+        _playbackSourceName = name;
+        _playbackSort = sort;
+        UpdateSourcePlayingState();
+        _queue.Build(SortedPlaybackSongs, Shuffled);
+        StartNormalizationWarmup();
+        LoadCurrent();
+    }
+
+    /// <summary>Points playback at whatever is being browsed. Used wherever the two are meant to
+    /// be the same thing (startup, restore, rescan).</summary>
+    private void SnapshotPlaybackSource()
+    {
+        _playbackSongs = [.. _activeSongs];
+        _playbackSourceName = CurrentSourceName;
+        _playbackSort = SelectedSortOption?.Option ?? LibrarySortOption.Artist;
+        UpdateSourcePlayingState();
+    }
+
+    /// <summary>After the browsed playlist was edited: if it is also the playing source, its
+    /// songs follow the edit.</summary>
+    private void SyncPlaybackSourceWithView()
+    {
+        if (string.Equals(CurrentSourceName, _playbackSourceName, StringComparison.OrdinalIgnoreCase))
+            _playbackSongs = [.. _activeSongs];
     }
 
     public bool IsViewingPlaylist => !IsBrowsingSources && CurrentSourceKind == LibrarySourceKind.Playlist;
@@ -66,9 +129,12 @@ public partial class MainWindowViewModel
     /// this so "next" matches the list the user is looking at, not raw source order.</summary>
     private IEnumerable<Song> SortedActiveSongs => GetSortedSongs(_activeSongs);
 
-    private IEnumerable<Song> GetSortedSongs(IEnumerable<Song> songs)
+    /// <summary>The playing source in the order it was started in; queue rebuilds follow this.</summary>
+    private IEnumerable<Song> SortedPlaybackSongs => GetSortedSongs(_playbackSongs, _playbackSort);
+
+    private IEnumerable<Song> GetSortedSongs(IEnumerable<Song> songs, LibrarySortOption? sort = null)
     {
-        return SelectedSortOption?.Option switch
+        return (sort ?? SelectedSortOption?.Option) switch
         {
             LibrarySortOption.Album => songs
                 .OrderBy(s => s.Album, StringComparer.OrdinalIgnoreCase)

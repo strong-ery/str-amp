@@ -181,7 +181,7 @@ public partial class MainWindowViewModel
                 return;
             }
 
-            _queue.AdvanceOrRebuild(SortedActiveSongs, Shuffled);
+            _queue.AdvanceOrRebuild(SortedPlaybackSongs, Shuffled);
             LoadCurrent();
         });
     }

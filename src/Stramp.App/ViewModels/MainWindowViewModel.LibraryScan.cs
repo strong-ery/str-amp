@@ -84,6 +84,7 @@ public partial class MainWindowViewModel
         if (_library.Count == 0)
         {
             _activeSongs = [];
+            _playbackSongs = [];
             LibraryRows.ReplaceAll([]);
             _queue.Restore([], 0, 0);
             RefreshQueueRows();
@@ -111,12 +112,22 @@ public partial class MainWindowViewModel
         UpdateSortOptionsForCurrentSource();
         UpdateDisplayedSongs();
 
+        // The playing source is re-found by its own name: it may differ from the browsed one.
+        var playbackSource = LibrarySources.FirstOrDefault(source => string.Equals(
+            source.Name, _playbackSourceName, StringComparison.OrdinalIgnoreCase));
+        if (playbackSource is null)
+        {
+            _playbackSourceName = "All Songs";
+            _playbackSort = SelectedSortOption?.Option ?? LibrarySortOption.Artist;
+        }
+        _playbackSongs = playbackSource is not null ? [.. playbackSource.Songs] : [.. _library];
+
         if (preservePlayback && previousQueue.Count > 0)
         {
             var songsByPath = _library.ToDictionary(song => song.Path, StringComparer.OrdinalIgnoreCase);
             var restoredQueue = ResolveSongs(previousQueue.Select(song => song.Path), songsByPath);
             var seen = restoredQueue.Select(song => song.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            restoredQueue.AddRange(SortedActiveSongs.Where(song => seen.Add(song.Path)));
+            restoredQueue.AddRange(SortedPlaybackSongs.Where(song => seen.Add(song.Path)));
 
             if (previousCurrent is not null && !seen.Contains(previousCurrent.Path))
                 restoredQueue.Insert(Math.Clamp(previousQueuePosition, 0, restoredQueue.Count), previousCurrent);
@@ -132,7 +143,7 @@ public partial class MainWindowViewModel
         else
         {
             IsBrowsingSources = true;
-            _queue.Build(SortedActiveSongs, Shuffled);
+            _queue.Build(SortedPlaybackSongs, Shuffled);
             _playbackStateReady = true;
             LoadCurrent(autoPlay: false);
         }
@@ -172,6 +183,11 @@ public partial class MainWindowViewModel
 
         foreach (var playlist in playlists)
             LibrarySources.Add(new LibrarySourceRow(playlist.Name, playlist.Songs, LibrarySourceKind.Playlist, playlist.FilePath));
+
+        // The rows were rebuilt, so the header's row is a new object.
+        UpdateSourcePlayingState();
+        OnPropertyChanged(nameof(CurrentSourceRow));
+        LoadSourceCover(CurrentSourceRow);
     }
 
     /// <summary>The scanned songs that live inside one configured library folder. Songs under a

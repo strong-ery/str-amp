@@ -30,6 +30,7 @@ public partial class MainWindowViewModel
 
     partial void OnIsPlayingChanged(bool value)
     {
+        UpdateSourcePlayingState();
         if (value)
         {
             if (!_isSeeking)

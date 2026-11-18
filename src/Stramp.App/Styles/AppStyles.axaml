@@ -196,6 +196,35 @@
     <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
   </Style>
 
+  <!-- Play button over a source's thumbnail in the source menu; appears with the row's hover. -->
+  <Style Selector="Button.cover-play">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="14" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource AppPlayPauseIconBrush}" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.15" Easing="CubicEaseOut" />
+      </Transitions>
+    </Setter>
+  </Style>
+  <Style Selector="ListBoxItem:pointerover Button.cover-play">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.cover-play PathIcon">
+    <Setter Property="Foreground" Value="{DynamicResource AppPlayPauseIconBrush}" />
+  </Style>
+  <Style Selector="Button.cover-play:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
+  </Style>
+
   <Style Selector="TextBlock.section-header">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="SemiBold" />

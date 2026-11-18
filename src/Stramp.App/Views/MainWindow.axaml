@@ -200,6 +200,40 @@
                             </Button>
                         </Grid>
 
+                        <!-- Header for the opened source: cover (playlists), size, and the Play button.
+                             Opening a source only browses it; this is what starts it. -->
+                        <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,*,Auto" Margin="2,8,2,8"
+                              IsVisible="{Binding !IsBrowsingSources}">
+                            <Border Grid.Column="0" Classes="art-frame" Width="72" Height="72" Margin="0,0,12,0"
+                                    IsVisible="{Binding CurrentSourceRow.HasCover}">
+                                <Grid>
+                                    <PathIcon Data="{Binding CurrentSourceRow.Icon}" Width="26" Height="26" Opacity="0.35"
+                                              HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              IsVisible="{Binding CurrentSourceRow.Cover, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                    <Image Source="{Binding CurrentSourceRow.Cover}" Stretch="UniformToFill"
+                                           RenderOptions.BitmapInterpolationMode="HighQuality"
+                                           IsVisible="{Binding CurrentSourceRow.Cover, Converter={StaticResource NullToBool}}" />
+                                </Grid>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding CurrentSourceRow.SummaryText}"
+                                       FontSize="12" Opacity="0.65" VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                            <Button Grid.Column="2" Classes="play-pause" Width="44" Height="44" CornerRadius="22"
+                                    Command="{Binding PlayCurrentSourceCommand}"
+                                    ToolTip.Tip="{Binding CurrentSourceRow.IsPlayingNow, Converter={x:Static conv:PlayPauseTipConverter.Instance}}">
+                                <Grid Width="18" Height="18">
+                                    <PathIcon Data="{x:Static app:Icons.Play}" Width="18" Height="18"
+                                              IsVisible="{Binding !CurrentSourceRow.IsPlayingNow}">
+                                        <PathIcon.RenderTransform>
+                                            <TranslateTransform X="1" />
+                                        </PathIcon.RenderTransform>
+                                    </PathIcon>
+                                    <PathIcon Data="{x:Static app:Icons.Pause}" Width="18" Height="18"
+                                              IsVisible="{Binding CurrentSourceRow.IsPlayingNow}" />
+                                </Grid>
+                            </Button>
+                        </Grid>
+
                         <!-- Search & Sort Bar -->
                         <Grid DockPanel.Dock="Top" RowDefinitions="Auto,Auto" Margin="0,0,0,8" IsVisible="{Binding !IsBrowsingSources}">
                             <TextBox Grid.Row="0" Text="{Binding SearchText}" PlaceholderText="Search…"
@@ -227,6 +261,7 @@
                             <!-- Source menu: All Songs, then each library folder, then playlists -->
                             <ListBox x:Name="SourceList" Grid.Row="0" Classes="flat-list library-scroll"
                                      ItemsSource="{Binding LibrarySources}"
+                                     ContainerPrepared="OnSourceContainerPrepared"
                                      IsVisible="{Binding IsBrowsingSources}" Tapped="OnSourceTapped">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:LibrarySourceRow">
@@ -249,9 +284,34 @@
                                                 </ContextMenu>
                                             </Border.ContextMenu>
                                             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
-                                                <PathIcon Grid.Column="0" Width="16" Height="16" Opacity="0.7"
-                                                          VerticalAlignment="Center"
-                                                          Data="{Binding Icon}" />
+                                                <Grid Grid.Column="0" Width="44" Height="44">
+                                                    <Border Classes="art-frame">
+                                                        <Grid>
+                                                            <PathIcon Width="18" Height="18" Opacity="0.55"
+                                                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                      Data="{Binding Icon}"
+                                                                      IsVisible="{Binding Cover, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                                            <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                                                                   RenderOptions.BitmapInterpolationMode="HighQuality"
+                                                                   IsVisible="{Binding Cover, Converter={StaticResource NullToBool}}" />
+                                                        </Grid>
+                                                    </Border>
+                                                    <Button Classes="cover-play"
+                                                            Command="{Binding #Root.DataContext.PlaySourceRowCommand}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip.Tip="{Binding IsPlayingNow, Converter={x:Static conv:PlayPauseTipConverter.Instance}}">
+                                                        <Grid Width="13" Height="13">
+                                                            <PathIcon Data="{x:Static app:Icons.Play}" Width="13" Height="13"
+                                                                      IsVisible="{Binding !IsPlayingNow}">
+                                                                <PathIcon.RenderTransform>
+                                                                    <TranslateTransform X="1" />
+                                                                </PathIcon.RenderTransform>
+                                                            </PathIcon>
+                                                            <PathIcon Data="{x:Static app:Icons.Pause}" Width="13" Height="13"
+                                                                      IsVisible="{Binding IsPlayingNow}" />
+                                                        </Grid>
+                                                    </Button>
+                                                </Grid>
                                                 <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding Name}" Classes="queue-title"
                                                                TextTrimming="CharacterEllipsis" />

@@ -85,9 +85,10 @@ public partial class MainWindowViewModel
 
         SettingsService.Save(_settings);
 
+        SyncPlaybackSourceWithView();
         if (!Shuffled)
         {
-            _queue.RestoreOrderKeepingCurrent(SortedActiveSongs);
+            _queue.RestoreOrderKeepingCurrent(SortedPlaybackSongs);
             RefreshQueueRows();
         }
 

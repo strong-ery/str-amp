@@ -1465,6 +1465,12 @@ public partial class MainWindow : Window
             ViewModel?.JumpToQueueRowCommand.Execute(row);
     }
 
+    private void OnSourceContainerPrepared(object? sender, ContainerPreparedEventArgs e)
+    {
+        if (e.Container.DataContext is LibrarySourceRow source)
+            ViewModel?.LoadSourceCover(source);
+    }
+
     private void OnSourceTapped(object? sender, TappedEventArgs e)
     {
         if ((e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null)
