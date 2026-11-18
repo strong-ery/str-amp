@@ -25,14 +25,15 @@ public partial class MainWindowViewModel
         IsStatusVisible = true;
         var cts = new CancellationTokenSource();
         _statusVisibilityCts = cts;
-        _ = HideStatusAfterDelayAsync(cts.Token);
+        _ = HideStatusAfterDelayAsync(value.Length, cts.Token);
     }
 
-    private async Task HideStatusAfterDelayAsync(CancellationToken ct)
+    private async Task HideStatusAfterDelayAsync(int messageLength, CancellationToken ct)
     {
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(3.5), ct);
+            // Longer messages (mostly errors) need longer to read.
+            await Task.Delay(TimeSpan.FromSeconds(Math.Min(3.5 + messageLength * 0.04, 9)), ct);
             IsStatusVisible = false;
         }
         catch (TaskCanceledException)

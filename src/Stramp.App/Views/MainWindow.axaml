@@ -1897,9 +1897,11 @@
             </Border>
         </Border>
 
-        <!-- Transient status toast: fades in on a new message, fades out on its own a few
-             seconds later (see MainWindowViewModel's IsStatusVisible). -->
-        <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,18,18"
+        <!-- Transient status toast: a themed card in the bottom-right that fades in on a new message
+             and out on its own (see MainWindowViewModel's IsStatusVisible). Long messages wrap
+             instead of being cut off. -->
+        <Border Classes="toast-card" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="0,0,18,18" MaxWidth="380"
                 IsHitTestVisible="False"
                 Opacity="{Binding IsStatusVisible, Converter={StaticResource FadeOpacity}}">
             <Border.Transitions>
@@ -1907,8 +1909,12 @@
                     <DoubleTransition Property="Opacity" Duration="0:0:0.4" Easing="CubicEaseOut" />
                 </Transitions>
             </Border.Transitions>
-            <TextBlock Text="{Binding StatusText}" Foreground="White" FontSize="12"
-                       TextTrimming="CharacterEllipsis" MaxWidth="360" />
+            <Grid ColumnDefinitions="Auto,*">
+                <Border Width="3" Background="{DynamicResource AppAccentBrush}" />
+                <TextBlock Grid.Column="1" Text="{Binding StatusText}" FontSize="12"
+                           TextWrapping="Wrap" MaxLines="8" TextTrimming="CharacterEllipsis"
+                           Margin="12,10,14,10" />
+            </Grid>
         </Border>
     </Panel>
 </Window>

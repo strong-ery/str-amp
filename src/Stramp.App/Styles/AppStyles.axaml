@@ -414,6 +414,16 @@
     <Setter Property="CornerRadius" Value="14" />
     <Setter Property="BoxShadow" Value="0 18 50 0 #90000000" />
   </Style>
+  <!-- Transient status toast; same surface as the dialogs and menus, clipped so the accent
+       strip follows the rounded corners. -->
+  <Style Selector="Border.toast-card">
+    <Setter Property="Background" Value="{DynamicResource AppDialogBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AppSubtleBackgroundBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="BoxShadow" Value="0 10 28 0 #80000000" />
+  </Style>
   <Style Selector="TextBlock.dialog-title">
     <Setter Property="FontSize" Value="17" />
     <Setter Property="FontWeight" Value="Bold" />
