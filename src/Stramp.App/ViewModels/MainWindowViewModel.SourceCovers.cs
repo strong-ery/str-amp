@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 
 namespace Stramp.App.ViewModels;
 public partial class MainWindowViewModel
@@ -27,7 +28,23 @@ public partial class MainWindowViewModel
     /// <summary>Builds the automatic collage (or takes it from the cache).</summary>
     private void StartCollage(LibrarySourceRow source)
     {
-        var candidates = source.CoverCandidatePaths();
+        // A playlist is small. The library-wide sources would walk every song, so they pick off-thread.
+        if (source.Kind == LibrarySourceKind.Playlist)
+        {
+            StartCollage(source, source.CoverCandidatePaths());
+            return;
+        }
+
+        _ = Task.Run(() => source.CoverCandidatePaths()).ContinueWith(
+            picked => Dispatcher.UIThread.Post(() =>
+            {
+                if (!_disposed && picked.IsCompletedSuccessfully)
+                    StartCollage(source, picked.Result);
+            }), TaskScheduler.Default);
+    }
+
+    private void StartCollage(LibrarySourceRow source, IReadOnlyList<string> candidates)
+    {
         if (candidates.Count == 0)
             return;
 

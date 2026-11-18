@@ -73,8 +73,17 @@ public sealed partial class LibrarySourceRow(
     /// doesn't become four copies of the same picture. A playlist uses its own order (so the
     /// cover is its first albums). All Songs has no meaningful order, so it picks by a hash of the
     /// album: the same albums win no matter how the library happens to be scanned.</summary>
-    internal IReadOnlyList<string> CoverCandidatePaths() =>
-        Kind == LibrarySourceKind.Playlist ? FirstSongPerAlbum() : StableSongPerAlbum();
+    internal IReadOnlyList<string> CoverCandidatePaths()
+    {
+        if (Kind == LibrarySourceKind.Playlist)
+            return FirstSongPerAlbum();
+
+        // All Songs and folders cover the whole library, which can be 100K songs: the pick is
+        // made once per scan (these rows are rebuilt by every scan) and never on the UI thread.
+        return _stableCandidates ??= StableSongPerAlbum();
+    }
+
+    private IReadOnlyList<string>? _stableCandidates;
 
     private List<string> StableSongPerAlbum()
     {

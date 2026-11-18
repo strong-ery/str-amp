@@ -10,18 +10,23 @@ namespace Stramp.App.Services;
 public sealed class LoudnessNormalizationService : IDisposable
 {
     private const int BackgroundWorkers = 2;
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
     private readonly object _gate = new();
     private readonly string _cachePath = Path.Combine(SettingsService.ConfigDirectory, "loudness-cache.json");
     private readonly SemaphoreSlim _analysisSlots = new(BackgroundWorkers + 1);
     private readonly CancellationTokenSource _shutdown = new();
     private readonly ConcurrentDictionary<string, Lazy<Task<TrackLoudness?>>> _inFlight =
         new(StringComparer.OrdinalIgnoreCase);
-    private Dictionary<string, CacheEntry> _entries;
+    private readonly object _saveFileGate = new();
+    private readonly Lazy<Dictionary<string, CacheEntry>> _lazyEntries;
+
+    // A big library's cache is a large file; it is read by whichever background thread needs it
+    // first instead of while the main window is being built.
+    private Dictionary<string, CacheEntry> _entries => _lazyEntries.Value;
 
     public LoudnessNormalizationService()
     {
-        _entries = LoadCache();
+        _lazyEntries = new Lazy<Dictionary<string, CacheEntry>>(LoadCache, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     public bool TryGetGainDb(
@@ -140,8 +145,9 @@ public sealed class LoudnessNormalizationService : IDisposable
                     IntegratedLufs = loudness.IntegratedLufs,
                     TruePeakDbTp = loudness.TruePeakDbTp,
                 };
-                SaveCache();
             }
+
+            ScheduleCacheSave();
 
             return loudness;
         }
@@ -158,8 +164,8 @@ public sealed class LoudnessNormalizationService : IDisposable
             if (!File.Exists(_cachePath))
                 return new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
 
-            var json = File.ReadAllText(_cachePath);
-            var stored = JsonSerializer.Deserialize<Dictionary<string, CacheEntry>>(json, JsonOptions);
+            using var stream = File.OpenRead(_cachePath);
+            var stored = JsonSerializer.Deserialize<Dictionary<string, CacheEntry>>(stream, JsonOptions);
             return stored is null
                 ? new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, CacheEntry>(stored, StringComparer.OrdinalIgnoreCase);
@@ -170,14 +176,40 @@ public sealed class LoudnessNormalizationService : IDisposable
         }
     }
 
+    private int _saveScheduled;
+
+    /// <summary>Measurements arrive one track at a time, and with a big library the cache is a
+    /// large file: rewriting it per track (while holding the lock playback needs) froze the app and
+    /// cost quadratic disk writes. Saves are batched a few seconds apart instead.</summary>
+    private void ScheduleCacheSave()
+    {
+        if (Interlocked.Exchange(ref _saveScheduled, 1) == 1)
+            return;
+
+        _ = Task.Delay(TimeSpan.FromSeconds(5)).ContinueWith(_ =>
+        {
+            Interlocked.Exchange(ref _saveScheduled, 0);
+            SaveCache();
+        }, TaskScheduler.Default);
+    }
+
     private void SaveCache()
     {
         try
         {
+            // Copy under the lock (quick), write outside it: playback also needs the lock.
+            Dictionary<string, CacheEntry> snapshot;
+            lock (_gate)
+                snapshot = new Dictionary<string, CacheEntry>(_entries);
+
             Directory.CreateDirectory(SettingsService.ConfigDirectory);
-            var temporaryPath = _cachePath + ".tmp";
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(_entries, JsonOptions));
-            File.Move(temporaryPath, _cachePath, overwrite: true);
+            lock (_saveFileGate)
+            {
+                var temporaryPath = _cachePath + ".tmp";
+                using (var stream = File.Create(temporaryPath))
+                    JsonSerializer.Serialize(stream, snapshot, JsonOptions);
+                File.Move(temporaryPath, _cachePath, overwrite: true);
+            }
         }
         catch
         {
@@ -216,5 +248,10 @@ public sealed class LoudnessNormalizationService : IDisposable
         public double TruePeakDbTp { get; init; }
     }
 
-    public void Dispose() => _shutdown.Cancel();
+    public void Dispose()
+    {
+        _shutdown.Cancel();
+        if (Volatile.Read(ref _saveScheduled) == 1)
+            SaveCache();
+    }
 }

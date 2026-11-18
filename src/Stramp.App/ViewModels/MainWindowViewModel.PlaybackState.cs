@@ -12,7 +12,10 @@ public partial class MainWindowViewModel
         if (state is null || !PlaybackStateMatchesLibrary(state))
             return false;
 
-        var savedActiveSongs = PlaylistScanner.ResolveSongs(state.ActiveSongPaths, _library);
+        var savedActiveSongs = _restoreActiveSongs
+                               ?? PlaylistScanner.ResolveSongs(state.ActiveSongPaths, _libraryIndex);
+        var preResolvedQueue = _restoreQueueSongs;
+        _restoreActiveSongs = _restoreQueueSongs = null;
         var namedSource = LibrarySources.FirstOrDefault(source =>
             string.Equals(source.Name, state.SourceName, StringComparison.OrdinalIgnoreCase));
 
@@ -31,10 +34,11 @@ public partial class MainWindowViewModel
         UpdateSortOptionsForCurrentSource(state.SortOption);
         UpdateDisplayedSongs();
         SnapshotPlaybackSource();
+        SeedSortedPlayback();
 
         Shuffled = state.Shuffled;
         LoopMode = state.LoopMode;
-        var restoredQueue = PlaylistScanner.ResolveSongs(state.QueuePaths, _library);
+        var restoredQueue = preResolvedQueue ?? PlaylistScanner.ResolveSongs(state.QueuePaths, _libraryIndex);
         if (restoredQueue.Count > 0)
         {
             var position = state.QueuePosition;
@@ -61,6 +65,33 @@ public partial class MainWindowViewModel
         _playbackStateReady = true;
         LoadCurrent(autoPlay: false, resumePositionSeconds: state.PositionSeconds);
         return true;
+    }
+
+    /// <summary>Uses the order prepared off-thread as the playing source's sorted list, when it is
+    /// what the sorted list would be anyway: All Songs, same sort, same songs.</summary>
+    private void SeedSortedPlayback()
+    {
+        var prepared = _restoreSortedLibrary;
+        _restoreSortedLibrary = null;
+        if (prepared is not { } ready
+            || !ReferenceEquals(_activeSongs, _library)
+            || _playbackSort != ready.Sort
+            || _playbackSongs.Count != ready.Sorted.Count)
+            return;
+
+        UseSortedPlayback(ready.Sorted, ready.Sort);
+    }
+
+    /// <summary>Adopts an already-sorted copy of the playing source, if it really is that order of it.</summary>
+    private void UseSortedPlayback(List<Song> sorted, LibrarySortOption sort)
+    {
+        if (_playbackSort != sort || _playbackSongs.Count != sorted.Count)
+            return;
+
+        _sortedPlaybackCache = sorted;
+        _sortedPlaybackFor = _playbackSongs;
+        _sortedPlaybackCount = _playbackSongs.Count;
+        _sortedPlaybackSort = sort;
     }
 
     private static List<Song> ResolveSongs(
@@ -92,7 +123,53 @@ public partial class MainWindowViewModel
         return normalizedSaved.SetEquals(_libraryPaths);
     }
 
-    private void SavePlaybackState(bool force = false)
+    private readonly object _stateWriteGate = new();
+    private SavedPlaybackState? _pendingState;
+    private int _stateWriterRunning;
+
+    /// <summary>Writes the snapshot on a background thread, newest wins: with a huge library the
+    /// file is tens of MB and must not be serialized and written on the UI thread. Exit writes
+    /// synchronously so the last state is on disk before the process ends.</summary>
+    private void WritePlaybackState(SavedPlaybackState state, bool wait)
+    {
+        if (wait)
+        {
+            Interlocked.Exchange(ref _pendingState, null);
+            lock (_stateWriteGate)
+                _playbackStateStore.Save(state);
+            return;
+        }
+
+        Volatile.Write(ref _pendingState, state);
+        if (Interlocked.Exchange(ref _stateWriterRunning, 1) == 0)
+            _ = Task.Run(DrainPlaybackStateWrites);
+    }
+
+    private void DrainPlaybackStateWrites()
+    {
+        do
+        {
+            while (Interlocked.Exchange(ref _pendingState, null) is { } next)
+            {
+                lock (_stateWriteGate)
+                {
+                    try
+                    {
+                        _playbackStateStore.Save(next);
+                    }
+                    catch
+                    {
+                        // State persistence should never interrupt playback (read-only drives, full disk, etc.).
+                    }
+                }
+            }
+
+            Volatile.Write(ref _stateWriterRunning, 0);
+        } while (Volatile.Read(ref _pendingState) is not null
+                 && Interlocked.Exchange(ref _stateWriterRunning, 1) == 0);
+    }
+
+    private void SavePlaybackState(bool force = false, bool wait = false)
     {
         if (!_playbackStateReady || _library.Count == 0 || _disposed)
             return;
@@ -104,7 +181,7 @@ public partial class MainWindowViewModel
         var currentPath = _queue.Current?.Path;
         var activeSourcePosition = currentPath is null
             ? 0
-            : SortedPlaybackSongs.ToList().FindIndex(song => string.Equals(
+            : SortedPlaybackList.FindIndex(song => string.Equals(
                 song.Path, currentPath, StringComparison.OrdinalIgnoreCase));
         var state = new SavedPlaybackState
         {
@@ -134,7 +211,7 @@ public partial class MainWindowViewModel
 
         try
         {
-            _playbackStateStore.Save(state);
+            WritePlaybackState(state, wait);
             _lastPlaybackStateSaveUtc = now;
         }
         catch

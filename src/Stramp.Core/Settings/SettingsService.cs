@@ -7,8 +7,12 @@ public static class SettingsService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
+    /// <summary>Where settings and caches live. STRAMP_CONFIG_DIR redirects it, so test runs
+    /// (stress tests against a huge synthetic library) never touch real data.</summary>
     public static string ConfigDirectory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "stramp");
+        Environment.GetEnvironmentVariable("STRAMP_CONFIG_DIR") is { Length: > 0 } overridden
+            ? overridden
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "stramp");
 
     private static string SettingsPath => Path.Combine(ConfigDirectory, "config.json");
 

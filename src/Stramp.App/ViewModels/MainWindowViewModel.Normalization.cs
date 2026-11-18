@@ -1,4 +1,5 @@
 using Avalonia.Threading;
+using Stramp.Core.Models;
 
 namespace Stramp.App.ViewModels;
 public partial class MainWindowViewModel
@@ -67,27 +68,32 @@ public partial class MainWindowViewModel
             return;
 
         _normalizationWarmupCts = new CancellationTokenSource();
-        var prioritizedPaths = BuildNormalizationCacheOrder();
-        _ = _loudnessNormalizer.CacheLibraryAsync(
-            prioritizedPaths, _normalizationWarmupCts.Token);
+        var token = _normalizationWarmupCts.Token;
+
+        // Snapshots are taken here; ordering 100K paths happens on a worker, not the UI thread.
+        var queue = _queue.Songs.ToArray();
+        var queueStart = Math.Clamp(_queue.Position, 0, queue.Length);
+        var library = _library.ToArray();
+        _ = Task.Run(() => _loudnessNormalizer.CacheLibraryAsync(
+            BuildNormalizationCacheOrder(queue, queueStart, library), token), token);
     }
 
-    private IReadOnlyList<string> BuildNormalizationCacheOrder()
+    private static IReadOnlyList<string> BuildNormalizationCacheOrder(
+        Song[] queue, int queueStart, Song[] library)
     {
-        var paths = new List<string>(_library.Count);
+        var paths = new List<string>(library.Length);
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Cache what will play next first. Once the queue is exhausted, sweep every remaining
         // library track so leaving STRAMP open eventually produces a complete disk cache.
-        var queueStart = Math.Clamp(_queue.Position, 0, _queue.Songs.Count);
-        for (var index = queueStart; index < _queue.Songs.Count; index++)
+        for (var index = queueStart; index < queue.Length; index++)
         {
-            var path = _queue.Songs[index].Path;
+            var path = queue[index].Path;
             if (seen.Add(path))
                 paths.Add(path);
         }
 
-        foreach (var song in _library)
+        foreach (var song in library)
         {
             if (seen.Add(song.Path))
                 paths.Add(song.Path);

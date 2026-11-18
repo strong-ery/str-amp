@@ -6,7 +6,7 @@ namespace Stramp.Core.Playback;
 /// <summary>Loads and atomically saves playback state separately from user preferences.</summary>
 public sealed class PlaybackStateStore
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
     private readonly string _statePath;
 
     public PlaybackStateStore(string? statePath = null)
@@ -23,7 +23,8 @@ public sealed class PlaybackStateStore
             if (!File.Exists(_statePath))
                 return null;
 
-            var state = JsonSerializer.Deserialize<SavedPlaybackState>(File.ReadAllText(_statePath));
+            using var stream = File.OpenRead(_statePath);
+            var state = JsonSerializer.Deserialize<SavedPlaybackState>(stream);
             return state is { Version: 1 } ? state : null;
         }
         catch
@@ -43,7 +44,8 @@ public sealed class PlaybackStateStore
         var temporaryPath = _statePath + ".tmp";
         try
         {
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(state, JsonOptions));
+            using (var stream = File.Create(temporaryPath))
+                JsonSerializer.Serialize(stream, state, JsonOptions);
             File.Move(temporaryPath, _statePath, overwrite: true);
         }
         finally

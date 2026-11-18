@@ -47,6 +47,12 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
     private List<Playlist> _discoveredPlaylists = [];
     private readonly List<string> _libraryPaths = [];
     private SavedPlaybackState? _savedPlaybackState;
+    private Task<SavedPlaybackState?>? _savedPlaybackStateTask;
+    private List<Song>? _restoreQueueSongs;
+    private (List<Song> Sorted, LibrarySortOption Sort)? _restoreSortedLibrary;
+    private List<Song>? _restoreActiveSongs;
+    private Dictionary<string, Song> _libraryIndex = new(StringComparer.OrdinalIgnoreCase);
+    private Dictionary<string, List<Song>> _folderSongs = new(StringComparer.OrdinalIgnoreCase);
     private double _resumePositionSeconds;
     private DateTime _lastPlaybackStateSaveUtc = DateTime.MinValue;
     private bool _playbackStateReady;
@@ -340,7 +346,8 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         _playbackStateStore = playbackStateStore ?? new PlaybackStateStore();
         _listeningHistoryStore = listeningHistoryStore ?? new ListeningHistoryStore();
         _listeningHistory = _listeningHistoryStore.Load();
-        _savedPlaybackState = _playbackStateStore.Load();
+        // The saved queue of a big library is a large file: read it while the library scans.
+        _savedPlaybackStateTask = Task.Run(() => _playbackStateStore.Load());
 
         if (_listeningHistory.TotalSecondsListened == 0 && _settings.TotalListenedSeconds > 0)
         {
@@ -438,7 +445,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
         {
             _listeningHistoryStore.Save(_listeningHistory);
         }
-        SavePlaybackState(force: true);
+        SavePlaybackState(force: true, wait: true);
         _disposed = true;
         _libraryScanCts?.Cancel();
         CancelNormalizationAnalysis();

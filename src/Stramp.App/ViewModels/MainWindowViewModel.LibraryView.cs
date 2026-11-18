@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.Input;
 using Stramp.Core.Library;
 using Stramp.Core.Models;
@@ -130,11 +131,42 @@ public partial class MainWindowViewModel
     private IEnumerable<Song> SortedActiveSongs => GetSortedSongs(_activeSongs);
 
     /// <summary>The playing source in the order it was started in; queue rebuilds follow this.</summary>
-    private IEnumerable<Song> SortedPlaybackSongs => GetSortedSongs(_playbackSongs, _playbackSort);
+    private IEnumerable<Song> SortedPlaybackSongs => SortedPlaybackList;
 
-    private IEnumerable<Song> GetSortedSongs(IEnumerable<Song> songs, LibrarySortOption? sort = null)
+    private List<Song>? _sortedPlaybackCache;
+    private List<Song>? _sortedPlaybackFor;
+    private int _sortedPlaybackCount;
+    private LibrarySortOption _sortedPlaybackSort;
+
+    /// <summary>The playing source in its order. Sorting 100K songs takes real time and the queue
+    /// asks for this on every track change and save, so it is reused until the source or its sort
+    /// changes. Sources are replaced (never reordered in place) when they change, and removals
+    /// change the count, so identity + count + sort identify the same ordering.</summary>
+    private List<Song> SortedPlaybackList
     {
-        return (sort ?? SelectedSortOption?.Option) switch
+        get
+        {
+            if (_sortedPlaybackCache is null
+                || !ReferenceEquals(_sortedPlaybackFor, _playbackSongs)
+                || _sortedPlaybackCount != _playbackSongs.Count
+                || _sortedPlaybackSort != _playbackSort)
+            {
+                _sortedPlaybackCache = GetSortedSongs(_playbackSongs, _playbackSort).ToList();
+                _sortedPlaybackFor = _playbackSongs;
+                _sortedPlaybackCount = _playbackSongs.Count;
+                _sortedPlaybackSort = _playbackSort;
+            }
+
+            return _sortedPlaybackCache;
+        }
+    }
+
+    private IEnumerable<Song> GetSortedSongs(IEnumerable<Song> songs, LibrarySortOption? sort = null) =>
+        SortSongs(songs, sort ?? SelectedSortOption?.Option);
+
+    private static IEnumerable<Song> SortSongs(IEnumerable<Song> songs, LibrarySortOption? sort)
+    {
+        return sort switch
         {
             LibrarySortOption.Album => songs
                 .OrderBy(s => s.Album, StringComparer.OrdinalIgnoreCase)
@@ -155,14 +187,46 @@ public partial class MainWindowViewModel
         };
     }
 
+    /// <summary>Lists longer than this are sorted, searched and turned into rows off the UI thread,
+    /// so opening or searching a huge source never stalls the window.</summary>
+    private const int BackgroundListThreshold = 3000;
+
+    private int _displayVersion;
+
     private void UpdateDisplayedSongs()
     {
-        var sorted = SortedActiveSongs;
-        var q = SearchText.Trim();
-        var filtered = string.IsNullOrEmpty(q)
-            ? sorted
-            : LibrarySearch.Rank(sorted, q);
-        PopulateLibraryRows(filtered);
+        var query = SearchText.Trim();
+        if (_activeSongs.Count < BackgroundListThreshold)
+        {
+            var sorted = SortedActiveSongs;
+            PopulateLibraryRows(string.IsNullOrEmpty(query) ? sorted : LibrarySearch.Rank(sorted, query));
+            return;
+        }
+
+        // Snapshot what the background work reads; a newer request makes this one stale.
+        var version = ++_displayVersion;
+        var songs = _activeSongs.ToArray();
+        var sort = SelectedSortOption?.Option;
+        var typing = !string.IsNullOrEmpty(query);
+        _ = Task.Run(async () =>
+        {
+            // Typing fires this on every keystroke: wait for a pause before working on 100K songs.
+            if (typing)
+                await Task.Delay(150);
+            if (version != Volatile.Read(ref _displayVersion))
+                return null;
+
+            var ordered = SortSongs(songs, sort);
+            var shown = typing ? LibrarySearch.Rank(ordered, query) : ordered;
+            return shown.Select(song => new SongRow(song)).ToList();
+        }).ContinueWith(task => Dispatcher.UIThread.Post(() =>
+        {
+            if (version != _displayVersion || _disposed || !task.IsCompletedSuccessfully || task.Result is not { } rows)
+                return;
+
+            LibraryRows.ReplaceAll(rows);
+            RefreshCurrentHighlight();
+        }), TaskScheduler.Default);
     }
 
     [RelayCommand]

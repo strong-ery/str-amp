@@ -13,15 +13,33 @@ public partial class MainWindowViewModel
         CancelNormalizationWarmup();
 
         var sourcePaths = _libraryPaths.ToArray();
+
+        // A big library takes a while to read: say how far along it is instead of sitting silent.
+        var scanProgress = new Progress<LibraryScanProgress>(report =>
+        {
+            if (ReferenceEquals(_libraryScanCts, scan))
+                StatusText = report.ReadingTags
+                    ? $"Reading tags… {report.Read:N0} of {report.Found:N0} songs"
+                    : $"Looking for songs… {report.Found:N0} found";
+        });
         var effectivePlDir = EffectivePlaylistsDirectory;
         List<Song> scannedSongs;
         List<Playlist> scannedPlaylists;
+        Dictionary<string, Song> scannedIndex;
+        Dictionary<string, List<Song>> scannedFolderSongs;
+        List<Song> scannedByArtist;
         try
         {
-            (scannedSongs, scannedPlaylists) = await Task.Run(() =>
+            (scannedSongs, scannedPlaylists, scannedIndex, scannedFolderSongs, scannedByArtist) = await Task.Run(() =>
             {
                 var songs = LibraryScanner.Scan(sourcePaths, scan.Token,
-                    _settings.CacheLibraryMetadata ? _libraryMetadataCache : null);
+                    _settings.CacheLibraryMetadata ? _libraryMetadataCache : null, scanProgress);
+                // Everything that only needs the scanned songs is prepared here, off the UI thread.
+                var index = PlaylistScanner.IndexByPath(songs);
+                var folderSongs = sourcePaths.Length > 1
+                    ? sourcePaths.Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(path => path, path => SongsUnder(songs, path), StringComparer.OrdinalIgnoreCase)
+                    : [];
                 var playlists = new List<Playlist>();
                 var scannedDirPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var path in sourcePaths.Where(Directory.Exists))
@@ -29,7 +47,7 @@ public partial class MainWindowViewModel
                     scan.Token.ThrowIfCancellationRequested();
                     var fullSource = Path.GetFullPath(path);
                     scannedDirPaths.Add(fullSource);
-                    playlists.AddRange(PlaylistScanner.Scan(fullSource, songs));
+                    playlists.AddRange(PlaylistScanner.Scan(fullSource, index));
                 }
 
                 if (Directory.Exists(effectivePlDir))
@@ -39,11 +57,13 @@ public partial class MainWindowViewModel
                                                     fullPlDir.StartsWith(src.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
                     {
                         scan.Token.ThrowIfCancellationRequested();
-                        playlists.AddRange(PlaylistScanner.Scan(fullPlDir, songs));
+                        playlists.AddRange(PlaylistScanner.Scan(fullPlDir, index));
                     }
                 }
 
-                return (songs, playlists);
+                // The default order, ready for the first queue build and playback-state save.
+                var byArtist = SortSongs(songs, LibrarySortOption.Artist).ToList();
+                return (songs, playlists, index, folderSongs, byArtist);
             }, scan.Token);
             scan.Token.ThrowIfCancellationRequested();
         }
@@ -70,6 +90,36 @@ public partial class MainWindowViewModel
         if (_disposed)
             return;
 
+        if (restorePlaybackState && _savedPlaybackStateTask is { } stateTask)
+        {
+            _savedPlaybackStateTask = null;
+            _savedPlaybackState = await stateTask;
+
+            // Matching 100K saved paths against the library is real work: do it here, off the UI thread.
+            if (_savedPlaybackState is { } saved)
+            {
+                (_restoreQueueSongs, _restoreActiveSongs, _restoreSortedLibrary) = await Task.Run(() =>
+                {
+                    var queue = PlaylistScanner.ResolveSongs(saved.QueuePaths ?? [], scannedIndex);
+                    var active = PlaylistScanner.ResolveSongs(saved.ActiveSongPaths ?? [], scannedIndex);
+
+                    // The usual case: the playing source is All Songs. Sort it now, so the first
+                    // playback-state save doesn't have to sort the whole library on the UI thread.
+                    (List<Song>, LibrarySortOption)? sorted = null;
+                    if (string.Equals(saved.SourceName, "All Songs", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var sort = Enum.TryParse<LibrarySortOption>(saved.SortOption, out var parsed)
+                            ? parsed : LibrarySortOption.Artist;
+                        if (sort != LibrarySortOption.Playlist)
+                            sorted = (sort == LibrarySortOption.Artist
+                                ? scannedByArtist : SortSongs(scannedSongs, sort).ToList(), sort);
+                    }
+
+                    return (queue, active, sorted);
+                });
+            }
+        }
+
         // Capture playback after the potentially long scan so advancing tracks while it runs is
         // never undone when the new library is installed.
         var previousQueue = preservePlayback ? _queue.Songs.ToList() : [];
@@ -77,6 +127,8 @@ public partial class MainWindowViewModel
         var previousQueuePosition = _queue.Position;
 
         _library = scannedSongs;
+        _libraryIndex = scannedIndex;
+        _folderSongs = scannedFolderSongs;
         _discoveredPlaylists = scannedPlaylists;
         EnsurePlaylistsOnDisk();
         PopulateSources();
@@ -121,11 +173,12 @@ public partial class MainWindowViewModel
             _playbackSort = SelectedSortOption?.Option ?? LibrarySortOption.Artist;
         }
         _playbackSongs = playbackSource is not null ? [.. playbackSource.Songs] : [.. _library];
+        if (playbackSource is null or { Kind: LibrarySourceKind.AllSongs })
+            UseSortedPlayback(scannedByArtist, LibrarySortOption.Artist);
 
         if (preservePlayback && previousQueue.Count > 0)
         {
-            var songsByPath = _library.ToDictionary(song => song.Path, StringComparer.OrdinalIgnoreCase);
-            var restoredQueue = ResolveSongs(previousQueue.Select(song => song.Path), songsByPath);
+            var restoredQueue = ResolveSongs(previousQueue.Select(song => song.Path), _libraryIndex);
             var seen = restoredQueue.Select(song => song.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
             restoredQueue.AddRange(SortedPlaybackSongs.Where(song => seen.Add(song.Path)));
 
@@ -158,7 +211,7 @@ public partial class MainWindowViewModel
         var playlists = new List<Playlist>();
         var playlistNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         // Prefer the first/imported copy when names collide across sources.
-        foreach (var playlist in PlaylistScanner.FromSaved(_settings.Playlists, _library)
+        foreach (var playlist in PlaylistScanner.FromSaved(_settings.Playlists, _libraryIndex)
                      .Concat(_discoveredPlaylists))
         {
             if (playlistNames.Add(playlist.Name))
@@ -177,7 +230,9 @@ public partial class MainWindowViewModel
             {
                 var name = UniqueFolderSourceName(path, takenNames);
                 takenNames.Add(name);
-                LibrarySources.Add(new LibrarySourceRow(name, SongsUnder(path), LibrarySourceKind.Folder));
+                LibrarySources.Add(new LibrarySourceRow(name,
+                    _folderSongs.TryGetValue(path, out var under) ? under : SongsUnder(_library, path),
+                    LibrarySourceKind.Folder));
             }
         }
 
@@ -192,11 +247,11 @@ public partial class MainWindowViewModel
 
     /// <summary>The scanned songs that live inside one configured library folder. Songs under a
     /// folder nested in another configured folder show up under both, which is what the paths say.</summary>
-    private List<Song> SongsUnder(string folder)
+    private static List<Song> SongsUnder(IReadOnlyList<Song> library, string folder)
     {
         var prefix = folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                      + Path.DirectorySeparatorChar;
-        return _library
+        return library
             .Where(song => NormalizeSeparators(song.Path)
                 .StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
             .ToList();

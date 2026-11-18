@@ -105,6 +105,9 @@ public partial class MainWindowViewModel
         }
 
         _library.RemoveAll(s => string.Equals(s.Path, song.Path, StringComparison.OrdinalIgnoreCase));
+        _libraryIndex.Remove(song.Path);
+        try { _libraryIndex.Remove(Path.GetFullPath(song.Path)); } catch { }
+        _folderSongs.Clear();
         _activeSongs.RemoveAll(s => string.Equals(s.Path, song.Path, StringComparison.OrdinalIgnoreCase));
         _playbackSongs.RemoveAll(s => string.Equals(s.Path, song.Path, StringComparison.OrdinalIgnoreCase));
         _queue.RemoveAllMatching(song.Path);

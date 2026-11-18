@@ -3,6 +3,10 @@ using Stramp.Core.Models;
 
 namespace Stramp.Core.Library;
 
+/// <summary>How far a library scan has got. While files are still being found, Found grows and
+/// ReadingTags is false; afterwards Read counts songs whose tags are done out of Found.</summary>
+public readonly record struct LibraryScanProgress(int Found, int Read, bool ReadingTags);
+
 /// <summary>Recursively finds audio files under a directory and reads their tags.</summary>
 public static class LibraryScanner
 {
@@ -21,10 +25,13 @@ public static class LibraryScanner
     public static List<Song> Scan(
         IEnumerable<string> musicDirs,
         CancellationToken cancellationToken,
-        LibraryMetadataCache? metadataCache = null)
+        LibraryMetadataCache? metadataCache = null,
+        IProgress<LibraryScanProgress>? progress = null)
     {
         var songs = new ConcurrentBag<Song>();
         var uncachedFiles = new List<FileInfo>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var lastReportMs = -1000L;
         var seenFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var musicDir in musicDirs)
@@ -54,6 +61,12 @@ public static class LibraryScanner
                         songs.Add(cached);
                     else
                         uncachedFiles.Add(file);
+
+                    if (progress is not null && clock.ElapsedMilliseconds - lastReportMs >= 150)
+                    {
+                        lastReportMs = clock.ElapsedMilliseconds;
+                        progress.Report(new LibraryScanProgress(songs.Count + uncachedFiles.Count, 0, false));
+                    }
                 }
             }
             catch (IOException)
@@ -66,6 +79,8 @@ public static class LibraryScanner
             }
         }
 
+        var total = songs.Count + uncachedFiles.Count;
+        var read = songs.Count;
         try
         {
             Parallel.ForEach(uncachedFiles, new ParallelOptions
@@ -77,6 +92,15 @@ public static class LibraryScanner
                 var song = ReadSong(file.FullName);
                 songs.Add(song);
                 metadataCache?.Put(file, song);
+
+                var done = Interlocked.Increment(ref read);
+                if (progress is not null)
+                {
+                    var now = clock.ElapsedMilliseconds;
+                    var last = Interlocked.Read(ref lastReportMs);
+                    if (now - last >= 150 && Interlocked.CompareExchange(ref lastReportMs, now, last) == last)
+                        progress.Report(new LibraryScanProgress(total, done, true));
+                }
             });
         }
         finally

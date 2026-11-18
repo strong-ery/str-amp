@@ -9,9 +9,11 @@ namespace Stramp.Core.Library;
 /// </summary>
 public static class PlaylistScanner
 {
-    public static List<Playlist> Scan(string musicDir, IReadOnlyList<Song> library)
+    public static List<Playlist> Scan(string musicDir, IReadOnlyList<Song> library) =>
+        Scan(musicDir, IndexByPath(library));
+
+    public static List<Playlist> Scan(string musicDir, Dictionary<string, Song> byPath)
     {
-        var byPath = IndexByPath(library);
         var playlists = new List<Playlist>();
 
         List<string> files;
@@ -100,9 +102,11 @@ public static class PlaylistScanner
     }
 
     /// <summary>Builds playlists from previously imported path lists without touching the original m3u.</summary>
-    public static List<Playlist> FromSaved(IEnumerable<SavedPlaylist> saved, IReadOnlyList<Song> library)
+    public static List<Playlist> FromSaved(IEnumerable<SavedPlaylist> saved, IReadOnlyList<Song> library) =>
+        FromSaved(saved, IndexByPath(library));
+
+    public static List<Playlist> FromSaved(IEnumerable<SavedPlaylist> saved, Dictionary<string, Song> byPath)
     {
-        var byPath = IndexByPath(library);
         var playlists = new List<Playlist>();
 
         foreach (var entry in saved)
@@ -133,13 +137,22 @@ public static class PlaylistScanner
     public static List<Song> ResolveSongs(IEnumerable<string> paths, IReadOnlyList<Song> library) =>
         ResolveSongs(paths, IndexByPath(library));
 
-    private static List<Song> ResolveSongs(IEnumerable<string> paths, Dictionary<string, Song> byPath)
+    public static List<Song> ResolveSongs(IEnumerable<string> paths, Dictionary<string, Song> byPath)
     {
         var songs = new List<Song>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var raw in paths)
         {
+            // Saved paths are nearly always the library's own, so look them up as they are before
+            // paying to normalize each one (and to touch the disk for the ones that are missing).
+            if (byPath.TryGetValue(raw, out var direct))
+            {
+                if (seen.Add(direct.Path))
+                    songs.Add(direct);
+                continue;
+            }
+
             string full;
             try
             {
@@ -175,7 +188,8 @@ public static class PlaylistScanner
         return songs;
     }
 
-    private static Dictionary<string, Song> IndexByPath(IReadOnlyList<Song> library)
+    /// <summary>Maps every library song by full path. Build it once per scan and share it.</summary>
+    public static Dictionary<string, Song> IndexByPath(IReadOnlyList<Song> library)
     {
         var byPath = new Dictionary<string, Song>(StringComparer.OrdinalIgnoreCase);
         foreach (var song in library)

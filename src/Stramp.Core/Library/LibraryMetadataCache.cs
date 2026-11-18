@@ -7,16 +7,20 @@ namespace Stramp.Core.Library;
 /// <summary>Persistent tag cache keyed by path, file length, and modification time.</summary>
 public sealed class LibraryMetadataCache
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = false };
     private readonly object _gate = new();
     private readonly string _cachePath;
-    private readonly Dictionary<string, CacheEntry> _entries;
+    private readonly Lazy<Dictionary<string, CacheEntry>> _lazyEntries;
+
+    // Reading a cache of a 100K-song library takes a noticeable moment, so it is loaded by the
+    // first scan (a background thread) rather than while the window is being built.
+    private Dictionary<string, CacheEntry> _entries => _lazyEntries.Value;
 
     public LibraryMetadataCache(string? cachePath = null)
     {
         _cachePath = cachePath ?? Path.Combine(
             SettingsService.ConfigDirectory, "library-metadata-cache.json");
-        _entries = Load();
+        _lazyEntries = new Lazy<Dictionary<string, CacheEntry>>(Load, LazyThreadSafetyMode.ExecutionAndPublication);
     }
 
     public bool TryGet(FileInfo file, out Song song)
@@ -85,7 +89,8 @@ public sealed class LibraryMetadataCache
             if (!string.IsNullOrWhiteSpace(directory))
                 Directory.CreateDirectory(directory);
             var temporaryPath = _cachePath + ".tmp";
-            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(snapshot, JsonOptions));
+            using (var stream = File.Create(temporaryPath))
+                JsonSerializer.Serialize(stream, snapshot, JsonOptions);
             File.Move(temporaryPath, _cachePath, overwrite: true);
         }
         catch
@@ -100,8 +105,8 @@ public sealed class LibraryMetadataCache
         {
             if (!File.Exists(_cachePath))
                 return new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase);
-            var stored = JsonSerializer.Deserialize<Dictionary<string, CacheEntry>>(
-                File.ReadAllText(_cachePath), JsonOptions);
+            using var stream = File.OpenRead(_cachePath);
+            var stored = JsonSerializer.Deserialize<Dictionary<string, CacheEntry>>(stream, JsonOptions);
             return stored is null
                 ? new Dictionary<string, CacheEntry>(StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, CacheEntry>(stored, StringComparer.OrdinalIgnoreCase);
