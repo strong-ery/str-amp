@@ -15,6 +15,7 @@ Many improvements!
 - Warning when ffmpeg isn't present (used for filetypes incompatible with WASAPI)
 - Lightweight markdown renderer for release notes. ( Like these ones :D ) - Issue 7
 - Playlist icons + the supporting features
+- A "check for updates" button
 
 ### Changed:
 - Fullscreen mode no longer extends past the screen bounds
@@ -25,6 +26,7 @@ Many improvements!
 - Improved playlist's and their associated UI/UX
 - Improved song delete popup UI
 - Improved many parts of the app to allow for libraries upwards and beyond 100,000 songs
+- Github preview release notes render as plaintext
 
 ## [v2.0.0] — Nov. 13, 2026
 Hello Everyone! We are excited to share the first official release of **str-amp** v2.0.0!
