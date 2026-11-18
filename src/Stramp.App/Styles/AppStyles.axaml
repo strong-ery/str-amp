@@ -698,6 +698,14 @@
     <Setter Property="Background" Value="{DynamicResource AppAccentBrushLight}" />
   </Style>
 
+  <Style Selector="Button.playlist-action-btn.danger">
+    <Setter Property="Background" Value="#E5484D" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.playlist-action-btn.danger:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#F0666B" />
+  </Style>
+
   <!-- Spotify's own green, which its branding asks sign-in buttons to use in every theme. -->
   <Style Selector="Button.spotify-sign-in">
     <Setter Property="Background" Value="#1DB954" />

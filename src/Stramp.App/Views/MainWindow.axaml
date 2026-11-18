@@ -1681,16 +1681,49 @@
              permanent song deletion) -->
         <Border x:Name="ConfirmScrim" Classes="dialog-scrim" IsVisible="{Binding IsConfirmDialogOpen}"
                 PointerPressed="OnConfirmScrimPressed">
+            <!-- Sits on the base background, a step darker than the other dialogs' raised surface. -->
             <Border Classes="dialog-card" Width="400" MaxWidth="400" Margin="16"
+                    Background="{DynamicResource AppBackgroundBrush}"
                     HorizontalAlignment="Center" VerticalAlignment="Center">
                 <StackPanel Margin="22" Spacing="14">
-                    <TextBlock Text="{Binding ConfirmDialogTitle}" Classes="dialog-title" />
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <Border Width="40" Height="40" CornerRadius="20" Background="#26E5484D"
+                                VerticalAlignment="Center">
+                            <PathIcon Data="{x:Static app:Icons.Delete}" Width="20" Height="20"
+                                      Foreground="#FF6B6F" />
+                        </Border>
+                        <TextBlock Text="{Binding ConfirmDialogTitle}" Classes="dialog-title"
+                                   VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <Border IsVisible="{Binding HasConfirmDialogDetail}" Padding="12,10" CornerRadius="10"
+                            Background="{DynamicResource AppSubtleBackgroundBrush}"
+                            BorderBrush="#40E5484D" BorderThickness="1">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Border Grid.Column="0" Width="46" Height="46" CornerRadius="6" ClipToBounds="True"
+                                    Background="{DynamicResource AppPlaceholderBackgroundBrush}">
+                                <Panel>
+                                    <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="20" Height="20" Opacity="0.35"
+                                              IsVisible="{Binding ConfirmDialogArt, Converter={StaticResource NullToBool}, ConverterParameter=invert}" />
+                                    <Image Source="{Binding ConfirmDialogArt}" Stretch="UniformToFill"
+                                           IsVisible="{Binding ConfirmDialogArt, Converter={StaticResource NullToBool}}" />
+                                </Panel>
+                            </Border>
+                            <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding ConfirmDialogDetail}" FontSize="13" FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding ConfirmDialogSubDetail}" FontSize="11" Opacity="0.6"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
                     <TextBlock Text="{Binding ConfirmDialogMessage}" TextWrapping="Wrap" FontSize="12"
-                               Foreground="#FF5C5C" />
+                               Opacity="0.7" />
                     <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="6" Margin="0,8,0,0">
                         <Button Grid.Column="1" Classes="playlist-action-btn" Content="Cancel"
                                 Command="{Binding CancelConfirmDialogCommand}" />
-                        <Button Grid.Column="2" Classes="playlist-action-btn primary"
+                        <Button Grid.Column="2" Classes="playlist-action-btn danger"
                                 Content="{Binding ConfirmDialogConfirmText}"
                                 Command="{Binding AcceptConfirmDialogCommand}" />
                     </Grid>

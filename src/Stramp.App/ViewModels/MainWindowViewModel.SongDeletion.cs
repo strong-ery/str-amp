@@ -9,6 +9,20 @@ public partial class MainWindowViewModel
     [ObservableProperty]
     public partial bool IsConfirmDialogOpen { get; set; }
 
+    /// <summary>What the dialog is about (a song's title), shown in its own card.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasConfirmDialogDetail))]
+    public partial string ConfirmDialogDetail { get; set; } = "";
+
+    [ObservableProperty]
+    public partial string ConfirmDialogSubDetail { get; set; } = "";
+
+    /// <summary>The song's album art, borrowed from its list row, for the detail card.</summary>
+    [ObservableProperty]
+    public partial Avalonia.Media.Imaging.Bitmap? ConfirmDialogArt { get; set; }
+
+    public bool HasConfirmDialogDetail => ConfirmDialogDetail.Length > 0;
+
     [ObservableProperty]
     public partial string ConfirmDialogTitle { get; set; } = "";
 
@@ -22,8 +36,13 @@ public partial class MainWindowViewModel
 
     /// <summary>A generic "are you sure" overlay: callers supply the wording and what happens on
     /// confirm, so one dialog serves any destructive action rather than each needing its own.</summary>
-    private void OpenConfirmDialog(string title, string message, string confirmText, Action onConfirm)
+    private void OpenConfirmDialog(
+        string title, string message, string confirmText, Action onConfirm,
+        string detail = "", string subDetail = "", Avalonia.Media.Imaging.Bitmap? art = null)
     {
+        ConfirmDialogArt = art;
+        ConfirmDialogDetail = detail;
+        ConfirmDialogSubDetail = subDetail;
         ConfirmDialogTitle = title;
         ConfirmDialogMessage = message;
         ConfirmDialogConfirmText = confirmText;
@@ -55,10 +74,12 @@ public partial class MainWindowViewModel
 
         OpenConfirmDialog(
             "Delete Song Permanently?",
-            $"This will permanently DELETE \"{row.Title}\" by {row.Artist} from your drive. " +
-            "This cannot be undone.",
+            "The file will be deleted from your drive for good. This can't be undone.",
             "Delete Permanently",
-            () => DeleteSongPermanently(row.Song));
+            () => DeleteSongPermanently(row.Song),
+            detail: row.Title,
+            subDetail: row.Artist,
+            art: row.ArtBitmap);
     }
 
     private void DeleteSongPermanently(Song song)
