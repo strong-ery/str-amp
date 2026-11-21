@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace Stramp.Audio;
 
@@ -10,7 +10,12 @@ namespace Stramp.Audio;
 /// </summary>
 public static class TrackPcmDecoder
 {
-    public static async Task<float[]?> DecodeMonoAsync(string path, int sampleRate, CancellationToken ct = default)
+    /// <summary>
+    /// Decodes <paramref name="path"/> to mono float PCM. <paramref name="expectedSeconds"/> is only a
+    /// sizing hint so the result lands in a single right-sized buffer; it may be wrong or zero.
+    /// </summary>
+    public static async Task<ReadOnlyMemory<float>?> DecodeMonoAsync(
+        string path, int sampleRate, double expectedSeconds = 0, CancellationToken ct = default)
     {
         Process? process = null;
         try
@@ -40,22 +45,49 @@ public static class TrackPcmDecoder
                 return null;
 
             using var cancellation = ct.Register(() => TryKill(process));
-            using var stdout = new MemoryStream();
-            var copyTask = process.StandardOutput.BaseStream.CopyToAsync(stdout, ct);
             var drainStderrTask = process.StandardError.ReadToEndAsync(ct);
 
-            await copyTask;
+            // Stream ffmpeg's output straight into one float[] (no MemoryStream + second copy, which
+            // briefly tripled the footprint). The hint plus a second of slack means it normally never
+            // has to grow; if the hint is missing or short it grows by 25% rather than doubling.
+            var capacity = expectedSeconds > 0
+                ? (int)Math.Min(int.MaxValue / 2, (expectedSeconds + 1) * sampleRate)
+                : sampleRate * 60;
+            var samples = new float[capacity];
+            var chunk = new byte[64 * 1024];
+            var carry = 0; // bytes of a split float left over from the previous read
+            var count = 0; // floats written so far
+            var stdout = process.StandardOutput.BaseStream;
+            while (true)
+            {
+                var n = await stdout.ReadAsync(chunk.AsMemory(carry), ct);
+                if (n == 0)
+                    break;
+
+                var available = carry + n;
+                var whole = available / sizeof(float);
+                if (count + whole > samples.Length)
+                {
+                    var grown = new float[(int)Math.Min(
+                        int.MaxValue / 2, Math.Max((long)samples.Length * 5 / 4, (long)count + whole) + 4096)];
+                    Array.Copy(samples, grown, count);
+                    samples = grown;
+                }
+
+                Buffer.BlockCopy(chunk, 0, samples, count * sizeof(float), whole * sizeof(float));
+                count += whole;
+                carry = available - whole * sizeof(float);
+                if (carry > 0)
+                    Buffer.BlockCopy(chunk, whole * sizeof(float), chunk, 0, carry);
+            }
+
             await drainStderrTask;
             await process.WaitForExitAsync(ct);
 
             if (process.ExitCode != 0)
                 return null;
 
-            var bytes = stdout.GetBuffer();
-            var sampleCount = (int)(stdout.Length / sizeof(float));
-            var samples = new float[sampleCount];
-            Buffer.BlockCopy(bytes, 0, samples, 0, sampleCount * sizeof(float));
-            return samples;
+            return samples.AsMemory(0, count);
         }
         catch (OperationCanceledException)
         {

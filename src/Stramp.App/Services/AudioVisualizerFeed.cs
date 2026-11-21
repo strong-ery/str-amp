@@ -1,4 +1,4 @@
-using Avalonia.Threading;
+﻿using Avalonia.Threading;
 using Stramp.Audio;
 using Stramp.Core.Dsp;
 
@@ -14,31 +14,43 @@ public sealed class AudioVisualizerFeed
     private const int SampleRate = 44100;
     private const int WindowSize = 2048;
 
-    private float[]? _pcm;
+    private ReadOnlyMemory<float>? _pcm;
     private float[]? _waveform;
     private CancellationTokenSource? _cts;
 
     /// <summary>Raised on the UI thread once a track's PCM is decoded and its waveform is ready.</summary>
     public event Action? WaveformReady;
 
-    public void LoadTrack(string path)
+    public void LoadTrack(string path, double durationSeconds = 0)
     {
         _pcm = null;
         _waveform = null;
         _cts?.Cancel();
         var cts = new CancellationTokenSource();
         _cts = cts;
-        _ = LoadAsync(path, cts.Token);
+        _ = LoadAsync(path, durationSeconds, cts.Token);
     }
 
-    private async Task LoadAsync(string path, CancellationToken ct)
+    private async Task LoadAsync(string path, double durationSeconds, CancellationToken ct)
     {
-        var pcm = await TrackPcmDecoder.DecodeMonoAsync(path, SampleRate, ct);
+        // Skipping through songs cancels this almost immediately, so wait a beat before spending a
+        // decode (and a GC) on a track that is about to be skipped.
+        try { await Task.Delay(200, ct); }
+        catch (OperationCanceledException) { return; }
+
+        // The previous track's PCM is a large-object-heap array that's now garbage. Compact the LOH
+        // once, before allocating the next one, so freed holes get reused/returned instead of
+        // piling up as fragmentation across skips. The live heap is small, so the pause is short.
+        System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+            System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+
+        var pcm = await TrackPcmDecoder.DecodeMonoAsync(path, SampleRate, durationSeconds, ct);
         if (ct.IsCancellationRequested)
             return;
 
         _pcm = pcm;
-        _waveform = pcm is null ? null : BuildWaveform(pcm, WaveformBuckets);
+        _waveform = pcm is null ? null : BuildWaveform(pcm.Value.Span, WaveformBuckets);
 
         if (_waveform is not null)
             Dispatcher.UIThread.Post(() => WaveformReady?.Invoke());
@@ -49,7 +61,7 @@ public sealed class AudioVisualizerFeed
 
     private const int WaveformBuckets = 900;
 
-    private static float[] BuildWaveform(float[] pcm, int buckets)
+    private static float[] BuildWaveform(ReadOnlySpan<float> pcm, int buckets)
     {
         var envelope = new float[buckets];
         if (pcm.Length == 0)
@@ -93,12 +105,12 @@ public sealed class AudioVisualizerFeed
     /// <summary>Returns the spectrum around `timePositionSeconds`, or null if not decoded (yet, or at all).</summary>
     public SpectrumFrame? GetFrame(double timePositionSeconds, int displayBinCount)
     {
-        var pcm = _pcm;
-        if (pcm is null || pcm.Length < WindowSize)
+        if (_pcm is not { } memory || memory.Length < WindowSize)
             return null;
+        var pcm = memory.Span;
 
         var center = (int)(timePositionSeconds * SampleRate);
         var start = Math.Clamp(center - WindowSize, 0, pcm.Length - WindowSize);
-        return SpectrumAnalyzer.Analyze(pcm.AsSpan(start, WindowSize), SampleRate, displayBinCount);
+        return SpectrumAnalyzer.Analyze(pcm.Slice(start, WindowSize), SampleRate, displayBinCount);
     }
 }

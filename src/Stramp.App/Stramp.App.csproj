@@ -10,7 +10,15 @@
     <Company>Dylan Strong, Aiden Adzich, and Contributors</Company>
     <Authors>Dylan Strong, Aiden Adzich, and Contributors</Authors>
     <Copyright>Copyright © 2025 Dylan Strong and Aiden Adzich</Copyright>
+    <!-- Memory: no background-GC thread/heap, no PGO instrumentation, and a GC that compacts and
+         returns memory sooner (ConserveMemory 0-9) at a small CPU cost. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
+
+  <ItemGroup>
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
 
   <!--
     The self-contained/single-file settings that make a release a single exe live ONLY in

@@ -1,4 +1,4 @@
-using Avalonia.Threading;
+﻿using Avalonia.Threading;
 using Stramp.Core.Playback;
 
 namespace Stramp.App.ViewModels;
@@ -102,7 +102,7 @@ public partial class MainWindowViewModel
             IsPlaying = false;
         }
 
-        VisualizerFeed.LoadTrack(song.Path);
+        VisualizerFeed.LoadTrack(song.Path, song.Duration.TotalSeconds);
         LoadLyrics(song);
 
         var requestedPath = song.Path;
