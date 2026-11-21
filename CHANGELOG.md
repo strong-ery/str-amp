@@ -4,6 +4,12 @@ All notable changes to str-amp go here!
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
+## [v2.0.2] — Nov. 21, 2026 -> ???
+Shinier!
+
+### Changed:
+- Various memory and other GC optimizations (700mb -> ~300mb)
+
 ## [v2.0.1] — Nov. 13, 2026 -> Nov. 18, 2026
 Many improvements!
 
