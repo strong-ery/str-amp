@@ -31,6 +31,7 @@ public partial class SetupWizardViewModel : ViewModelBase
     public string StepTitle => CurrentStep switch
     {
         SetupStep.Welcome => "Welcome to str-amp",
+        SetupStep.Ffmpeg => "ffmpeg",
         SetupStep.Library => "Your Library",
         SetupStep.Playlists => "Playlists",
         SetupStep.Audio => "Audio",

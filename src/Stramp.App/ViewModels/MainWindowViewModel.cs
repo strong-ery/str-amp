@@ -429,6 +429,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
             StatusText = "Add a folder to start building your library.";
 
         InitializeSetupWizard();
+        _ = CheckFfmpegAsync();
         CheckWhatsNew();
         _ = CheckForUpdatesAsync();
     }

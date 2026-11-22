@@ -4,6 +4,7 @@ namespace Stramp.App.ViewModels;
 public enum SetupStep
 {
     Welcome,
+    Ffmpeg,
     Library,
     Playlists,
     Audio,

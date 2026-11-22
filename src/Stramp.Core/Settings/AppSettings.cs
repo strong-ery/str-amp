@@ -32,6 +32,9 @@ public sealed class AppSettings
     /// </summary>
     public string? LastSeenVersion { get; set; }
 
+    /// <summary>The user chose "don't warn me again" about ffmpeg being missing.</summary>
+    public bool SuppressFfmpegWarning { get; set; }
+
     /// <summary>Folders combined into the music library.</summary>
     public List<string>? LibraryPaths { get; set; }
 
