@@ -4,16 +4,16 @@ All notable changes to str-amp go here!
 
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
-## [v2.0.2] — Nov. 21, 2026 -> ???
+## [v2.2.0] — Nov. 21, 2026 -> ???
 Shinier!
 
 ### Added:
-- Linux support (x64): PulseAudio/PipeWire playback through ffmpeg, the same FxSound-based effects, MPRIS media keys and desktop media controls, Discord Rich Presence, application-menu launcher, and in-app updates
+- Linux support (x64)
 
 ### Changed:
 - Various memory and other GC optimizations (700mb -> ~300mb)
 
-## [v2.0.1] — Nov. 13, 2026 -> Nov. 18, 2026
+## [v2.1.0] — Nov. 13, 2026 -> Nov. 18, 2026
 Many improvements!
 
 ### Added:
