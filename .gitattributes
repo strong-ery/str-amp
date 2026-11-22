@@ -1,0 +1,2 @@
+*.sh text eol=lf
+native/dfxbridge/linux-shim/* text eol=lf
