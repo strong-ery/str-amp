@@ -32,11 +32,11 @@ Written in C#, with an Avalonia UI backend, lighter than Spotify, open source, f
 
 **[ffmpeg](https://ffmpeg.org/download.html)** on your `PATH` is needed for `.ogg` / `.opus` playback, audio normalization, and the waveform. Everything else plays without it.
 
+**Linux** (x64, glibc 2.28+): download the `linux-x64` `.tar.gz`, extract it anywhere and run `Stramp.App`. It needs **ffmpeg** (it decodes everything there) and **PulseAudio or PipeWire**. Media keys and the desktop media widget work through MPRIS, and Discord Rich Presence works too. "Application menu shortcut" in settings adds a launcher entry.
+
 ### Disclaimer:
 
 **str-amp** will never share any usage data with anybody, and it only ever needs network access to check for updates / ask to install them for you.
-
-**str-amp** is Windows only, however Linux support is planned soon.
 
 **str-amp** was developed in-part with **Claude** by **Anthropic**, both contributors are real developers, and we *do not* use AI as a substitute for our better judgement.
 

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace Stramp.Core.Updates;
 
@@ -34,11 +34,26 @@ public sealed class UpdateChecker(GitHubReleaseClient? client = null) : IDisposa
         if (release is null || release.Draft || release.Prerelease || !AppVersion.IsNewerThanCurrent(release.TagName))
             return null;
 
-        var asset = release.Assets.FirstOrDefault(a => a.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase));
+        var asset = release.Assets.FirstOrDefault(IsAssetForThisPlatform);
         if (asset is null)
             return null;
 
         return new UpdateInfo(release.TagName.TrimStart('v', 'V'), release.Body, release.HtmlUrl, asset.BrowserDownloadUrl);
+    }
+
+    /// <summary>
+    /// Releases carry one archive per platform: a plain .zip for Windows and a .tar.gz with "linux" in
+    /// its name for Linux (which, unlike a zip, preserves the executable bit).
+    /// </summary>
+    private static bool IsAssetForThisPlatform(GitHubReleaseAsset asset)
+    {
+        var name = asset.Name;
+        var isLinuxAsset = name.Contains("linux", StringComparison.OrdinalIgnoreCase);
+
+        if (OperatingSystem.IsLinux())
+            return isLinuxAsset && name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
+
+        return !isLinuxAsset && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
     }
 
     public void Dispose() => _client.Dispose();

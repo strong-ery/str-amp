@@ -1,13 +1,13 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Stramp.Core.Settings;
-using Stramp.Integrations.Windows;
+using Stramp.App.Services;
 
 namespace Stramp.App.ViewModels;
 public partial class MainWindowViewModel
 {
     public SetupWizardViewModel SetupWizard { get; } = new()
     {
-        InstallDirectory = WindowsAppInstaller.InstallDirectory,
+        InstallDirectory = PlatformServices.InstallDirectory,
     };
 
     [ObservableProperty]

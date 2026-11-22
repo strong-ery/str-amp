@@ -1,5 +1,5 @@
-using Stramp.Core.Models;
-using Stramp.Integrations.Windows;
+﻿using Stramp.Core.Models;
+using Stramp.Core.Discord;
 
 namespace Stramp.App.Services;
 

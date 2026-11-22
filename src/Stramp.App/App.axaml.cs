@@ -32,7 +32,7 @@ public partial class App : Application
 
             var window = new MainWindow
             {
-                DataContext = new MainWindowViewModel(new WasapiMediaPlayer(), settings),
+                DataContext = new MainWindowViewModel(MediaPlayerFactory.Create(), settings),
             };
             VisualThemeStyles.Host(window);
             desktop.MainWindow = window;

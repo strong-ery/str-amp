@@ -1232,7 +1232,7 @@
                                             </Button>
                                             <Button Grid.Column="3" Classes="transport" Padding="8,4" Height="28"
                                                     Click="OnOpenPlaylistsFolderInExplorerClicked"
-                                                    ToolTip.Tip="Open this folder in Windows File Explorer">
+                                                    ToolTip.Tip="Open this folder in your file manager">
                                                 <TextBlock Text="Reveal" FontSize="11" />
                                             </Button>
                                             <Button Grid.Column="4" Classes="transport" Width="28" Height="28" Padding="6"
@@ -1444,8 +1444,8 @@
                                               OnContent="Ensure Desktop Shortcut"
                                               OffContent="Ensure Desktop Shortcut" />
                                 <ToggleSwitch IsChecked="{Binding Theme.EnsureStartMenuShortcut}"
-                                              OnContent="Ensure appearance in Windows Start Menu"
-                                              OffContent="Ensure appearance in Windows Start Menu" />
+                                              OnContent="Ensure appearance in the Start Menu / application menu"
+                                              OffContent="Ensure appearance in the Start Menu / application menu" />
                                 <TextBlock Classes="field-hint" TextWrapping="Wrap"
                                            Text="Shortcuts point to this copy of Stramp and use its app icon. Turning an option off removes the shortcut created by Stramp." />
                             </StackPanel>
@@ -1556,7 +1556,7 @@
                                     </StackPanel>
                                     <Button Grid.Column="1" Classes="transport" Padding="8,4" Height="28"
                                             Click="OnOpenListeningHistoryClicked"
-                                            ToolTip.Tip="Open listening history JSON in Windows File Explorer">
+                                            ToolTip.Tip="Open listening history JSON in your file manager">
                                         <TextBlock Text="Reveal" FontSize="11" />
                                     </Button>
                                 </Grid>
@@ -1820,7 +1820,7 @@
                                 <ToggleSwitch IsChecked="{Binding Theme.EnsureDesktopShortcut}"
                                               OnContent="Desktop shortcut" OffContent="Desktop shortcut" />
                                 <ToggleSwitch IsChecked="{Binding Theme.EnsureStartMenuShortcut}"
-                                              OnContent="Start Menu shortcut" OffContent="Start Menu shortcut" />
+                                              OnContent="Start Menu / application menu shortcut" OffContent="Start Menu / application menu shortcut" />
                                 <TextBlock Classes="field-hint" TextWrapping="Wrap"
                                            Text="Shortcuts point to this copy of str-amp and use its app icon." />
                             </StackPanel>

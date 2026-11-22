@@ -2,7 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Stramp.Core.Settings;
 using Stramp.Core.Updates;
-using Stramp.Integrations.Windows;
+using Stramp.App.Services;
 
 namespace Stramp.App.ViewModels;
 public partial class MainWindowViewModel
@@ -134,7 +134,7 @@ public partial class MainWindowViewModel
             var stagingDirectory = await UpdateDownloader.DownloadAndExtractAsync(downloadUrl, update.Version, progress);
 
             UpdateStatusText = "Installing…";
-            if (!WindowsAppUpdater.TryApplyUpdate(stagingDirectory, out var error))
+            if (!PlatformServices.TryApplyUpdate(stagingDirectory, out var error))
             {
                 UpdateStatusText = $"Couldn't install the update: {error}";
                 IsDownloadingUpdate = false;

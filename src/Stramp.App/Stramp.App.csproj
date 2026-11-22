@@ -1,7 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <!-- Windows builds target the Windows TFM (WinRT, taskbar APIs); anywhere else it is plain net10.0.
+         `-p:StrampLinux=true` forces the Linux build from a Windows machine (cross-publish). -->
+    <StrampWindows Condition="'$(OS)' == 'Windows_NT' And '$(StrampLinux)' != 'true'">true</StrampWindows>
+    <TargetFramework Condition="'$(StrampWindows)' == 'true'">net10.0-windows10.0.19041.0</TargetFramework>
+    <TargetFramework Condition="'$(StrampWindows)' != 'true'">net10.0</TargetFramework>
+    <DefineConstants Condition="'$(StrampWindows)' == 'true'">$(DefineConstants);STRAMP_WINDOWS</DefineConstants>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
@@ -58,6 +63,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Stramp.Core\Stramp.Core.csproj" />
     <ProjectReference Include="..\Stramp.Audio\Stramp.Audio.csproj" />
-    <ProjectReference Include="..\Stramp.Integrations.Windows\Stramp.Integrations.Windows.csproj" />
+    <ProjectReference Include="..\Stramp.Integrations.Windows\Stramp.Integrations.Windows.csproj" Condition="'$(StrampWindows)' == 'true'" />
+    <ProjectReference Include="..\Stramp.Integrations.Linux\Stramp.Integrations.Linux.csproj" Condition="'$(StrampWindows)' != 'true'" />
   </ItemGroup>
 </Project>

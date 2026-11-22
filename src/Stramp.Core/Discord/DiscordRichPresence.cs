@@ -1,10 +1,11 @@
-using System.Buffers.Binary;
+﻿using System.Buffers.Binary;
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Stramp.Integrations.Windows;
+namespace Stramp.Core.Discord;
 
 public readonly record struct DiscordActivity(
     string Details,
@@ -52,7 +53,7 @@ public sealed class DiscordRichPresence : IDisposable
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly object _stateLock = new();
 
-    private NamedPipeClientStream? _pipe;
+    private Stream? _pipe;
     private volatile bool _connected;
     private DiscordActivity? _pendingActivity;
     private bool _pendingClear;
@@ -163,24 +164,73 @@ public sealed class DiscordRichPresence : IDisposable
             await ReadFrameAsync(pipe, token);
     }
 
-    private static async Task<NamedPipeClientStream?> TryConnectAnyPipeAsync(CancellationToken token)
+    private static async Task<Stream?> TryConnectAnyPipeAsync(CancellationToken token)
     {
         for (var i = 0; i <= MaxPipeIndex; i++)
         {
-            var candidate = new NamedPipeClientStream(
-                ".", $"discord-ipc-{i}", PipeDirection.InOut, PipeOptions.Asynchronous);
-            try
+            if (OperatingSystem.IsWindows())
             {
-                await candidate.ConnectAsync((int)ConnectTimeout.TotalMilliseconds, token);
-                return candidate;
+                var candidate = new NamedPipeClientStream(
+                    ".", $"discord-ipc-{i}", PipeDirection.InOut, PipeOptions.Asynchronous);
+                try
+                {
+                    await candidate.ConnectAsync((int)ConnectTimeout.TotalMilliseconds, token);
+                    return candidate;
+                }
+                catch
+                {
+                    candidate.Dispose();
+                }
             }
-            catch
+            else
             {
-                candidate.Dispose();
+                foreach (var path in UnixSocketPaths(i))
+                {
+                    if (!File.Exists(path))
+                        continue;
+
+                    var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+                    try
+                    {
+                        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+                        timeout.CancelAfter(ConnectTimeout);
+                        await socket.ConnectAsync(new UnixDomainSocketEndPoint(path), timeout.Token);
+                        return new NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch
+                    {
+                        socket.Dispose();
+                    }
+                }
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Where Discord puts its IPC socket on Linux: the runtime dir for a normal install, with the
+    /// Flatpak and Snap sandboxes each nesting it one level down.
+    /// </summary>
+    private static IEnumerable<string> UnixSocketPaths(int index)
+    {
+        var name = $"discord-ipc-{index}";
+        var bases = new List<string>();
+        foreach (var variable in new[] { "XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP" })
+        {
+            var value = Environment.GetEnvironmentVariable(variable);
+            if (!string.IsNullOrEmpty(value))
+                bases.Add(value);
+        }
+        bases.Add("/tmp");
+
+        foreach (var root in bases.Distinct())
+        {
+            yield return Path.Combine(root, name);
+            yield return Path.Combine(root, "app", "com.discordapp.Discord", name);
+            yield return Path.Combine(root, "app", "com.discordapp.DiscordCanary", name);
+            yield return Path.Combine(root, "snap.discord", name);
+        }
     }
 
     private async Task TrySendActivityAsync(DiscordActivity activity, CancellationToken token)
@@ -254,7 +304,7 @@ public sealed class DiscordRichPresence : IDisposable
     }
 
     private async Task WriteFrameAsync(
-        NamedPipeClientStream pipe, Opcode opcode, string json, CancellationToken token)
+        Stream pipe, Opcode opcode, string json, CancellationToken token)
     {
         var body = Encoding.UTF8.GetBytes(json);
         var header = new byte[8];
@@ -274,7 +324,7 @@ public sealed class DiscordRichPresence : IDisposable
         }
     }
 
-    private static async Task ReadFrameAsync(NamedPipeClientStream pipe, CancellationToken token)
+    private static async Task ReadFrameAsync(Stream pipe, CancellationToken token)
     {
         var header = new byte[8];
         await ReadExactAsync(pipe, header, token);
@@ -287,7 +337,7 @@ public sealed class DiscordRichPresence : IDisposable
     }
 
     private static async Task ReadExactAsync(
-        NamedPipeClientStream pipe, byte[] buffer, CancellationToken token)
+        Stream pipe, byte[] buffer, CancellationToken token)
     {
         var offset = 0;
         while (offset < buffer.Length)

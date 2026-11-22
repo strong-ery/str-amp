@@ -19,7 +19,11 @@
 
 #include <string>
 
+#if defined(_WIN32)
 #define DFXBRIDGE_API extern "C" __declspec(dllexport)
+#else
+#define DFXBRIDGE_API extern "C" __attribute__((visibility("default")))
+#endif
 
 DFXBRIDGE_API DfxDsp* dfx_create()
 {

@@ -1,17 +1,18 @@
+﻿using System.Formats.Tar;
 using System.IO.Compression;
 
 namespace Stramp.Core.Updates;
 
-/// <summary>Downloads an update's zip asset and extracts it to a fresh temp staging folder.</summary>
+/// <summary>Downloads an update's archive (zip, or tar.gz on Linux) and extracts it to a fresh temp staging folder.</summary>
 public static class UpdateDownloader
 {
     private const string ClientId = "str-amp (https://github.com/strong-ery/str-amp)";
     private const int BufferSize = 81920;
 
     /// <summary>
-    /// Downloads and extracts the asset, returning the folder that actually holds Stramp.App.exe:
-    /// a release zip may wrap its contents in one extra folder or not, so this looks for the exe
-    /// rather than assuming the zip's layout.
+    /// Downloads and extracts the asset, returning the folder that actually holds the app executable:
+    /// a release archive may wrap its contents in one extra folder or not, so this looks for the
+    /// executable rather than assuming the archive's layout.
     /// </summary>
     public static async Task<string> DownloadAndExtractAsync(
         string downloadUrl, string version, IProgress<double>? progress = null, CancellationToken ct = default)
@@ -21,16 +22,26 @@ public static class UpdateDownloader
             Directory.Delete(stagingRoot, recursive: true);
         Directory.CreateDirectory(stagingRoot);
 
-        var zipPath = Path.Combine(Path.GetTempPath(), $"stramp-update-{version}.zip");
-        await DownloadAsync(downloadUrl, zipPath, progress, ct);
+        var isTarball = downloadUrl.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase);
+        var archivePath = Path.Combine(Path.GetTempPath(), $"stramp-update-{version}{(isTarball ? ".tar.gz" : ".zip")}");
+        await DownloadAsync(downloadUrl, archivePath, progress, ct);
 
         try
         {
-            ZipFile.ExtractToDirectory(zipPath, stagingRoot, overwriteFiles: true);
+            if (isTarball)
+            {
+                await using var file = File.OpenRead(archivePath);
+                await using var gzip = new GZipStream(file, CompressionMode.Decompress);
+                await TarFile.ExtractToDirectoryAsync(gzip, stagingRoot, overwriteFiles: true, ct);
+            }
+            else
+            {
+                ZipFile.ExtractToDirectory(archivePath, stagingRoot, overwriteFiles: true);
+            }
         }
         finally
         {
-            File.Delete(zipPath);
+            File.Delete(archivePath);
         }
 
         return FindAppRoot(stagingRoot) ?? stagingRoot;
@@ -62,7 +73,8 @@ public static class UpdateDownloader
 
     private static string? FindAppRoot(string stagingRoot)
     {
-        var exePath = Directory.EnumerateFiles(stagingRoot, "Stramp.App.exe", SearchOption.AllDirectories).FirstOrDefault();
+        var exeName = OperatingSystem.IsWindows() ? "Stramp.App.exe" : "Stramp.App";
+        var exePath = Directory.EnumerateFiles(stagingRoot, exeName, SearchOption.AllDirectories).FirstOrDefault();
         return exePath is null ? null : Path.GetDirectoryName(exePath);
     }
 }

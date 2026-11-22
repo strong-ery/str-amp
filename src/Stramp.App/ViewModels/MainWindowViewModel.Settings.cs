@@ -1,8 +1,7 @@
-using CommunityToolkit.Mvvm.Input;
-using Stramp.App.Services;
+﻿using CommunityToolkit.Mvvm.Input;
 using Stramp.Core.Playback;
 using Stramp.Core.Settings;
-using Stramp.Integrations.Windows;
+using Stramp.App.Services;
 
 namespace Stramp.App.ViewModels;
 public partial class MainWindowViewModel
@@ -24,7 +23,7 @@ public partial class MainWindowViewModel
 
     private void ApplyDesktopShortcutSetting(bool enabled)
     {
-        if (!WindowsShortcutService.SetDesktopShortcut(enabled))
+        if (!PlatformServices.SetDesktopShortcut(enabled))
             StatusText = enabled
                 ? "Couldn't create the Desktop shortcut."
                 : "Couldn't remove the Desktop shortcut.";
@@ -32,10 +31,10 @@ public partial class MainWindowViewModel
 
     private void ApplyStartMenuShortcutSetting(bool enabled)
     {
-        if (!WindowsShortcutService.SetStartMenuShortcut(enabled))
+        if (!PlatformServices.SetMenuShortcut(enabled))
             StatusText = enabled
-                ? "Couldn't create the Start Menu shortcut."
-                : "Couldn't remove the Start Menu shortcut.";
+                ? $"Couldn't create the {PlatformServices.MenuName} shortcut."
+                : $"Couldn't remove the {PlatformServices.MenuName} shortcut.";
     }
 
     [RelayCommand]

@@ -79,3 +79,23 @@ To rebuild it (Visual Studio 2022, x64):
 DfxDsp.vcxproj builds a static library, and DfxBridge links it together with the utility
 modules from audiopassthru that it depends on, so the result is one self-contained DLL
 with no runtime dependency on an FxSound installation.
+
+
+BUNDLED BINARY: native/prebuilt/linux-x64/libDfxBridge.so
+=========================================================
+
+The same DSP for Linux, covered by the same terms and with the same corresponding source:
+native/dfxbridge/ here (including linux-shim/, a small Windows-API compatibility layer) plus
+https://github.com/fxsound2/fxsound-app at the commit recorded above.
+
+To rebuild it (g++, gcc, make, patch, iconv; any recent Linux or WSL):
+
+  git clone https://github.com/fxsound2/fxsound-app
+  cd fxsound-app && git checkout aed079771554b47766a750e7f181f75b7808108a
+  cd <str-amp>/native/dfxbridge
+  FXSOUND_ROOT=<path to fxsound-app> ./build-linux.sh
+  cp build/linux-x64/libDfxBridge.so ../prebuilt/linux-x64/
+
+build-linux.sh works on a copy of the FxSound sources: it applies the registry-namespace patch,
+rewrites C "long" to "int" (FxSound targets Windows, where long is 32 bits), and compiles the
+sources against the shim. The result needs only glibc 2.28 and libstdc++.

@@ -1,6 +1,6 @@
 ﻿using Avalonia;
 using System;
-using Stramp.Integrations.Windows;
+using Stramp.App.Services;
 
 namespace Stramp.App;
 
@@ -16,7 +16,7 @@ sealed class Program
         // Running from wherever the release zip was extracted (Downloads, Desktop, ...) rather
         // than the stable per-user install folder: copy the build there and hand off to it. Gated
         // to Release builds only, so an ordinary debug run never relocates itself out of bin/.
-        if (OperatingSystem.IsWindows() && WindowsAppInstaller.TryRelocateToInstallDirectory(args))
+        if (PlatformServices.TryRelocateToInstallDirectory(args))
             return;
 #endif
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

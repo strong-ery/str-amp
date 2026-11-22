@@ -14,7 +14,9 @@ using Avalonia.VisualTree;
 using Stramp.App.Services;
 using Stramp.App.ViewModels;
 using Stramp.Core.Dsp;
+#if STRAMP_WINDOWS
 using Stramp.Integrations.Windows;
+#endif
 
 namespace Stramp.App.Views;
 
@@ -73,8 +75,12 @@ public partial class MainWindow : Window
     private bool _isFrameLoopRunning;
     private TimeSpan? _lastFrameTimestamp;
 
+#if STRAMP_WINDOWS
     private ThumbnailToolbar? _thumbnailToolbar;
     private WindowsWindowIcon? _windowIcon;
+#else
+    private LinuxNowPlayingHost? _nowPlaying;
+#endif
     private readonly MediaKeyController _mediaKeys;
     private MainWindowViewModel? _observedViewModel;
     private ThemeSettingsViewModel? _observedTheme;
@@ -150,7 +156,7 @@ public partial class MainWindow : Window
         Opened += (_, _) =>
         {
             StartFrameLoop();
-            SetUpThumbnailToolbar();
+            SetUpPlatformIntegration();
             UpdateColumnWidths(animate: false);
             UpdateLyricsSplit(animate: false);
         };
@@ -158,8 +164,12 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             StopFrameLoop();
+#if STRAMP_WINDOWS
             _thumbnailToolbar?.Dispose();
             _windowIcon?.Dispose();
+#else
+            _nowPlaying?.Dispose();
+#endif
             _mediaKeys.Dispose();
             ViewModel?.Dispose();
         };
@@ -225,7 +235,14 @@ public partial class MainWindow : Window
 
     // ── Taskbar thumbnail buttons (Windows only) ─────────────────────────────
 
-    private void SetUpThumbnailToolbar()
+#if !STRAMP_WINDOWS
+    private void SetUpPlatformIntegration()
+    {
+        _nowPlaying ??= new LinuxNowPlayingHost(this);
+        _nowPlaying.Attach(ViewModel);
+    }
+#else
+    private void SetUpPlatformIntegration()
     {
         if (!OperatingSystem.IsWindows())
             return;
@@ -280,6 +297,8 @@ public partial class MainWindow : Window
         return IntPtr.Zero;
     }
 
+#endif
+
     private void OnDataContextChanged(object? sender, EventArgs e)
     {
         if (_observedViewModel is not null)
@@ -330,7 +349,9 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName == nameof(MainWindowViewModel.IsPlaying))
         {
+#if STRAMP_WINDOWS
             _thumbnailToolbar?.SetPlaying(ViewModel?.IsPlaying ?? false);
+#endif
             _mediaKeys.SetPlaybackState(ViewModel?.IsPlaying ?? false);
         }
         else if (e.PropertyName == nameof(MainWindowViewModel.IsLibraryOpen))
@@ -1625,12 +1646,7 @@ public partial class MainWindow : Window
             if (!Directory.Exists(path))
                 Directory.CreateDirectory(path);
 
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = path,
-                UseShellExecute = true,
-                Verb = "open",
-            });
+            PlatformServices.OpenFolder(path);
         }
         catch (Exception ex)
         {
@@ -1653,21 +1669,11 @@ public partial class MainWindow : Window
 
             if (File.Exists(filePath))
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "explorer.exe",
-                    Arguments = $"/select,\"{filePath}\"",
-                    UseShellExecute = true,
-                });
+                PlatformServices.RevealFile(filePath);
             }
             else if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir))
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = dir,
-                    UseShellExecute = true,
-                    Verb = "open",
-                });
+                PlatformServices.OpenFolder(dir);
             }
         }
         catch (Exception ex)

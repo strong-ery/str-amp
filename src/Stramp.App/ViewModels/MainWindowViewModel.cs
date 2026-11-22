@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -13,7 +13,6 @@ using Stramp.Core.Models;
 using Stramp.Core.Playback;
 using Stramp.Core.Settings;
 using Stramp.Core.Spotify;
-using Stramp.Integrations.Windows;
 
 namespace Stramp.App.ViewModels;
 
@@ -333,7 +332,7 @@ public partial class MainWindowViewModel : ViewModelBase, IDisposable
 
     public string ListeningHistoryFilePath => _listeningHistoryStore.FilePath;
 
-    public MainWindowViewModel() : this(new WasapiMediaPlayer(), SettingsService.Load())
+    public MainWindowViewModel() : this(MediaPlayerFactory.Create(), SettingsService.Load())
     {
     }
 

@@ -20,9 +20,21 @@
     FxSound's DSP, prebuilt so an ordinary build needs no C++ toolchain. It is x64-only, which
     matches what str-amp ships. COPYRIGHT records where it comes from and how to rebuild it.
   -->
-  <ItemGroup>
+  <PropertyGroup>
+    <StrampWindowsHost Condition="'$(OS)' == 'Windows_NT' And '$(StrampLinux)' != 'true'">true</StrampWindowsHost>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(StrampWindowsHost)' == 'true'">
     <None Include="../../native/prebuilt/x64/DfxBridge.dll">
       <Link>DfxBridge.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- The Linux build of the same DSP (native/dfxbridge/build-linux.sh); glibc 2.28+, x64. -->
+  <ItemGroup Condition="'$(StrampWindowsHost)' != 'true'">
+    <None Include="../../native/prebuilt/linux-x64/libDfxBridge.so">
+      <Link>libDfxBridge.so</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

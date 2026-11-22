@@ -2,7 +2,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+#if STRAMP_WINDOWS
 using Stramp.Integrations.Windows;
+#endif
 
 namespace Stramp.App.Services;
 
@@ -18,7 +20,9 @@ public sealed class MediaKeyController : IDisposable
     private readonly Func<double> _getVolume;
     private readonly Action<double> _setVolume;
     private readonly Func<bool> _isSuppressed;
+#if STRAMP_WINDOWS
     private WindowsMediaKeys? _windowsMediaKeys;
+#endif
     private bool _spaceIsDown;
 
     public MediaKeyController(
@@ -45,6 +49,7 @@ public sealed class MediaKeyController : IDisposable
         _window.Deactivated += OnWindowDeactivated;
     }
 
+#if STRAMP_WINDOWS
     public void AttachWindowsMediaKeys(IntPtr hwnd, bool isPlaying)
     {
         if (!OperatingSystem.IsWindows() || _windowsMediaKeys is not null)
@@ -66,6 +71,11 @@ public sealed class MediaKeyController : IDisposable
 
     public void SetPlaybackState(bool isPlaying) =>
         _windowsMediaKeys?.SetPlaybackState(isPlaying);
+#else
+    public void SetPlaybackState(bool isPlaying)
+    {
+    }
+#endif
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
@@ -154,7 +164,9 @@ public sealed class MediaKeyController : IDisposable
         _window.RemoveHandler(InputElement.KeyDownEvent, OnKeyDown);
         _window.RemoveHandler(InputElement.KeyUpEvent, OnKeyUp);
         _window.Deactivated -= OnWindowDeactivated;
+#if STRAMP_WINDOWS
         _windowsMediaKeys?.Dispose();
         _windowsMediaKeys = null;
+#endif
     }
 }
