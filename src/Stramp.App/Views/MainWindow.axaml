@@ -1091,7 +1091,7 @@
                                         </Border.ContextMenu>
                                         <!-- Grid rather than a StackPanel: a horizontal StackPanel hands children
                                              infinite width, so ellipsising kicks in far too early. -->
-                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
                                             <Border Grid.Column="0" Classes="art-frame" Width="40" Height="40">
                                                 <Grid>
                                                     <PathIcon Data="{x:Static app:Icons.MusicNote}" Width="18" Height="18" Opacity="0.35"
@@ -1106,6 +1106,11 @@
                                                 <TextBlock Text="{Binding Title}" Classes="queue-title" TextTrimming="CharacterEllipsis" />
                                                 <TextBlock Text="{Binding Artist}" FontSize="11" Opacity="0.65" TextTrimming="CharacterEllipsis" />
                                             </StackPanel>
+                                            <!-- Marks songs added with "Add to queue", as opposed to ones drawn from the source. -->
+                                            <PathIcon Grid.Column="2" Data="{x:Static app:Icons.PlaylistPlay}"
+                                                      Width="12" Height="12" Margin="0,0,4,0" Opacity="0.55"
+                                                      VerticalAlignment="Center" Background="Transparent"
+                                                      IsVisible="{Binding IsQueued}" ToolTip.Tip="Added to queue" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

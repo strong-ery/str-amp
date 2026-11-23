@@ -130,7 +130,11 @@ public partial class MainWindowViewModel
         var end = Math.Min(songs.Count, _queue.Position + QueueShowCount);
         for (var i = _queue.Position; i < end; i++)
         {
-            var row = new SongRow(songs[i]) { IsCurrent = i == _queue.Position };
+            var row = new SongRow(songs[i])
+            {
+                IsCurrent = i == _queue.Position,
+                IsQueued = _queue.IsQueuedAt(i),
+            };
             QueueRows.Add(row);
         }
     }

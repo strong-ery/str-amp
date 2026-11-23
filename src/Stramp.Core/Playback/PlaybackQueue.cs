@@ -28,8 +28,9 @@ public sealed class PlaybackQueue
     public bool HasNext => Position < _entries.Count - 1;
 
     // Queued means added with AddToQueue rather than drawn from the playing source.
-    public bool CurrentIsQueued => IsInRange(Position) && _entries[Position].Queued;
-    public bool NextIsQueued => IsInRange(Position + 1) && _entries[Position + 1].Queued;
+    public bool IsQueuedAt(int index) => IsInRange(index) && _entries[index].Queued;
+    public bool CurrentIsQueued => IsQueuedAt(Position);
+    public bool NextIsQueued => IsQueuedAt(Position + 1);
 
     // The queued songs from the current track on, in play order: what Restore needs to re-mark them.
     public IEnumerable<string> QueuedPathsFromCurrent =>
