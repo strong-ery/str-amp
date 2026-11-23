@@ -3,7 +3,7 @@ namespace Stramp.Core.Updates;
 /// <summary>The app's own version, bumped by hand to match each GitHub release tag.</summary>
 public static class AppVersion
 {
-    public const string Current = "2.1.0";
+    public const string Current = "2.2.0";
 
     /// <summary>
     /// Whether a GitHub tag like "v2.1.0" (or "2.1.0") is newer than <see cref="Current"/>. A tag
