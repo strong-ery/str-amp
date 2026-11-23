@@ -32,22 +32,11 @@ public partial class MainWindowViewModel
         PlayDroppedFiles([filePath]);
     }
 
-    [RelayCommand]
-    private void JumpToQueueRow(SongRow row)
-    {
-        var index = _queue.Position + QueueRows.IndexOf(row);
-        _queue.JumpTo(index);
-        LoadCurrent();
-    }
-
-    [RelayCommand]
-    private void RemoveFromQueue(SongRow row)
-    {
-        var index = _queue.Position + QueueRows.IndexOf(row);
-        _queue.RemoveAt(index);
-        RefreshQueueRows();
-        SavePlaybackState(force: true);
-    }
+    // True when the queue is playing something neither from the source nor added to the queue by
+    // hand, such as dropped-in files; skipping or reshuffling then starts the source again.
+    private bool CurrentIsOutsideSource =>
+        _queue.Current is { } song && !_queue.CurrentIsQueued
+        && !_playbackSongs.Any(s => s.Path == song.Path);
 
     [RelayCommand]
     private void PlayPause()
@@ -149,7 +138,7 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private void Next()
     {
-        if (_queue.Current is not null && !_playbackSongs.Any(s => s.Path == _queue.Current.Path))
+        if (CurrentIsOutsideSource && !_queue.NextIsQueued)
         {
             _queue.Build(SortedPlaybackSongs, Shuffled);
             LoadCurrent();
@@ -188,7 +177,7 @@ public partial class MainWindowViewModel
             Reshuffle();
         else
         {
-            if (_queue.Current is null || !_playbackSongs.Any(s => s.Path == _queue.Current.Path))
+            if (_queue.Current is null || CurrentIsOutsideSource)
             {
                 _queue.Build(SortedPlaybackSongs, shuffled: false);
                 if (IsPlaying)
@@ -235,7 +224,7 @@ public partial class MainWindowViewModel
     [RelayCommand]
     private void Reshuffle()
     {
-        if (_queue.Current is null || !_playbackSongs.Any(s => s.Path == _queue.Current.Path))
+        if (_queue.Current is null || CurrentIsOutsideSource)
         {
             _queue.Build(SortedPlaybackSongs, shuffled: true);
             if (IsPlaying)

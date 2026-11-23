@@ -408,6 +408,13 @@
                                                         </MenuItem.Icon>
                                                     </MenuItem>
                                                     <Separator IsVisible="{Binding #Root.DataContext.IsViewingPlaylist}" />
+                                                    <MenuItem Header="Add to queue"
+                                                              Command="{Binding #Root.DataContext.AddToQueueCommand}"
+                                                              CommandParameter="{Binding}">
+                                                        <MenuItem.Icon>
+                                                            <PathIcon Data="{x:Static app:Icons.PlaylistPlay}" Width="14" Height="14" />
+                                                        </MenuItem.Icon>
+                                                    </MenuItem>
                                                     <MenuItem Header="Add to playlist…"
                                                               Command="{Binding #Root.DataContext.OpenAddToPlaylistForSongCommand}"
                                                               CommandParameter="{Binding}">

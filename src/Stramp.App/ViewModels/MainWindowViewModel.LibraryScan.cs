@@ -125,6 +125,7 @@ public partial class MainWindowViewModel
         var previousQueue = preservePlayback ? _queue.Songs.ToList() : [];
         var previousCurrent = preservePlayback ? _queue.Current : null;
         var previousQueuePosition = _queue.Position;
+        var previousQueued = preservePlayback ? _queue.QueuedPathsFromCurrent.ToList() : [];
 
         _library = scannedSongs;
         _libraryIndex = scannedIndex;
@@ -138,7 +139,7 @@ public partial class MainWindowViewModel
             _activeSongs = [];
             _playbackSongs = [];
             LibraryRows.ReplaceAll([]);
-            _queue.Restore([], 0, 0);
+            _queue.Restore([], 0, null, 0);
             RefreshQueueRows();
             _playbackStateReady = false;
             StatusText = _libraryPaths.Count == 0
@@ -184,11 +185,8 @@ public partial class MainWindowViewModel
 
             if (previousCurrent is not null && !seen.Contains(previousCurrent.Path))
                 restoredQueue.Insert(Math.Clamp(previousQueuePosition, 0, restoredQueue.Count), previousCurrent);
-
-            var currentIndex = previousCurrent is null ? -1 : restoredQueue.FindIndex(song =>
-                string.Equals(song.Path, previousCurrent.Path, StringComparison.OrdinalIgnoreCase));
-            _queue.Restore(restoredQueue,
-                currentIndex >= 0 ? currentIndex : previousQueuePosition, _queue.ShuffleSeed);
+            _queue.Restore(restoredQueue, previousQueuePosition, previousCurrent?.Path,
+                _queue.ShuffleSeed, previousQueued);
             RefreshQueueRows();
             _playbackStateReady = true;
             SavePlaybackState(force: true);

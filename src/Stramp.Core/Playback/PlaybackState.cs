@@ -12,6 +12,7 @@ public sealed class SavedPlaybackState
     public int ActiveSourcePosition { get; set; }
     public List<string> QueuePaths { get; set; } = [];
     public int QueuePosition { get; set; }
+    public List<string> QueuedPaths { get; set; } = [];
     public string? CurrentSongPath { get; set; }
     public int ShuffleSeed { get; set; }
     public bool Shuffled { get; set; }

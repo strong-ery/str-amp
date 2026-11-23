@@ -41,15 +41,8 @@ public partial class MainWindowViewModel
         var restoredQueue = preResolvedQueue ?? PlaylistScanner.ResolveSongs(state.QueuePaths, _libraryIndex);
         if (restoredQueue.Count > 0)
         {
-            var position = state.QueuePosition;
-            if (!string.IsNullOrWhiteSpace(state.CurrentSongPath))
-            {
-                var currentIndex = restoredQueue.FindIndex(song => string.Equals(
-                    song.Path, state.CurrentSongPath, StringComparison.OrdinalIgnoreCase));
-                if (currentIndex >= 0)
-                    position = currentIndex;
-            }
-            _queue.Restore(restoredQueue, position, state.ShuffleSeed);
+            _queue.Restore(restoredQueue, state.QueuePosition, state.CurrentSongPath,
+                state.ShuffleSeed, state.QueuedPaths);
         }
         else
         {
@@ -200,6 +193,7 @@ public partial class MainWindowViewModel
             ActiveSourcePosition = Math.Max(activeSourcePosition, 0),
             QueuePaths = _queue.Songs.Select(song => song.Path).ToList(),
             QueuePosition = _queue.Position,
+            QueuedPaths = _queue.QueuedPathsFromCurrent.ToList(),
             CurrentSongPath = currentPath,
             ShuffleSeed = _queue.ShuffleSeed,
             Shuffled = Shuffled,
