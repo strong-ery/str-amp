@@ -1054,7 +1054,7 @@
                                  Tapped="OnQueueTapped">
                             <ListBox.ItemTemplate>
                                 <DataTemplate x:DataType="vm:SongRow">
-                                    <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}" ToolTip.Tip="Right-click to remove from queue">
+                                    <Border Classes="queue-row" Classes.playing="{Binding IsCurrent}">
                                         <Border.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="Edit lyrics…"
