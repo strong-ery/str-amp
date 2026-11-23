@@ -11,9 +11,11 @@ Shinier!
 - Linux support (x64)
 - str-amp now warns when ffmpeg is missing, and can install it for you (in the setup wizard or from the warning)
 - Right-click a song -> "Add to queue" to play it next (after anything you've already queued)
+- 'Add to queue' context menu entry
 
 ### Changed:
 - Various memory and other GC optimizations (700mb -> ~300mb)
+- Removed 'Right click to remove from queue' hoverhint
 
 ## [v2.1.0] — Nov. 13, 2026 -> Nov. 18, 2026
 Many improvements!
